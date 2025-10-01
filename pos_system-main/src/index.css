@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+@layer base {
+    * {
+        @apply box-border;
+    }
+
+    html {
+        @apply scroll-smooth;
+    }
+
+    body {
+        @apply font-sans text-gray-900 bg-gray-50 antialiased;
+    }
+}
+
+@layer components {
+    .btn {
+        @apply inline-flex items-center justify-center px-6 py-3 text-base font-semibold rounded-xl transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-opacity-50;
+    }
+
+    .btn-primary {
+        @apply bg-gradient-to-r from-primary-600 to-secondary-600 text-white hover:from-primary-700 hover:to-secondary-700 hover:shadow-lg hover:-translate-y-0.5 focus:ring-primary-500;
+    }
+
+    .btn-secondary {
+        @apply border-2 border-primary-600 text-primary-600 bg-transparent hover:bg-primary-600 hover:text-white focus:ring-primary-500;
+    }
+
+    .btn-large {
+        @apply px-8 py-4 text-lg;
+    }
+
+    .container {
+        @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+    }
+
+    .section {
+        @apply py-16 lg:py-24;
+    }
+
+    .card {
+        @apply bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-lg transition-all duration-300;
+    }
+
+    .gradient-text {
+        @apply bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent;
+    }
+
+    .glass {
+        @apply bg-white/10 backdrop-blur-lg border border-white/20;
+    }
+}
+
+@layer utilities {
+    .text-shadow {
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .text-shadow-lg {
+        text-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+}
