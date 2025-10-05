@@ -1,0 +1,47 @@
+{
+    "name": "pos-system-client",
+    "version": "1.0.0",
+    "description": "POS System React Frontend",
+    "private": true,
+    "scripts": {
+        "start": "react-scripts start",
+        "build": "react-scripts build",
+        "test": "react-scripts test",
+        "eject": "react-scripts eject"
+    },
+    "dependencies": {
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0",
+        "react-scripts": "5.0.1",
+        "react-router-dom": "^6.8.1",
+        "firebase": "^9.17.2",
+        "framer-motion": "^10.16.5",
+        "lucide-react": "^0.292.0",
+        "react-intersection-observer": "^9.5.3",
+        "clsx": "^2.0.0"
+    },
+    "devDependencies": {
+        "tailwindcss": "^3.3.6",
+        "autoprefixer": "^10.4.16",
+        "postcss": "^8.4.32"
+    },
+    "eslintConfig": {
+        "extends": [
+            "react-app",
+            "react-app/jest"
+        ]
+    },
+    "browserslist": {
+        "production": [
+            ">0.2%",
+            "not dead",
+            "not op_mini all"
+        ],
+        "development": [
+            "last 1 chrome version",
+            "last 1 firefox version",
+            "last 1 safari version"
+        ]
+    },
+    "proxy": "http://localhost:8000"
+}
