@@ -1,9 +1,9 @@
 pipeline {
     agent any
 
-    tools {
-        nodejs "NodeJS" // Your NodeJS installation name in Jenkins
-    }
+  //  tools {
+   //     nodejs "NodeJS" // Your NodeJS installation name in Jenkins
+  //  }
 
     parameters {
         choice(
