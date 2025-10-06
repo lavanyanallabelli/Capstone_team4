@@ -35,6 +35,20 @@ pipeline {
                 }
             }
         }
+        stage('Deploy to DEV EC2') {
+            steps {
+                sshagent(credentials: ['AWS_DEV_SSH_KEY']) {    
+                    sh '''
+                        scp -r pos_system-main/client/build/* ec2-user@34.229.14.13:/home/ec2-user/pos_system/build/
+                        ssh ec2-user@34.229.14.13 '
+                            cd /home/ec2-user/pos_system
+                            pm2 stop pos-system || true
+                            pm2 serve build 3000 --name pos-system --spa
+                        '
+                    ''' 
+                }
+            }
+        }
     }
 
     post {
