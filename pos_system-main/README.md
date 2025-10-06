@@ -4,21 +4,7 @@ A modern Point of Sale system built with React frontend and Express.js backend.
 
 ## Project Structure
 
-```
-pos_system-main/
-├── client/                 # React frontend application
-│   ├── src/               # React source code
-│   ├── public/            # Public assets
-│   ├── build/             # Production build
-│   ├── package.json       # Frontend dependencies
-│   ├── tailwind.config.js # Tailwind CSS configuration
-│   └── postcss.config.js  # PostCSS configuration
-├── server/                # Express.js backend
-│   ├── server.js          # Main server file
-│   ├── env.example        # Environment variables example
-│   └── package.json       # Backend dependencies
-├── package.json           # Root package.json with workspace scripts
-└── README.md             # This file
+
 ```
 
 ## Getting Started
