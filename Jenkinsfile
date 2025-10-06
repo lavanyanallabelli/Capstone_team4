@@ -38,37 +38,15 @@ pipeline {
         stage('Deploy to DEV EC2') {
             steps {
                 withCredentials([sshUserPrivateKey(credentialsId: 'AWS_DEV_SSH_KEY', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
-                    bat '''
-                set KEY=%WORKSPACE%\\.tmp_ssh_key
-                copy "%SSH_KEY%" "%KEY%" >nul
-                icacls "%KEY%" /inheritance:r
-                icacls "%KEY%" /grant:r %USERNAME%:R
-                
-                ssh -i "%KEY%" -o StrictHostKeyChecking=no %SSH_USER%@34.229.14.13 "mkdir -p /home/ec2-user/pos_system/build"
-                
-                scp -i "%KEY%" -o StrictHostKeyChecking=no -r pos_system-main\\client\\build\\* %SSH_USER%@34.229.14.13:/home/ec2-user/pos_system/build/
-                
-                ssh -i "%KEY%" -o StrictHostKeyChecking=no %SSH_USER%@34.229.14.13 "
-                    cd /home/ec2-user/pos_system &&
-                    pm2 stop pos-system || true &&
-                    pm2 serve build 3000 --name pos-system --spa &&
-                    pm2 save &&
-                    pm2 startup -u ec2-user --hp /home/ec2-user
-                "
-                
-                del /f /q "%KEY%"
-            '''
-                    // bat '''
-                        // set KEY=%WORKSPACE%\\.tmp_ssh_key
-                        // copy "%SSH_KEY%" "%KEY%" >nul
-                        // icacls "%KEY%" /inheritance:r
-                        // icacls "%KEY%" /grant:r %USERNAME%:R
-                        // 
-                        // scp -i "%KEY%" -o StrictHostKeyChecking=no -r pos_system-main\\client\\build\\* %SSH_USER%@34.229.14.13:/home/ec2-user/pos_system/build/
-                        // ssh -i "%KEY%" -o StrictHostKeyChecking=no %SSH_USER%@34.229.14.13 "cd /home/ec2-user/pos_system && pm2 stop pos-system || true && pm2 serve build 3000 --name pos-system --spa"
-                        // 
-                        // del /f /q "%KEY%"
-                    // '''
+                    bat 'set KEY=%WORKSPACE%\\.tmp_ssh_key && copy "%SSH_KEY%" "%KEY%" >nul'
+                    bat 'icacls "%KEY%" /inheritance:r'
+                    bat 'icacls "%KEY%" /grant:r %USERNAME%:R'
+                    bat 'icacls "%KEY%" /grant:r SYSTEM:R'
+                    bat 'icacls "%KEY%" /remove:g "BUILTIN\\Administrators" "CREATOR OWNER" "Users" "Authenticated Users" "Everyone" >nul 2>&1'
+                    bat 'ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@34.229.14.13 "mkdir -p /home/ec2-user/pos_system/build"'
+                    bat 'scp -i "%KEY%" -o StrictHostKeyChecking=no -r pos_system-main\\client\\build\\* %SSH_USER%@34.229.14.13:/home/ec2-user/pos_system/build/'
+                    bat 'ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@34.229.14.13 "cd /home/ec2-user/pos_system && pm2 stop pos-system || true && pm2 serve build 3000 --name pos-system --spa && pm2 save && pm2 startup -u ec2-user --hp /home/ec2-user"'
+                    bat 'del /f /q "%KEY%"'
                 }
             }
         }
