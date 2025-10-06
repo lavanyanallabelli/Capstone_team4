@@ -39,8 +39,15 @@ pipeline {
             steps {
                 withCredentials([sshUserPrivateKey(credentialsId: 'AWS_DEV_SSH_KEY', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
                     bat '''
-                        scp -i %SSH_KEY% -o StrictHostKeyChecking=no -r pos_system-main\\client\\build\\* %SSH_USER%@34.229.14.13:/home/ec2-user/pos_system/build/
-                        ssh -i %SSH_KEY% -o StrictHostKeyChecking=no %SSH_USER%@34.229.14.13 "cd /home/ec2-user/pos_system && pm2 stop pos-system || true && pm2 serve build 3000 --name pos-system --spa"
+                        set KEY=%WORKSPACE%\\.tmp_ssh_key
+                        copy "%SSH_KEY%" "%KEY%" >nul
+                        icacls "%KEY%" /inheritance:r
+                        icacls "%KEY%" /grant:r %USERNAME%:R
+                        
+                        scp -i "%KEY%" -o StrictHostKeyChecking=no -r pos_system-main\\client\\build\\* %SSH_USER%@34.229.14.13:/home/ec2-user/pos_system/build/
+                        ssh -i "%KEY%" -o StrictHostKeyChecking=no %SSH_USER%@34.229.14.13 "cd /home/ec2-user/pos_system && pm2 stop pos-system || true && pm2 serve build 3000 --name pos-system --spa"
+                        
+                        del /f /q "%KEY%"
                     '''
                 }
             }
