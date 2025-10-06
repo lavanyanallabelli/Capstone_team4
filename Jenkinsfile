@@ -1,10 +1,14 @@
 pipeline {
     agent any
+    
+    tools {
+        nodejs "NodeJS"
+    }
 
     parameters {
         choice(
             name: 'BRANCH',
-            choices: ['dev', 'QA', 'prod'],
+            choices: ['dev', 'QA', 'prod', 'main'],
             description: 'Select the branch to build'
         )
     }
@@ -33,16 +37,12 @@ pipeline {
         }
 
         stage('Deploy to DEV EC2') {
+            when {
+                expression { params.BRANCH == 'dev' }
+            }
             steps {
                 sshagent(credentials: ['aws-ec2-key']) {
-                    sh """
-                    ssh -o StrictHostKeyChecking=no ec2-user@YOUR_DEV_EC2_PUBLIC_IP '
-                        cd /home/ec2-user/dev_app &&
-                        git pull origin ${params.BRANCH} &&
-                        npm install &&
-                        pm2 restart all || pm2 start npm --name dev-app -- run start
-                    '
-                    """
+                    bat 'ssh -o StrictHostKeyChecking=no ec2-user@YOUR_DEV_EC2_PUBLIC_IP "cd /home/ec2-user/dev_app && git pull origin %BRANCH% && npm install && pm2 restart all || pm2 start npm --name dev-app -- run start"'
                 }
             }
         }
