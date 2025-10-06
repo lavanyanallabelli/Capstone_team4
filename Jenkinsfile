@@ -39,9 +39,14 @@ pipeline {
             steps {
                 withCredentials([sshUserPrivateKey(credentialsId: 'AWS_DEV_SSH_KEY', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
                     bat '''
-                        ssh -i "%SSH_KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@34.229.14.13 "mkdir -p /home/ec2-user/pos_system/build"
-                        scp -i "%SSH_KEY%" -o StrictHostKeyChecking=no -r pos_system-main\\client\\build\\* %SSH_USER%@34.229.14.13:/home/ec2-user/pos_system/build/
-                        ssh -i "%SSH_KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@34.229.14.13 "cd /home/ec2-user/pos_system && pm2 stop pos-system || true && pm2 serve build 3000 --name pos-system --spa && pm2 save && pm2 startup -u ec2-user --hp /home/ec2-user"
+                        set KEY=%WORKSPACE%\\.tmp_ssh_key
+                        copy "%SSH_KEY%" "%KEY%" >nul
+                        icacls "%KEY%" /inheritance:r /grant:r "%USERNAME%":R /grant:r "SYSTEM":R
+                        icacls "%KEY%" /remove "BUILTIN\\Users" "BUILTIN\\Administrators" "CREATOR OWNER" "Authenticated Users" "Everyone" >nul 2>&1
+                        ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@34.229.14.13 "mkdir -p /home/ec2-user/pos_system/build"
+                        scp -i "%KEY%" -o StrictHostKeyChecking=no -r pos_system-main\\client\\build\\* %SSH_USER%@34.229.14.13:/home/ec2-user/pos_system/build/
+                        ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@34.229.14.13 "cd /home/ec2-user/pos_system && pm2 stop pos-system || true && pm2 serve build 3000 --name pos-system --spa && pm2 save && pm2 startup -u ec2-user --hp /home/ec2-user"
+                        del /f /q "%KEY%" >nul 2>&1
                     '''
                 }
             }
