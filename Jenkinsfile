@@ -1,14 +1,14 @@
 pipeline {
     agent any
-    
+
     // tools {
-        // nodejs "NodeJS"
+        // nodejs "NodeJS" // Your NodeJS installation name in Jenkins
     // }
 
     parameters {
         choice(
             name: 'BRANCH',
-            choices: ['dev', 'QA', 'prod', 'main'],
+            choices: ['main', 'QA', 'prod'],
             description: 'Select the branch to build'
         )
     }
@@ -23,37 +23,26 @@ pipeline {
         stage('Install Dependencies') {
             steps {
                 dir('pos_system-main') {
-                    bat 'npm run install:all'
+                    bat 'npm install'
                 }
             }
         }
 
-        stage('Build Client Application') {
+        stage('Build React Application') {
             steps {
                 dir('pos_system-main') {
-                    bat 'npm run build:client'
-                }
-            }
-        }
-
-        stage('Deploy to DEV EC2') {
-            when {
-                expression { params.BRANCH == 'dev' }
-            }
-            steps {
-                sshagent(credentials: ['aws-ec2-key']) {
-                    bat 'ssh -o StrictHostKeyChecking=no ec2-user@YOUR_DEV_EC2_PUBLIC_IP "cd /home/ec2-user/dev_app && git pull origin %BRANCH% && npm install && pm2 restart all || pm2 start npm --name dev-app -- run start"'
+                    bat 'npm run build'
                 }
             }
         }
     }
 
     post {
-        success {
-            echo "✅ Deployment to ${params.BRANCH} successful!"
-        }
         failure {
-            echo "❌ Deployment failed!"
+            echo "Build failed!"
+        }
+        success {
+            echo "React app build completed successfully for branch ${params.BRANCH}!"
         }
     }
 }
