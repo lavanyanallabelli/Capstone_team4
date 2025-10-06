@@ -58,7 +58,7 @@ pipeline {
                         ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@34.229.14.13 "pm2 save"
                         ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@34.229.14.13 "pm2 startup -u ec2-user --hp /home/ec2-user"
                         ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@34.229.14.13 "pm2 list"
-                        ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@34.229.14.13 "pm2 logs pos-system --lines 20"
+                        ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@34.229.14.13 "timeout 10 pm2 logs pos-system --lines 20 || echo 'Logs command completed'"
                         del /f /q "%KEY%" >nul 2>&1
                     '''
                 }
