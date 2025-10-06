@@ -45,7 +45,13 @@ pipeline {
                         icacls "%KEY%" /remove "BUILTIN\\Users" "BUILTIN\\Administrators" "CREATOR OWNER" "Authenticated Users" "Everyone" >nul 2>&1
                         ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@34.229.14.13 "mkdir -p /home/ec2-user/pos_system/build"
                         scp -i "%KEY%" -o StrictHostKeyChecking=no -r pos_system-main\\client\\build\\* %SSH_USER%@34.229.14.13:/home/ec2-user/pos_system/build/
-                        ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@34.229.14.13 "cd /home/ec2-user/pos_system && pm2 stop pos-system || true && pm2 serve build 3000 --name pos-system --spa && pm2 save && pm2 startup -u ec2-user --hp /home/ec2-user"
+                        ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@34.229.14.13 "cd /home/ec2-user/pos_system && ls -la build/"
+                        ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@34.229.14.13 "pm2 stop pos-system || true"
+                        ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@34.229.14.13 "cd /home/ec2-user/pos_system && pm2 serve build 3000 --name pos-system --spa"
+                        ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@34.229.14.13 "pm2 save"
+                        ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@34.229.14.13 "pm2 startup -u ec2-user --hp /home/ec2-user"
+                        ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@34.229.14.13 "pm2 list"
+                        ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@34.229.14.13 "pm2 logs pos-system --lines 20"
                         del /f /q "%KEY%" >nul 2>&1
                     '''
                 }
