@@ -41,8 +41,10 @@ pipeline {
                     bat '''
                         set KEY=%WORKSPACE%\\.tmp_ssh_key
                         copy "%SSH_KEY%" "%KEY%" >nul
-                        icacls "%KEY%" /inheritance:r /grant:r "%USERNAME%":R /grant:r "SYSTEM":R
-                        icacls "%KEY%" /remove "BUILTIN\\Users" "BUILTIN\\Administrators" "CREATOR OWNER" "Authenticated Users" "Everyone" >nul 2>&1
+                        icacls "%KEY%" /inheritance:r
+                        icacls "%KEY%" /grant:r "SYSTEM":F
+                        icacls "%KEY%" /grant:r "%USERNAME%":F
+                        icacls "%KEY%" /remove "BUILTIN\\Users" "BUILTIN\\Administrators" "CREATOR OWNER" "Authenticated Users" "Everyone" "NT AUTHORITY\\Authenticated Users" >nul 2>&1
                         echo "Checking if build files exist locally..."
                         dir pos_system-main\\client\\build\\
                         echo "Creating remote directory..."
