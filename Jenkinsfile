@@ -23,7 +23,7 @@ pipeline {
         stage('Install Dependencies') {
             steps {
                 dir('pos_system-main') {
-                    bat 'npm install'
+                     bat 'npm run install:all'
                 }
             }
         }
@@ -31,7 +31,7 @@ pipeline {
         stage('Build React Application') {
             steps {
                 dir('pos_system-main') {
-                    bat 'npm run build'
+                    bat 'npm run build:client'
                 }
             }
         }
