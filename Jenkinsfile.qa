@@ -41,7 +41,7 @@ pipeline {
                 expression { params.BRANCH == 'QA' }
             }
             steps {
-                withCredentials([sshUserPrivateKey(credentialsId: 'AWS_QA_SSH_KEY', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
+                withCredentials([sshUserPrivateKey(credentialsId: 'capstone-qa-key', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
                     bat '''
                         set KEY=%WORKSPACE%\\.tmp_ssh_key
                         copy "%SSH_KEY%" "%KEY%" >nul
