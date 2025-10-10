@@ -50,7 +50,7 @@ pipeline {
                         echo "Creating remote directory..."
                         ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@34.229.14.13 "mkdir -p /home/ec2-user/pos_system/build"
                         echo "Copying build files..."
-                        scp -v -i "%KEY%" -o StrictHostKeyChecking=no -r pos_system-main\\client\\build\\* %SSH_USER%@34.229.14.13:/home/ec2-user/pos_system/build/
+                        scp -v -i "%KEY%" -o StrictHostKeyChecking=no -r pos_system-main\\client\\build\\* %SSH_USER%@50.17.73.133:/home/ec2-user/pos_system/build/
                         echo "Verifying files were copied..."
                         ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@34.229.14.13 "cd /home/ec2-user/pos_system && ls -la build/"
                         ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@34.229.14.13 "pm2 stop pos-system || true"
