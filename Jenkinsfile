@@ -48,17 +48,17 @@ pipeline {
                         echo "Checking if build files exist locally..."
                         dir pos_system-main\\client\\build\\
                         echo "Creating remote directory..."
-                        ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@34.229.14.13 "mkdir -p /home/ec2-user/pos_system/build"
+                        ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@3.85.243.29 "mkdir -p /home/ec2-user/pos_system/build"
                         echo "Copying build files..."
-                        scp -v -i "%KEY%" -o StrictHostKeyChecking=no -r pos_system-main\\client\\build\\* %SSH_USER%@50.17.73.133:/home/ec2-user/pos_system/build/
+                        scp -v -i "%KEY%" -o StrictHostKeyChecking=no -r pos_system-main\\client\\build\\* %SSH_USER%@3.85.243.29:/home/ec2-user/pos_system/build/
                         echo "Verifying files were copied..."
-                        ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@34.229.14.13 "cd /home/ec2-user/pos_system && ls -la build/"
-                        ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@34.229.14.13 "pm2 stop pos-system || true"
-                        ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@34.229.14.13 "cd /home/ec2-user/pos_system && pm2 serve build 3000 --name pos-system --spa"
-                        ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@34.229.14.13 "pm2 save"
-                        ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@34.229.14.13 "pm2 startup -u ec2-user --hp /home/ec2-user"
-                        ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@34.229.14.13 "pm2 list"
-                        ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@34.229.14.13 "timeout 10 pm2 logs pos-system --lines 20 || echo 'Logs command completed'"
+                        ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@3.85.243.29 "cd /home/ec2-user/pos_system && ls -la build/"
+                        ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@3.85.243.29 "pm2 stop pos-system || true"
+                        ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@3.85.243.29 "cd /home/ec2-user/pos_system && pm2 serve build 3000 --name pos-system --spa"
+                        ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@3.85.243.29 "pm2 save"
+                        ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@3.85.243.29 "pm2 startup -u ec2-user --hp /home/ec2-user"
+                        ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@3.85.243.29 "pm2 list"
+                        ssh -i "%KEY%" -o StrictHostKeyChecking=no -T %SSH_USER%@3.85.243.29 "timeout 10 pm2 logs pos-system --lines 20 || echo 'Logs command completed'"
                         del /f /q "%KEY%" >nul 2>&1
                     '''
                 }
