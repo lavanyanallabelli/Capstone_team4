@@ -67,11 +67,26 @@ pipeline {
     }
 
     post {
-        failure {
-            echo "Build failed!"
-        }
         success {
             echo "React app build completed successfully for branch ${params.BRANCH}!"
+            withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_URL')]) {
+                bat """
+                curl -X POST -H "Content-type: application/json" ^
+                --data "{\"text\": \":white_check_mark: Jenkins Dev Build Successful! Dev deployment completed for branch ${params.BRANCH}.\"}" ^
+                %SLACK_URL%
+                """
+            }
+        }
+
+        failure {
+            echo "Build failed!"
+            withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_URL')]) {
+                bat """
+                curl -X POST -H "Content-type: application/json" ^
+                --data "{\"text\": \":x: Jenkins Dev Build Failed for branch ${params.BRANCH}. Please check the logs.\"}" ^
+                %SLACK_URL%
+                """
+            }
         }
     }
 }
