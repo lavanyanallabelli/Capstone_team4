@@ -61,7 +61,7 @@ pipeline {
                         ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@50.17.73.133 "pm2 stop qa-pos-system || true"
                         ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@50.17.73.133 "cd /home/ec2-user/qa_pos_system && pm2 serve build 3001 --name qa-pos-system --spa"
                         ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@50.17.73.133 "pm2 save"
-                        ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@50.17.73.133 "pm2 startup -u ec2-user --hp /home/ec2-user"
+                        ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@50.17.73.133 "pm2 startup -u ec2-user --hp /home/ec2-user || echo 'PM2 startup command completed (may require manual setup)'"
                         ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@50.17.73.133 "pm2 list"
                         ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@50.17.73.133 "timeout 10 pm2 logs qa-pos-system --lines 20 || echo 'Logs command completed'"
                     '''
