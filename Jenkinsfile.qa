@@ -37,9 +37,6 @@ pipeline {
         }
         
         stage('Deploy to QA EC2') {
-            when {
-                expression { params.BRANCH == 'QA' }
-            }
             steps {
                 withCredentials([sshUserPrivateKey(credentialsId: 'capstone-qa-key', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
                     bat '''
@@ -71,21 +68,22 @@ pipeline {
     }
 
     post {
-    success {
-        echo "React app build completed successfully for branch ${params.BRANCH}!"
-        withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_URL')]) {
-            bat """
-            curl -X POST -H "Content-type: application/json" --data "{\\"text\\": \\":white_check_mark: Jenkins QA Build Successful! QA deployment completed for branch ${params.BRANCH}.\\"}" %SLACK_URL%
-            """
+        success {
+            echo "React app build completed successfully for branch ${params.BRANCH}!"
+            withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_URL')]) {
+                bat """
+                curl -X POST -H "Content-type: application/json" --data "{\\"text\\": \\":white_check_mark: Jenkins QA Build Successful! QA deployment completed for branch ${params.BRANCH}.\\"}" %SLACK_URL%
+                """
+            }
         }
-    }
-    failure {
-        echo "Build failed!"
-        withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_URL')]) {
-            bat """
-            curl -X POST -H "Content-type: application/json" --data "{\\"text\\": \\":x: Jenkins QA Build Failed for branch ${params.BRANCH}. Please check the logs.\\"}" %SLACK_URL%
-            """
+
+        failure {
+            echo "Build failed!"
+            withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_URL')]) {
+                bat """
+                curl -X POST -H "Content-type: application/json" --data "{\\"text\\": \\":x: Jenkins QA Build Failed for branch ${params.BRANCH}. Please check the logs.\\"}" %SLACK_URL%
+                """
+            }
         }
-       }
     }
 }
