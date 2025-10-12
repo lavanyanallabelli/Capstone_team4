@@ -23,7 +23,17 @@ pipeline {
         stage('Install Dependencies') {
             steps {
                 dir('pos_system-main') {
-                     sh 'npm run install:all'
+                     sh '''
+                     echo "Cleaning previous installations..."
+                     rm -rf node_modules client/node_modules server/node_modules
+                     rm -f package-lock.json client/package-lock.json server/package-lock.json
+                     echo "Installing dependencies..."
+                     npm run install:all
+                     echo "Installing missing dependencies..."
+                     cd client && npm install path-exists --save
+                     cd ../server && npm install path-exists --save
+                     cd ..
+                     '''
                 }
             }
         }
