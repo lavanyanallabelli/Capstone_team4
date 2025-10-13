@@ -73,7 +73,7 @@ pipeline {
                 bat """
                 curl -X POST -H "Content-type: application/json" ^
                 --data "{\"text\": \":white_check_mark: Jenkins Dev Build Successful! Dev deployment completed for branch ${params.BRANCH}.\"}" ^
-                %SLACK_URL%
+                %SLACK_URL% || echo "Slack notification failed but build succeeded"
                 """
             }
         }
@@ -84,7 +84,7 @@ pipeline {
                 bat """
                 curl -X POST -H "Content-type: application/json" ^
                 --data "{\"text\": \":x: Jenkins Dev Build Failed for branch ${params.BRANCH}. Please check the logs.\"}" ^
-                %SLACK_URL%
+                %SLACK_URL% || echo "Slack notification failed"
                 """
             }
         }
