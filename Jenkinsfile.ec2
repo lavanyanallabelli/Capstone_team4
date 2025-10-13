@@ -14,6 +14,26 @@ pipeline {
     }
 
     stages {
+        stage('Workspace Cleanup') {
+            steps {
+                sh '''
+                    echo "Cleaning up workspace..."
+                    echo "Removing old build artifacts..."
+                    rm -rf pos_system-main/client/build/ || true
+                    rm -rf pos_system-main/server/dist/ || true
+                    echo "Cleaning up old node_modules..."
+                    rm -rf pos_system-main/node_modules/ || true
+                    rm -rf pos_system-main/client/node_modules/ || true
+                    rm -rf pos_system-main/server/node_modules/ || true
+                    echo "Cleaning up package-lock files..."
+                    rm -f pos_system-main/package-lock.json || true
+                    rm -f pos_system-main/client/package-lock.json || true
+                    rm -f pos_system-main/server/package-lock.json || true
+                    echo "Workspace cleanup completed!"
+                '''
+            }
+        }
+
         stage('Checkout from GitHub') {
             steps {
                 git branch: "${params.BRANCH}", url: 'https://github.com/lavanyanallabelli/Capstone_team4.git'
