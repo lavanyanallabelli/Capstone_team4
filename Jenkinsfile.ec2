@@ -75,6 +75,7 @@ pipeline {
                 curl -X POST -H "Content-type: application/json" --data '{"text": ":white_check_mark: Jenkins Dev Build Successful! Dev deployment completed for branch ${params.BRANCH}."}' $SLACK_URL
                 """
             }
+<<<<<<< Updated upstream
             mail (
                 to: 'cuteamy104@gmail.com',
                 subject: "✅ Jenkins Dev Build Successful - Branch: ${params.BRANCH}",
@@ -90,6 +91,22 @@ Build URL: ${env.BUILD_URL}
 
 The React application has been successfully built and deployed to the Dev EC2 instance.
                 """
+=======
+            emailext (
+                subject: "✅ Jenkins Dev Build Successful - Branch: ${params.BRANCH}",
+                body: """
+                <h2>Build Successful!</h2>
+                <p><strong>Project:</strong> POS System</p>
+                <p><strong>Branch:</strong> ${params.BRANCH}</p>
+                <p><strong>Build:</strong> ${env.BUILD_NUMBER}</p>
+                <p><strong>Status:</strong> SUCCESS</p>
+                <p><strong>Deployment:</strong> Dev EC2 Instance</p>
+                <p><strong>Build URL:</strong> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
+                <p>The React application has been successfully built and deployed to the Dev EC2 instance.</p>
+                """,
+                to: 'cuteamy104@gmail.com',
+                mimeType: 'text/html'
+>>>>>>> Stashed changes
             )
         }
 
@@ -100,6 +117,7 @@ The React application has been successfully built and deployed to the Dev EC2 in
                 curl -X POST -H "Content-type: application/json" --data '{"text": ":x: Jenkins Dev Build Failed for branch ${params.BRANCH}. Please check the logs."}' $SLACK_URL
                 """
             }
+<<<<<<< Updated upstream
             mail (
                 to: 'cuteamy104@gmail.com',
                 subject: "❌ Jenkins Dev Build Failed - Branch: ${params.BRANCH}",
@@ -116,6 +134,23 @@ Console Output: ${env.BUILD_URL}console
 
 Please check the build logs for more details about the failure.
                 """
+=======
+            emailext (
+                subject: "❌ Jenkins Dev Build Failed - Branch: ${params.BRANCH}",
+                body: """
+                <h2>Build Failed!</h2>
+                <p><strong>Project:</strong> POS System</p>
+                <p><strong>Branch:</strong> ${params.BRANCH}</p>
+                <p><strong>Build:</strong> ${env.BUILD_NUMBER}</p>
+                <p><strong>Status:</strong> FAILED</p>
+                <p><strong>Environment:</strong> Dev EC2 Instance</p>
+                <p><strong>Build URL:</strong> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
+                <p><strong>Console Output:</strong> <a href="${env.BUILD_URL}console">${env.BUILD_URL}console</a></p>
+                <p>Please check the build logs for more details about the failure.</p>
+                """,
+                to: 'cuteamy104@gmail.com',
+                mimeType: 'text/html'
+>>>>>>> Stashed changes
             )
         }
     }
