@@ -1,14 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import {
-    createUserWithEmailAndPassword,
-    signInWithEmailAndPassword,
-    signOut,
-    onAuthStateChanged,
-    updateProfile,
-    sendPasswordResetEmail
-} from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { auth, db } from '../firebase/config';
+import { Hub } from 'aws-amplify';
+import authService from '../aws/authService';
+import { hasPermission } from '../aws/userRoles';
+// import { USER_ROLES } from '../aws/userRoles'; // Unused - commented out
+import '../aws/config'; // Initialize AWS Amplify
 
 const AuthContext = createContext();
 
@@ -29,26 +24,7 @@ export const AuthProvider = ({ children }) => {
     const signup = async (email, password, userData) => {
         try {
             setError('');
-            const { user } = await createUserWithEmailAndPassword(auth, email, password);
-
-            // Update user profile
-            await updateProfile(user, {
-                displayName: userData.businessName
-            });
-
-            // Save additional user data to Firestore
-            await setDoc(doc(db, 'users', user.uid), {
-                uid: user.uid,
-                email: email,
-                businessName: userData.businessName,
-                phone: userData.phone || '',
-                businessType: userData.businessType || '',
-                createdAt: new Date().toISOString(),
-                plan: 'trial',
-                trialStartDate: new Date().toISOString(),
-                trialEndDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 days trial
-            });
-
+            const user = await authService.signUp(email, password, userData);
             return user;
         } catch (error) {
             setError(error.message);
@@ -60,7 +36,7 @@ export const AuthProvider = ({ children }) => {
     const login = async (email, password) => {
         try {
             setError('');
-            const { user } = await signInWithEmailAndPassword(auth, email, password);
+            const user = await authService.signIn(email, password);
             return user;
         } catch (error) {
             setError(error.message);
@@ -72,7 +48,7 @@ export const AuthProvider = ({ children }) => {
     const logout = async () => {
         try {
             setError('');
-            await signOut(auth);
+            await authService.signOut();
         } catch (error) {
             setError(error.message);
             throw error;
@@ -83,44 +59,117 @@ export const AuthProvider = ({ children }) => {
     const resetPassword = async (email) => {
         try {
             setError('');
-            await sendPasswordResetEmail(auth, email);
+            await authService.forgotPassword(email);
         } catch (error) {
             setError(error.message);
             throw error;
         }
     };
 
-    // Get user data from Firestore
-    const getUserData = async (uid) => {
+    // Confirm password reset
+    const resetPasswordConfirm = async (email, code, newPassword) => {
         try {
-            const docRef = doc(db, 'users', uid);
-            const docSnap = await getDoc(docRef);
-            if (docSnap.exists()) {
-                return docSnap.data();
-            }
-            return null;
+            setError('');
+            await authService.forgotPasswordSubmit(email, code, newPassword);
+        } catch (error) {
+            setError(error.message);
+            throw error;
+        }
+    };
+
+    // Confirm sign up
+    const confirmSignUp = async (email, code) => {
+        try {
+            setError('');
+            await authService.confirmSignUp(email, code);
+        } catch (error) {
+            setError(error.message);
+            throw error;
+        }
+    };
+
+    // Resend confirmation code
+    const resendConfirmationCode = async (email) => {
+        try {
+            setError('');
+            await authService.resendSignUp(email);
+        } catch (error) {
+            setError(error.message);
+            throw error;
+        }
+    };
+
+    // Get user data from Cognito attributes
+    const getUserData = async () => {
+        try {
+            const attributes = await authService.getUserAttributes();
+            return {
+                uid: attributes.sub,
+                email: attributes.email,
+                businessName: authService.getBusinessName(attributes),
+                businessType: authService.getBusinessType(attributes),
+                phone: authService.getPhone(attributes),
+                userRole: authService.getUserRole(attributes),
+                businessId: authService.getBusinessId(attributes),
+                createdAt: attributes.created_at,
+                emailVerified: attributes.email_verified === 'true'
+            };
         } catch (error) {
             console.error('Error getting user data:', error);
             return null;
         }
     };
 
+    // Check if user has permission
+    const hasUserPermission = (permission) => {
+        if (!currentUser?.userRole) return false;
+        return hasPermission(currentUser.userRole, permission);
+    };
+
     // Clear error
     const clearError = () => setError('');
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                // Get additional user data from Firestore
-                const userData = await getUserData(user.uid);
-                setCurrentUser({ ...user, ...userData });
-            } else {
+        // Check for existing session
+        const checkAuthState = async () => {
+            try {
+                const user = await authService.getCurrentUser();
+                if (user) {
+                    const userData = await getUserData();
+                    setCurrentUser(userData);
+                } else {
+                    setCurrentUser(null);
+                }
+            } catch (error) {
                 setCurrentUser(null);
             }
             setLoading(false);
+        };
+
+        checkAuthState();
+
+        // Listen for auth events
+        const hubListener = Hub.listen('auth', ({ payload: { event, data } }) => {
+            switch (event) {
+                case 'signIn':
+                    getUserData().then(userData => {
+                        setCurrentUser(userData);
+                    });
+                    break;
+                case 'signOut':
+                    setCurrentUser(null);
+                    break;
+                case 'signUp':
+                    // Handle sign up event if needed
+                    break;
+                default:
+                    break;
+            }
         });
 
-        return unsubscribe;
+        return () => {
+            hubListener();
+        };
     }, []);
 
     const value = {
@@ -129,7 +178,11 @@ export const AuthProvider = ({ children }) => {
         login,
         logout,
         resetPassword,
+        resetPasswordConfirm,
+        confirmSignUp,
+        resendConfirmationCode,
         getUserData,
+        hasUserPermission,
         loading,
         error,
         clearError

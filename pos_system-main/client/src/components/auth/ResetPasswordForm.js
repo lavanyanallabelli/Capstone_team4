@@ -2,14 +2,17 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Mail, ArrowLeft, AlertCircle, Loader2, CheckCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
-const ResetPasswordForm = ({ onClose, onSwitchToLogin }) => {
+const ResetPasswordForm = ({ onClose, onSwitchToLogin, isPage = false }) => {
+    // console.log('ResetPasswordForm - Props:', { onClose, onSwitchToLogin, isPage }); // Debug log
     const [email, setEmail] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
     const [error, setError] = useState('');
 
     const { resetPassword } = useAuth();
+    const navigate = useNavigate();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -29,7 +32,10 @@ const ResetPasswordForm = ({ onClose, onSwitchToLogin }) => {
 
         try {
             await resetPassword(email);
-            setIsSuccess(true);
+            // Navigate to password reset confirmation page
+            navigate('/reset-password-confirm', {
+                state: { email: email }
+            });
         } catch (error) {
             setError(error.message || 'Failed to send reset email');
         } finally {
@@ -56,7 +62,7 @@ const ResetPasswordForm = ({ onClose, onSwitchToLogin }) => {
 
                 <div className="space-y-4">
                     <button
-                        onClick={onSwitchToLogin}
+                        onClick={isPage ? () => navigate('/login') : onSwitchToLogin}
                         className="btn btn-primary w-full justify-center"
                     >
                         Back to Sign In
@@ -83,13 +89,15 @@ const ResetPasswordForm = ({ onClose, onSwitchToLogin }) => {
             exit={{ opacity: 0, scale: 0.95 }}
             className="w-full max-w-md mx-auto"
         >
-            <button
-                onClick={onSwitchToLogin}
-                className="flex items-center space-x-2 text-gray-600 hover:text-gray-800 mb-6 transition-colors"
-            >
-                <ArrowLeft className="w-4 h-4" />
-                <span>Back to Sign In</span>
-            </button>
+            {!isPage && (
+                <button
+                    onClick={onSwitchToLogin}
+                    className="flex items-center space-x-2 text-gray-600 hover:text-gray-800 mb-6 transition-colors"
+                >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span>Back to Sign In</span>
+                </button>
+            )}
 
             <div className="text-center mb-8">
                 <h2 className="text-3xl font-bold text-gray-900 mb-2">Reset Password</h2>
