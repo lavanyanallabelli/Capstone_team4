@@ -99,15 +99,35 @@ const SignupForm = ({ onClose, onSwitchToLogin, isPage = false }) => {
         clearError();
 
         try {
-            await signup(formData.email, formData.password, {
+            console.log('📝 SignupForm - Form Data:', formData);
+
+            const userData = {
                 businessName: formData.businessName,
                 phone: formData.phone,
                 businessType: formData.businessType
+            };
+
+            console.log('📤 SignupForm - Calling signup with:', {
+                email: formData.email,
+                userData: userData
             });
+
+            await signup(formData.email, formData.password, userData);
+
+            console.log('✅ SignupForm - Signup successful, redirecting...');
+
+            // Redirect to email verification page
+            navigate('/verify-email', {
+                state: { email: formData.email }
+            });
+
             if (!isPage && onClose) onClose();
-            navigate('/dashboard');
         } catch (error) {
-            console.error('Signup error:', error);
+            console.error('❌ SignupForm - Signup error:', error);
+            console.error('❌ SignupForm - Error details:', {
+                message: error.message,
+                stack: error.stack
+            });
         } finally {
             setIsLoading(false);
         }

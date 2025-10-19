@@ -8,6 +8,9 @@ import SignupPage from './pages/SignupPage';
 import PricingPage from './pages/PricingPage';
 import AboutPage from './pages/AboutPage';
 import ContactPage from './pages/ContactPage';
+import EmailVerification from './components/auth/EmailVerification';
+import ResetPasswordConfirm from './components/auth/ResetPasswordConfirm';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import './App.css';
 
@@ -23,6 +26,9 @@ function App() {
                         <Route path="/contact" element={<ContactPage />} />
                         <Route path="/login" element={<LoginPage />} />
                         <Route path="/signup" element={<SignupPage />} />
+                        <Route path="/verify-email" element={<EmailVerification />} />
+                        <Route path="/reset-password" element={<ResetPasswordPage />} />
+                        <Route path="/reset-password-confirm" element={<ResetPasswordConfirm />} />
                         <Route
                             path="/dashboard"
                             element={
