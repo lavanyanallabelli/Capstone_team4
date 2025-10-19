@@ -13,7 +13,8 @@ const EmailVerification = () => {
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
 
-    const { confirmSignUp, resendConfirmationCode, error: authError, clearError } = useAuth();
+    const { confirmSignUp, resendConfirmationCode } = useAuth();
+    // const { error: authError, clearError } = useAuth(); // Unused - commented out
     const navigate = useNavigate();
     const location = useLocation();
 
