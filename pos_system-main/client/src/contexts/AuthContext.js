@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Hub } from 'aws-amplify';
 import authService from '../aws/authService';
-import { USER_ROLES, hasPermission } from '../aws/userRoles';
+import { hasPermission } from '../aws/userRoles';
+// import { USER_ROLES } from '../aws/userRoles'; // Unused - commented out
 import '../aws/config'; // Initialize AWS Amplify
 
 const AuthContext = createContext();
