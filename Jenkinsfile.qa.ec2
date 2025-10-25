@@ -100,7 +100,7 @@ pipeline {
             }
             mail (
                 to: 'nikithaveerati01@gmail.com',
-                subject: "✅ Jenkins QA Build Successful - Branch: ${params.BRANCH}",
+                subject: "✅ login and reset password testing done successfully - Branch: ${params.BRANCH}",
                 body: """
 Build Successful!
 
@@ -124,8 +124,8 @@ The React application has been successfully built and deployed to the QA EC2 ins
                 """
             }
             mail (
-                to: 'nikithaveerati01@gmail.com',
-                subject: "❌ Jenkins QA Build Failed - Branch: ${params.BRANCH}",
+                to: 'nikithaveerati01@gmail.com', 
+                subject: "❌  login and reset password testing failed - Branch: ${params.BRANCH}",
                 body: """
 Build Failed!
 
