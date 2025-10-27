@@ -37,6 +37,19 @@ console.log('🔧 AWS Amplify Configuration:', {
     apiEndpoint: awsConfig.API.endpoints[0].endpoint
 });
 
+// Check for missing environment variables
+const missingVars = [];
+if (!process.env.REACT_APP_AWS_REGION) missingVars.push('REACT_APP_AWS_REGION');
+if (!process.env.REACT_APP_USER_POOL_ID) missingVars.push('REACT_APP_USER_POOL_ID');
+if (!process.env.REACT_APP_USER_POOL_WEB_CLIENT_ID) missingVars.push('REACT_APP_USER_POOL_WEB_CLIENT_ID');
+
+if (missingVars.length > 0) {
+    console.error('❌ Missing environment variables:', missingVars);
+    console.error('Please check your .env file or environment configuration');
+} else {
+    console.log('✅ All required environment variables are present');
+}
+
 Amplify.configure(awsConfig);
 console.log('✅ AWS Amplify configured successfully');
 
