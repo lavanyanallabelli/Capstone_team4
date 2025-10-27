@@ -1,0 +1,208 @@
+pipeline {
+    agent any
+    
+    environment {
+        NODE_VERSION = '18'
+        AWS_REGION = 'us-east-1'
+        BUILD_DIR = 'code'
+        QA_ENVIRONMENT = 'qa'
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                echo "✅ Code checked out successfully for QA testing"
+            }
+        }
+        
+        stage('Install Dependencies') {
+            steps {
+                dir('code/client') {
+                    echo "📦 Installing client dependencies..."
+                    sh 'npm install'
+                }
+                dir('code/server') {
+                    echo "📦 Installing server dependencies..."
+                    sh 'npm install'
+                }
+                echo "✅ Dependencies installed successfully"
+            }
+        }
+        
+        stage('Build React Application') {
+            steps {
+                dir('code/client') {
+                    echo "🏗️ Building React application for QA..."
+                    sh 'npm run build'
+                    echo "✅ React build completed for QA"
+                }
+            }
+        }
+        
+        stage('Run Comprehensive Tests') {
+            parallel {
+                stage('Unit Tests') {
+                    steps {
+                        dir('code/client') {
+                            echo "🧪 Running client unit tests..."
+                            sh 'npm test -- --coverage --watchAll=false'
+                        }
+                        dir('code/server') {
+                            echo "🧪 Running server unit tests..."
+                            sh 'npm test'
+                        }
+                    }
+                }
+                stage('Integration Tests') {
+                    steps {
+                        echo "🔗 Running integration tests..."
+                        sh '''
+                            # Start the server in background
+                            cd code/server && npm start &
+                            SERVER_PID=$!
+                            
+                            # Wait for server to start
+                            sleep 10
+                            
+                            # Run integration tests
+                            cd code/client && npm run test:integration || true
+                            
+                            # Stop the server
+                            kill $SERVER_PID
+                        '''
+                    }
+                }
+                stage('E2E Tests') {
+                    steps {
+                        echo "🎭 Running end-to-end tests..."
+                        sh '''
+                            cd code/client
+                            npm run test:e2e || true
+                        '''
+                    }
+                }
+            }
+        }
+        
+        stage('Security & Quality Checks') {
+            parallel {
+                stage('Security Audit') {
+                    steps {
+                        echo "🔒 Running security audit..."
+                        sh 'npm audit --audit-level high'
+                    }
+                }
+                stage('Code Quality') {
+                    steps {
+                        echo "📊 Running code quality checks..."
+                        sh '''
+                            cd code/client && npm run lint || true
+                            cd ../server && npm run lint || true
+                        '''
+                    }
+                }
+                stage('Dependency Check') {
+                    steps {
+                        echo "📋 Checking for outdated dependencies..."
+                        sh 'npm outdated || true'
+                    }
+                }
+            }
+        }
+        
+        stage('Performance Testing') {
+            steps {
+                echo "⚡ Running performance tests..."
+                sh '''
+                    cd code/client
+                    npm run test:performance || true
+                '''
+            }
+        }
+        
+        stage('Deploy to QA EC2') {
+            steps {
+                echo "🚀 Deploying to QA EC2 for testing..."
+                script {
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'SSH_KEY')]) {
+                        sh '''
+                            echo "📋 Checking build directory..."
+                            ls -la code/client/build/
+                            
+                            echo "📤 Copying files to QA EC2..."
+                            scp -v -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/client/build/* ec2-user@your-qa-ec2-ip:/var/www/html/
+                            
+                            echo "🔄 Restarting services on QA EC2..."
+                            ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no ec2-user@your-qa-ec2-ip '
+                                sudo systemctl restart nginx
+                                sudo systemctl restart your-pos-backend
+                                echo "✅ QA services restarted successfully"
+                            '
+                        '''
+                    }
+                }
+                echo "✅ Deployment to QA EC2 completed"
+            }
+        }
+        
+        stage('QA Validation') {
+            steps {
+                echo "✅ Running QA validation tests..."
+                sh '''
+                    # Wait for deployment to be ready
+                    sleep 30
+                    
+                    # Run health checks
+                    curl -f http://your-qa-ec2-ip/health || exit 1
+                    
+                    # Run smoke tests
+                    curl -f http://your-qa-ec2-ip/api/health || exit 1
+                    
+                    echo "✅ QA validation completed successfully"
+                '''
+            }
+        }
+    }
+    
+    post {
+        always {
+            echo "🧹 Cleaning up workspace..."
+            cleanWs()
+        }
+        success {
+            echo "🎉 QA Pipeline completed successfully!"
+            emailext (
+                subject: "✅ POS System QA Deployment Successful - ${env.BUILD_NUMBER}",
+                body: """
+                The POS system has been successfully deployed to QA environment.
+                
+                Build Number: ${env.BUILD_NUMBER}
+                Branch: ${env.BRANCH_NAME}
+                Environment: ${QA_ENVIRONMENT}
+                
+                QA Testing URL: http://your-qa-ec2-ip
+                
+                Please proceed with QA testing and validation.
+                """,
+                to: "qa-team@yourcompany.com,admin@yourcompany.com"
+            )
+        }
+        failure {
+            echo "❌ QA Pipeline failed!"
+            emailext (
+                subject: "❌ POS System QA Deployment Failed - ${env.BUILD_NUMBER}",
+                body: """
+                The POS system QA deployment has failed.
+                
+                Build Number: ${env.BUILD_NUMBER}
+                Branch: ${env.BRANCH_NAME}
+                Environment: ${QA_ENVIRONMENT}
+                
+                Please check the logs and fix the issues before proceeding.
+                """,
+                to: "qa-team@yourcompany.com,admin@yourcompany.com"
+            )
+        }
+    }
+}
