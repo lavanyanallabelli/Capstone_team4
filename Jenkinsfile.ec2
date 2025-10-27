@@ -5,6 +5,18 @@ pipeline {
         // nodejs "NodeJS" // Your NodeJS installation name in Jenkins
     // }
 
+    environment {
+        // React App Environment Variables
+        REACT_APP_AWS_REGION = 'us-east-1'
+        REACT_APP_USER_POOL_ID = 'us-east-1_XXXXXXXXX'
+        REACT_APP_USER_POOL_WEB_CLIENT_ID = 'your-client-id'
+        REACT_APP_OAUTH_DOMAIN = 'your-domain.auth.us-east-1.amazoncognito.com'
+        REACT_APP_API_ENDPOINT = 'http://3.85.243.29:5000/api'
+        REACT_APP_API_URL = 'http://3.85.243.29:5000'
+        REACT_APP_REDIRECT_SIGN_IN = 'http://3.85.243.29/'
+        REACT_APP_REDIRECT_SIGN_OUT = 'http://3.85.243.29/'
+    }
+
     parameters {
         choice(
             name: 'BRANCH',
