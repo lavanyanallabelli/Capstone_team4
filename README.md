@@ -88,6 +88,8 @@ Copy `server/env.example` to `server/.env` and configure your environment variab
 
 ## Scripts
 
+
+
 - `npm run install:all` - Install all dependencies
 - `npm run dev` - Start both client and server in development
 - `npm run start:client` - Start client only
