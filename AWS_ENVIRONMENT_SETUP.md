@@ -64,22 +64,37 @@ REACT_APP_REDIRECT_SIGN_OUT=http://localhost:3000/
 
 4. **Restart your application**
 
-### Option 3: Jenkins Pipeline
+### Option 3: Jenkins Pipeline (RECOMMENDED - SECURE)
 
-1. **Add to Jenkinsfile.qa.ec2**:
+**⚠️ SECURITY WARNING: Never put sensitive credentials directly in Jenkins files!**
+
+1. **Create Jenkins Credentials** (Go to Jenkins > Manage Jenkins > Credentials):
+   - `AWS_USER_POOL_ID` - Your Cognito User Pool ID
+   - `AWS_USER_POOL_WEB_CLIENT_ID` - Your Cognito App Client ID  
+   - `AWS_OAUTH_DOMAIN` - Your Cognito OAuth Domain
+
+2. **Use withCredentials in Jenkinsfile**:
    ```groovy
-   environment {
-       REACT_APP_AWS_REGION = 'us-east-1'
-       REACT_APP_USER_POOL_ID = 'your-actual-user-pool-id'
-       REACT_APP_USER_POOL_WEB_CLIENT_ID = 'your-actual-client-id'
-       REACT_APP_OAUTH_DOMAIN = 'your-domain.auth.us-east-1.amazoncognito.com'
-       REACT_APP_API_ENDPOINT = 'https://your-api-gateway-url.amazonaws.com/prod'
+   stage('Build React Application') {
+       steps {
+           withCredentials([
+               string(credentialsId: 'AWS_USER_POOL_ID', variable: 'REACT_APP_USER_POOL_ID'),
+               string(credentialsId: 'AWS_USER_POOL_WEB_CLIENT_ID', variable: 'REACT_APP_USER_POOL_WEB_CLIENT_ID'),
+               string(credentialsId: 'AWS_OAUTH_DOMAIN', variable: 'REACT_APP_OAUTH_DOMAIN')
+           ]) {
+               dir('code/client') {
+                   sh 'npm run build'
+               }
+           }
+       }
    }
    ```
 
-2. **Or use Jenkins Credentials**:
-   - Store sensitive values in Jenkins Credentials
-   - Reference them in the pipeline
+3. **Benefits of Jenkins Credentials**:
+   - ✅ **Secure** - Credentials are encrypted and not visible in logs
+   - ✅ **Safe for Git** - No sensitive data in version control
+   - ✅ **Centralized** - Easy to update credentials in one place
+   - ✅ **Audit trail** - Track who has access to credentials
 
 ## Getting Your AWS Cognito Values
 

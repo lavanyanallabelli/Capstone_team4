@@ -6,11 +6,8 @@ pipeline {
     // }
 
     environment {
-        // React App Environment Variables
+        // Non-sensitive environment variables only
         REACT_APP_AWS_REGION = 'us-east-1'
-        REACT_APP_USER_POOL_ID = 'us-east-1_XXXXXXXXX'
-        REACT_APP_USER_POOL_WEB_CLIENT_ID = 'your-client-id'
-        REACT_APP_OAUTH_DOMAIN = 'your-domain.auth.us-east-1.amazoncognito.com'
         REACT_APP_API_ENDPOINT = 'http://3.85.243.29:5000/api'
         REACT_APP_API_URL = 'http://3.85.243.29:5000'
         REACT_APP_REDIRECT_SIGN_IN = 'http://3.85.243.29/'
@@ -50,8 +47,14 @@ pipeline {
 
         stage('Build React Application') {
             steps {
-                dir('code') {
-                    sh 'npm run build:client'
+                withCredentials([
+                    string(credentialsId: 'AWS_USER_POOL_ID', variable: 'REACT_APP_USER_POOL_ID'),
+                    string(credentialsId: 'AWS_USER_POOL_WEB_CLIENT_ID', variable: 'REACT_APP_USER_POOL_WEB_CLIENT_ID'),
+                    string(credentialsId: 'AWS_OAUTH_DOMAIN', variable: 'REACT_APP_OAUTH_DOMAIN')
+                ]) {
+                    dir('code') {
+                        sh 'npm run build:client'
+                    }
                 }
             }
         }
@@ -88,7 +91,7 @@ pipeline {
                 """
             }
             mail (
-                to: 'cuteamy104@gmail.com',
+                to: 'chetanjogi042@gmail.com, cuteamy104@gmail.com',
                 subject: "✅ Jenkins Dev Build Successful - Branch: ${params.BRANCH}",
                 body: """
 Build Successful!
