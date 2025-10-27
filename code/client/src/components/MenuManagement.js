@@ -33,6 +33,22 @@ const MenuManagement = () => {
     const canManageCategories = hasPermission(userRole, PERMISSIONS.CAN_MANAGE_MENU_CATEGORIES);
     const canToggleAvailability = hasPermission(userRole, PERMISSIONS.CAN_TOGGLE_ITEM_AVAILABILITY);
 
+    const loadMenuItems = useCallback(async () => {
+        try {
+            const params = {};
+            if (searchTerm) params.search = searchTerm;
+            if (selectedCategory !== 'All') params.category = selectedCategory;
+
+            const response = await apiService.getMenuItems(params);
+            if (response.success) {
+                setMenuItems(response.data);
+            }
+        } catch (error) {
+            console.error('Error loading menu items:', error);
+            setError('Failed to load menu items');
+        }
+    }, [searchTerm, selectedCategory]);
+
     // Load menu items and categories on component mount
     useEffect(() => {
         loadMenuData();
@@ -79,21 +95,6 @@ const MenuManagement = () => {
         }
     };
 
-    const loadMenuItems = useCallback(async () => {
-        try {
-            const params = {};
-            if (searchTerm) params.search = searchTerm;
-            if (selectedCategory !== 'All') params.category = selectedCategory;
-
-            const response = await apiService.getMenuItems(params);
-            if (response.success) {
-                setMenuItems(response.data);
-            }
-        } catch (error) {
-            console.error('Error loading menu items:', error);
-            setError('Failed to load menu items');
-        }
-    }, [searchTerm, selectedCategory]);
 
     // Only show this component to owners
     if (userRole !== USER_ROLES.OWNER) {
