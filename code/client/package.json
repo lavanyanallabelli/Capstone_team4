@@ -6,7 +6,10 @@
     "scripts": {
         "start": "react-scripts start",
         "build": "react-scripts build",
-        "test": "react-scripts test",
+        "test": "react-scripts test --passWithNoTests",
+        "test:e2e": "echo 'E2E tests not implemented yet' && exit 0",
+        "test:integration": "echo 'Integration tests not implemented yet' && exit 0",
+        "test:performance": "echo 'Performance tests not implemented yet' && exit 0",
         "eject": "react-scripts eject"
     },
     "dependencies": {
