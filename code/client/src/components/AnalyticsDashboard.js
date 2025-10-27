@@ -25,11 +25,6 @@ const AnalyticsDashboard = () => {
     // const canViewEmployeePerformance = hasPermission(userRole, PERMISSIONS.CAN_VIEW_EMPLOYEE_PERFORMANCE); // Commented out for future use
     // const canViewRevenueBreakdown = hasPermission(userRole, PERMISSIONS.CAN_VIEW_REVENUE_BREAKDOWN); // Commented out for future use
 
-    // Load analytics data on component mount
-    useEffect(() => {
-        loadAnalyticsData();
-    }, [selectedPeriod, loadAnalyticsData]);
-
     const loadAnalyticsData = useCallback(async () => {
         try {
             setLoading(true);
@@ -45,6 +40,12 @@ const AnalyticsDashboard = () => {
             setLoading(false);
         }
     }, [selectedPeriod]);
+
+    // Load analytics data on component mount
+    useEffect(() => {
+        loadAnalyticsData();
+    }, [selectedPeriod, loadAnalyticsData]);
+
 
     // Only show this component to owners
     if (userRole !== USER_ROLES.OWNER) {
