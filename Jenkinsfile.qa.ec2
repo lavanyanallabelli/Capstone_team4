@@ -154,10 +154,10 @@ pipeline {
                     sleep 30
                     
                     # Run health checks
-                    curl -f http://your-qa-ec2-ip/health || exit 1
+                    curl -f http://50.17.73.133/health || exit 1
                     
                     # Run smoke tests
-                    curl -f http://your-qa-ec2-ip/api/health || exit 1
+                    curl -f http://50.17.73.133/api/health || exit 1
                     
                     echo "✅ QA validation completed successfully"
                 '''
@@ -172,6 +172,11 @@ pipeline {
         }
         success {
             echo "🎉 QA Pipeline completed successfully!"
+            withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_URL')]) {
+                sh """
+                curl -X POST -H "Content-type: application/json" --data '{"text": ":white_check_mark: Jenkins QA Build Successful! QA deployment completed for branch ${env.BRANCH_NAME}."}' $SLACK_URL
+                """
+            }
             mail (
                 to: 'cuteamy104@gmail.com',
                 subject: "✅ POS System QA Deployment Successful - ${env.BUILD_NUMBER}",
@@ -189,6 +194,11 @@ Please proceed with QA testing and validation.
         }
         failure {
             echo "❌ QA Pipeline failed!"
+            withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_URL')]) {
+                sh """
+                curl -X POST -H "Content-type: application/json" --data '{"text": ":x: Jenkins QA Build Failed for branch ${env.BRANCH_NAME}. Please check the logs."}' $SLACK_URL
+                """
+            }
             mail (
                 to: 'cuteamy104@gmail.com',
                 subject: "❌ POS System QA Deployment Failed - ${env.BUILD_NUMBER}",
