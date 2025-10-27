@@ -1,12 +1,65 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
-import { LogOut, User, Calendar, CreditCard, BarChart3, Package, DollarSign, ShoppingCart } from 'lucide-react';
+import { LogOut, User, Calendar, CreditCard, BarChart3, Package, DollarSign, ShoppingCart, Users, Settings, TrendingUp, ChefHat } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import apiService from '../services/api';
 
 const Dashboard = () => {
-    const { currentUser, logout } = useAuth();
+    const { currentUser, logout, userRole } = useAuth();
     const navigate = useNavigate();
+    const [dashboardData, setDashboardData] = useState({
+        menuItemsCount: 0,
+        employeesCount: 0,
+        totalSales: 0,
+        ordersToday: 0
+    });
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    const isOwner = userRole === 'owner';
+
+    useEffect(() => {
+        if (currentUser) {
+            fetchDashboardData();
+        }
+    }, [currentUser, isOwner]);
+
+    const fetchDashboardData = async () => {
+        try {
+            setLoading(true);
+            
+            if (isOwner) {
+                const [menuResponse, employeesResponse, analyticsResponse] = await Promise.all([
+                    apiService.getMenuItems(),
+                    apiService.getEmployees(),
+                    apiService.getAnalyticsOverview('7d')
+                ]);
+
+                const newData = {
+                    menuItemsCount: menuResponse.success ? menuResponse.data.length : 0,
+                    employeesCount: employeesResponse.success ? employeesResponse.data.length : 0,
+                    totalSales: analyticsResponse.success ? (analyticsResponse.data.data?.sales?.totalRevenue || analyticsResponse.data.sales?.totalRevenue || 0) : 0,
+                    ordersToday: analyticsResponse.success ? (analyticsResponse.data.data?.sales?.totalOrders || analyticsResponse.data.sales?.totalOrders || 0) : 0
+                };
+                
+                setDashboardData(newData);
+            } else {
+                const menuResponse = await apiService.getMenuItems();
+                setDashboardData({
+                    menuItemsCount: menuResponse.success ? menuResponse.data.length : 0,
+                    employeesCount: 0,
+                    totalSales: 0,
+                    ordersToday: 0
+                });
+            }
+        } catch (error) {
+            console.error('Error fetching dashboard data:', error);
+            setError('Failed to load dashboard data');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const handleLogout = async () => {
         try {
@@ -18,10 +71,10 @@ const Dashboard = () => {
     };
 
     const stats = [
-        { label: 'Total Sales', value: '$0', icon: DollarSign, color: 'from-green-500 to-green-600' },
-        { label: 'Orders Today', value: '0', icon: ShoppingCart, color: 'from-blue-500 to-blue-600' },
-        { label: 'Inventory Items', value: '0', icon: Package, color: 'from-purple-500 to-purple-600' },
-        { label: 'Revenue Growth', value: '0%', icon: BarChart3, color: 'from-orange-500 to-orange-600' },
+        { label: 'Total Sales', value: `$${dashboardData.totalSales.toFixed(2)}`, icon: DollarSign, color: 'from-green-500 to-green-600' },
+        { label: 'Orders Today', value: dashboardData.ordersToday.toString(), icon: ShoppingCart, color: 'from-blue-500 to-blue-600' },
+        { label: 'Menu Items', value: dashboardData.menuItemsCount.toString(), icon: Package, color: 'from-purple-500 to-purple-600' },
+        { label: 'Employees', value: dashboardData.employeesCount.toString(), icon: Users, color: 'from-orange-500 to-orange-600' },
     ];
 
     const containerVariants = {
@@ -51,6 +104,38 @@ const Dashboard = () => {
     const trialEndDate = new Date(currentUser?.trialEndDate);
     const today = new Date();
     const daysRemaining = Math.max(0, Math.ceil((trialEndDate - today) / (1000 * 60 * 60 * 24)));
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Loading dashboard...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="text-center">
+                    <p className="text-red-600 mb-4">{error}</p>
+                    <button
+                        onClick={fetchDashboardData}
+                        className="bg-primary-500 text-white px-4 py-2 rounded-lg hover:bg-primary-600"
+                    >
+                        Try Again
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    if (!currentUser) {
+        navigate('/login');
+        return null;
+    }
 
     return (
         <div className="min-h-screen bg-gray-50">
@@ -157,21 +242,76 @@ const Dashboard = () => {
                         })}
                     </motion.div>
 
-                    {/* Getting Started Section */}
+                    {/* Main Features Section */}
                     <motion.div
                         variants={itemVariants}
                         className="grid lg:grid-cols-2 gap-8"
                     >
-                        {/* Quick Actions */}
+                        {/* Main Features */}
                         <div className="card p-8">
-                            <h3 className="text-xl font-bold text-gray-900 mb-6">Quick Actions</h3>
+                            <h3 className="text-xl font-bold text-gray-900 mb-6">Main Features</h3>
                             <div className="space-y-4">
-                                <button className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                                {isOwner && (
+                                    <>
+                                        <button 
+                                            onClick={() => navigate('/employees')}
+                                            className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                                        >
+                                            <div className="flex items-center space-x-3">
+                                                <Users className="w-6 h-6 text-primary-600" />
+                                                <div>
+                                                    <h4 className="font-semibold text-gray-900">Manage Employees</h4>
+                                                    <p className="text-sm text-gray-600">Add, edit, and manage your team members</p>
+                                                </div>
+                                            </div>
+                                        </button>
+                                        <button 
+                                            onClick={() => navigate('/menu/manage')}
+                                            className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                                        >
+                                            <div className="flex items-center space-x-3">
+                                                <ChefHat className="w-6 h-6 text-primary-600" />
+                                                <div>
+                                                    <h4 className="font-semibold text-gray-900">Menu Management</h4>
+                                                    <p className="text-sm text-gray-600">Create and manage your restaurant menu</p>
+                                                </div>
+                                            </div>
+                                        </button>
+                                        <button 
+                                            onClick={() => navigate('/analytics')}
+                                            className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                                        >
+                                            <div className="flex items-center space-x-3">
+                                                <TrendingUp className="w-6 h-6 text-primary-600" />
+                                                <div>
+                                                    <h4 className="font-semibold text-gray-900">View Analytics</h4>
+                                                    <p className="text-sm text-gray-600">Track sales, performance, and insights</p>
+                                                </div>
+                                            </div>
+                                        </button>
+                                        <button 
+                                            onClick={() => navigate('/settings')}
+                                            className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                                        >
+                                            <div className="flex items-center space-x-3">
+                                                <Settings className="w-6 h-6 text-primary-600" />
+                                                <div>
+                                                    <h4 className="font-semibold text-gray-900">Restaurant Settings</h4>
+                                                    <p className="text-sm text-gray-600">Configure your restaurant preferences</p>
+                                                </div>
+                                            </div>
+                                        </button>
+                                    </>
+                                )}
+                                <button 
+                                    onClick={() => navigate('/menu')}
+                                    className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                                >
                                     <div className="flex items-center space-x-3">
                                         <Package className="w-6 h-6 text-primary-600" />
                                         <div>
-                                            <h4 className="font-semibold text-gray-900">Add Products</h4>
-                                            <p className="text-sm text-gray-600">Start by adding your first products to inventory</p>
+                                            <h4 className="font-semibold text-gray-900">View Menu</h4>
+                                            <p className="text-sm text-gray-600">Browse available menu items</p>
                                         </div>
                                     </div>
                                 </button>
@@ -181,15 +321,6 @@ const Dashboard = () => {
                                         <div>
                                             <h4 className="font-semibold text-gray-900">Process Sale</h4>
                                             <p className="text-sm text-gray-600">Make your first sale with POS Pro</p>
-                                        </div>
-                                    </div>
-                                </button>
-                                <button className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                                    <div className="flex items-center space-x-3">
-                                        <BarChart3 className="w-6 h-6 text-primary-600" />
-                                        <div>
-                                            <h4 className="font-semibold text-gray-900">View Reports</h4>
-                                            <p className="text-sm text-gray-600">Analyze your business performance</p>
                                         </div>
                                     </div>
                                 </button>
