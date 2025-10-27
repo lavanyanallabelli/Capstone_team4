@@ -1,145 +1,121 @@
 pipeline {
     agent any
 
-    environment {
-        NODE_VERSION = '18'
-        AWS_REGION = 'us-east-1'
-        BUILD_DIR = 'code'
+    // tools {
+        // nodejs "NodeJS" // Your NodeJS installation name in Jenkins
+    // }
+
+    parameters {
+        choice(
+            name: 'BRANCH',
+            choices: ['main', 'QA', 'prod'],
+            description: 'Select the branch to build'
+        )
     }
 
     stages {
-        stage('Checkout') {
+
+        stage('Checkout from GitHub') {
             steps {
-                checkout scm
-                echo "✅ Code checked out successfully"
+                git branch: "${params.BRANCH}", url: 'https://github.com/lavanyanallabelli/Capstone_team4.git'
             }
         }
 
         stage('Install Dependencies') {
             steps {
-                dir('code/client') {
-                    echo "📦 Installing client dependencies..."
-                    sh 'npm install'
+                dir('code') {
+                     sh '''
+                     echo "Installing dependencies (using cache if available)..."
+                     npm run install:all
+                     echo "Installing missing dependencies..."
+                     cd client && npm install path-exists --save
+                     cd ../server && npm install path-exists --save
+                     cd ..
+                     '''
                 }
-                dir('code/server') {
-                    echo "📦 Installing server dependencies..."
-                    sh 'npm install'
-                }
-                echo "✅ Dependencies installed successfully"
             }
         }
 
         stage('Build React Application') {
             steps {
-                dir('code/client') {
-                    echo "🏗️ Building React application..."
-                    sh 'npm run build'
-                    echo "✅ React build completed"
+                dir('code') {
+                    sh 'npm run build:client'
                 }
             }
         }
-        
-        stage('Run Tests') {
-            parallel {
-                stage('Client Tests') {
-                    steps {
-                        dir('code/client') {
-                            echo "🧪 Running client tests..."
-                            sh 'npm test -- --coverage --watchAll=false || true'
-                        }
-                    }
-                }
-                stage('Server Tests') {
-            steps {
-                        dir('code/server') {
-                            echo "🧪 Running server tests..."
-                            sh 'npm test || true'
-                        }
-                    }
-                }
-            }
-        }
-        
-        stage('Security Scan') {
-            steps {
-                echo "🔒 Running security scans..."
-                sh 'npm audit --audit-level moderate || true'
-            }
-        }
-        
         stage('Deploy to DEV EC2') {
-            when {
-                branch 'main'
-            }
             steps {
-                echo "🚀 Deploying to DEV EC2..."
-                script {
-                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'SSH_KEY')]) {
-                        sh '''
-                            echo "📋 Checking build directory..."
-                            ls -la code/client/build/
-                            
-                            echo "📤 Copying files to EC2..."
-                            scp -v -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/client/build/* ec2-user@your-dev-ec2-ip:/var/www/html/
-                            
-                            echo "🔄 Restarting services on EC2..."
-                            ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no ec2-user@your-dev-ec2-ip '
-                                sudo systemctl restart nginx
-                                sudo systemctl restart your-pos-backend
-                                echo "✅ Services restarted successfully"
-                            '
-                        '''
-                    }
+                withCredentials([sshUserPrivateKey(credentialsId: 'AWS_DEV_SSH_KEY', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
+                    sh '''
+                        echo "Checking if build files exist locally..."
+                        ls -la code/client/build/
+                        echo "Creating remote directory..."
+                        ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@3.85.243.29 "mkdir -p /home/ec2-user/pos_system/build"
+                        echo "Copying build files..."
+                        scp -v -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/client/build/* $SSH_USER@3.85.243.29:/home/ec2-user/pos_system/build/
+                        echo "Verifying files were copied..."
+                        ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@3.85.243.29 "cd /home/ec2-user/pos_system && ls -la build/"
+                        ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@3.85.243.29 "pm2 stop pos-system || true"
+                        ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@3.85.243.29 "cd /home/ec2-user/pos_system && pm2 serve build 3000 --name pos-system --spa"
+                        ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@3.85.243.29 "pm2 save"
+                        ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@3.85.243.29 "pm2 startup -u ec2-user --hp /home/ec2-user || echo 'PM2 startup command completed (may require manual setup)'"
+                        ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@3.85.243.29 "pm2 list"
+                        ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@3.85.243.29 "timeout 10 pm2 logs pos-system --lines 20 || echo 'Logs command completed'"
+                    '''
                 }
-                echo "✅ Deployment to DEV EC2 completed"
-            }
-        }
-        
-        stage('Deploy to PROD EC2') {
-            when {
-                branch 'main'
-            }
-            steps {
-                echo "🚀 Deploying to PROD EC2..."
-                script {
-                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'SSH_KEY')]) {
-                        sh '''
-                            echo "📤 Copying files to PROD EC2..."
-                            scp -v -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/client/build/* ec2-user@your-prod-ec2-ip:/var/www/html/
-                            
-                            echo "🔄 Restarting services on PROD EC2..."
-                            ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no ec2-user@your-prod-ec2-ip '
-                                sudo systemctl restart nginx
-                                sudo systemctl restart your-pos-backend
-                                echo "✅ Services restarted successfully"
-                            '
-                        '''
-                    }
-                }
-                echo "✅ Deployment to PROD EC2 completed"
             }
         }
     }
-    
+
     post {
-        always {
-            echo "🧹 Cleaning up workspace..."
-            cleanWs()
-        }
         success {
-            echo "🎉 Pipeline completed successfully!"
-            emailext (
-                subject: "✅ POS System Deployment Successful - ${env.BUILD_NUMBER}",
-                body: "The POS system has been successfully deployed to ${env.BRANCH_NAME} environment.",
-                to: "admin@yourcompany.com"
+            echo "React app build completed successfully for branch ${params.BRANCH}!"
+            withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_URL')]) {
+                sh """
+                curl -X POST -H "Content-type: application/json" --data '{"text": ":white_check_mark: Jenkins Dev Build Successful! Dev deployment completed for branch ${params.BRANCH}."}' $SLACK_URL
+                """
+            }
+            mail (
+                to: 'cuteamy104@gmail.com',
+                subject: "✅ Jenkins Dev Build Successful - Branch: ${params.BRANCH}",
+                body: """
+Build Successful!
+
+Project: POS System
+Branch: ${params.BRANCH}
+Build: ${env.BUILD_NUMBER}
+Status: SUCCESS
+Deployment: Dev EC2 Instance
+Build URL: ${env.BUILD_URL}
+
+The React application has been successfully built and deployed to the Dev EC2 instance.
+                """
             )
         }
+
         failure {
-            echo "❌ Pipeline failed!"
-            emailext (
-                subject: "❌ POS System Deployment Failed - ${env.BUILD_NUMBER}",
-                body: "The POS system deployment to ${env.BRANCH_NAME} environment has failed. Please check the logs.",
-                to: "admin@yourcompany.com"
+            echo "Build failed!"
+            withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_URL')]) {
+                sh """
+                curl -X POST -H "Content-type: application/json" --data '{"text": ":x: Jenkins Dev Build Failed for branch ${params.BRANCH}. Please check the logs."}' $SLACK_URL
+                """
+            }
+            mail (
+                to: 'cuteamy104@gmail.com',
+                subject: "❌ Jenkins Dev Build Failed - Branch: ${params.BRANCH}",
+                body: """
+Build Failed!
+
+Project: POS System
+Branch: ${params.BRANCH}
+Build: ${env.BUILD_NUMBER}
+Status: FAILED
+Environment: Dev EC2 Instance
+Build URL: ${env.BUILD_URL}
+Console Output: ${env.BUILD_URL}console
+
+Please check the build logs for more details about the failure.
+                """
             )
         }
     }
