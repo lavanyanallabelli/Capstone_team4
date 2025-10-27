@@ -54,7 +54,7 @@ const EmployeeManagement = () => {
         try {
             const response = await apiService.updateEmployee(employeeId, employeeData);
             if (response.success) {
-                setEmployees(prev => prev.map(emp => 
+                setEmployees(prev => prev.map(emp =>
                     emp.employeeId === employeeId ? response.data : emp
                 ));
                 setShowEditForm(false);
@@ -76,7 +76,7 @@ const EmployeeManagement = () => {
                 isActive: !employee.isActive
             });
             if (response.success) {
-                setEmployees(prev => prev.map(emp => 
+                setEmployees(prev => prev.map(emp =>
                     emp.employeeId === employeeId ? { ...emp, isActive: !emp.isActive } : emp
                 ));
             }
@@ -101,13 +101,13 @@ const EmployeeManagement = () => {
 
     const filteredEmployees = employees.filter(employee => {
         const matchesSearch = employee.firstName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            employee.lastName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            employee.email?.toLowerCase().includes(searchTerm.toLowerCase());
-        
-        const matchesFilter = filterStatus === 'all' || 
-                            (filterStatus === 'active' && employee.isActive) ||
-                            (filterStatus === 'inactive' && !employee.isActive);
-        
+            employee.lastName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            employee.email?.toLowerCase().includes(searchTerm.toLowerCase());
+
+        const matchesFilter = filterStatus === 'all' ||
+            (filterStatus === 'active' && employee.isActive) ||
+            (filterStatus === 'inactive' && !employee.isActive);
+
         return matchesSearch && matchesFilter;
     });
 
@@ -266,11 +266,10 @@ const EmployeeManagement = () => {
                                         {employee.phone || 'N/A'}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                            employee.isActive 
-                                                ? 'bg-green-100 text-green-800' 
-                                                : 'bg-red-100 text-red-800'
-                                        }`}>
+                                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${employee.isActive
+                                            ? 'bg-green-100 text-green-800'
+                                            : 'bg-red-100 text-red-800'
+                                            }`}>
                                             {employee.isActive ? 'Active' : 'Inactive'}
                                         </span>
                                     </td>
@@ -287,11 +286,10 @@ const EmployeeManagement = () => {
                                             </button>
                                             <button
                                                 onClick={() => handleToggleEmployeeStatus(employee.employeeId)}
-                                                className={`${
-                                                    employee.isActive 
-                                                        ? 'text-red-600 hover:text-red-900' 
-                                                        : 'text-green-600 hover:text-green-900'
-                                                }`}
+                                                className={`${employee.isActive
+                                                    ? 'text-red-600 hover:text-red-900'
+                                                    : 'text-green-600 hover:text-green-900'
+                                                    }`}
                                             >
                                                 {employee.isActive ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
                                             </button>
