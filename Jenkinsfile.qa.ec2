@@ -125,16 +125,16 @@ pipeline {
             steps {
                 echo "🚀 Deploying to QA EC2 for testing..."
                 script {
-                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'SSH_KEY')]) {
+                    withCredentials([sshUserPrivateKey(credentialsId: 'capstone-qa-key', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
                         sh '''
                             echo "📋 Checking build directory..."
                             ls -la code/client/build/
                             
                             echo "📤 Copying files to QA EC2..."
-                            scp -v -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/client/build/* ec2-user@your-qa-ec2-ip:/var/www/html/
+                            scp -v -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/client/build/* $SSH_USER@50.17.73.133:/var/www/html/
                             
                             echo "🔄 Restarting services on QA EC2..."
-                            ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no ec2-user@your-qa-ec2-ip '
+                            ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no $SSH_USER@50.17.73.133 '
                                 sudo systemctl restart nginx
                                 sudo systemctl restart your-pos-backend
                                 echo "✅ QA services restarted successfully"
@@ -172,36 +172,35 @@ pipeline {
         }
         success {
             echo "🎉 QA Pipeline completed successfully!"
-            emailext (
+            mail (
+                to: 'cuteamy104@gmail.com',
                 subject: "✅ POS System QA Deployment Successful - ${env.BUILD_NUMBER}",
                 body: """
-                The POS system has been successfully deployed to QA environment.
-                
-                Build Number: ${env.BUILD_NUMBER}
-                Branch: ${env.BRANCH_NAME}
-                Environment: ${QA_ENVIRONMENT}
-                
-                QA Testing URL: http://your-qa-ec2-ip
-                
-                Please proceed with QA testing and validation.
-                """,
-                to: "qa-team@yourcompany.com,admin@yourcompany.com"
+The POS system has been successfully deployed to QA environment.
+
+Build Number: ${env.BUILD_NUMBER}
+Branch: ${env.BRANCH_NAME}
+Environment: QA
+QA Testing URL: http://50.17.73.133
+
+Please proceed with QA testing and validation.
+                """
             )
         }
         failure {
             echo "❌ QA Pipeline failed!"
-            emailext (
+            mail (
+                to: 'cuteamy104@gmail.com',
                 subject: "❌ POS System QA Deployment Failed - ${env.BUILD_NUMBER}",
                 body: """
-                The POS system QA deployment has failed.
-                
-                Build Number: ${env.BUILD_NUMBER}
-                Branch: ${env.BRANCH_NAME}
-                Environment: ${QA_ENVIRONMENT}
-                
-                Please check the logs and fix the issues before proceeding.
-                """,
-                to: "qa-team@yourcompany.com,admin@yourcompany.com"
+The POS system QA deployment has failed.
+
+Build Number: ${env.BUILD_NUMBER}
+Branch: ${env.BRANCH_NAME}
+Environment: QA
+
+Please check the logs and fix the issues before proceeding.
+                """
             )
         }
     }
