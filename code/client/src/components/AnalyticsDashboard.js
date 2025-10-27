@@ -28,7 +28,7 @@ const AnalyticsDashboard = () => {
     // Load analytics data on component mount
     useEffect(() => {
         loadAnalyticsData();
-    }, [selectedPeriod, loadAnalyticsData]);
+    }, [selectedPeriod]);
 
     const loadAnalyticsData = async () => {
         try {
