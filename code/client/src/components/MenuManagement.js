@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import { USER_ROLES, PERMISSIONS, hasPermission } from '../aws/userRoles';
@@ -43,7 +43,7 @@ const MenuManagement = () => {
         if (!loading) {
             loadMenuItems();
         }
-    }, [searchTerm, selectedCategory, loading]);
+    }, [loadMenuItems, loading]);
 
     const loadMenuData = async () => {
         try {
@@ -79,7 +79,7 @@ const MenuManagement = () => {
         }
     };
 
-    const loadMenuItems = async () => {
+    const loadMenuItems = useCallback(async () => {
         try {
             const params = {};
             if (searchTerm) params.search = searchTerm;
@@ -93,7 +93,7 @@ const MenuManagement = () => {
             console.error('Error loading menu items:', error);
             setError('Failed to load menu items');
         }
-    };
+    }, [searchTerm, selectedCategory]);
 
     // Only show this component to owners
     if (userRole !== USER_ROLES.OWNER) {

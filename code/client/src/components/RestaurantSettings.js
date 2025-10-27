@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
-import { USER_ROLES, PERMISSIONS, hasPermission } from '../aws/userRoles';
+import { USER_ROLES } from '../aws/userRoles';
 import {
     Settings,
     Building,
