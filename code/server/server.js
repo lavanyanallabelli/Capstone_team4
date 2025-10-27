@@ -20,6 +20,7 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 8000;
+const HOST = '0.0.0.0'; // allow external traffic
 
 // Configure AWS
 console.log('🔧 AWS Configuration:');
@@ -96,10 +97,10 @@ app.use('*', (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`📊 Health check: http://localhost:${PORT}/health`);
-    console.log(`🔗 API Base URL: http://localhost:${PORT}/api`);
+app.listen(PORT, HOST, () => {
+    console.log(`🚀 Server running on http://${HOST}:${PORT}`);
+    console.log(`📊 Health check: http://${HOST}:${PORT}/health`);
+    console.log(`🔗 API Base URL: http://${HOST}:${PORT}/api`);
 });
 
 module.exports = { app, dynamodb };
