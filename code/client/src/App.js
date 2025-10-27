@@ -3,6 +3,10 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import Homepage from './components/Homepage';
 import Dashboard from './components/Dashboard';
+import EmployeeManagement from './components/EmployeeManagement';
+import MenuManagement from './components/MenuManagement';
+import AnalyticsDashboard from './components/AnalyticsDashboard';
+import RestaurantSettings from './components/RestaurantSettings';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import PricingPage from './pages/PricingPage';
@@ -12,11 +16,6 @@ import EmailVerification from './components/auth/EmailVerification';
 import ResetPasswordConfirm from './components/auth/ResetPasswordConfirm';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import ProtectedRoute from './components/ProtectedRoute';
-import DebugAuth from './components/DebugAuth';
-import EmployeeManagement from './components/EmployeeManagement';
-import MenuManagement from './components/MenuManagement';
-import AnalyticsDashboard from './components/AnalyticsDashboard';
-import RestaurantSettings from './components/RestaurantSettings';
 import './App.css';
 
 function App() {
@@ -34,7 +33,6 @@ function App() {
                         <Route path="/verify-email" element={<EmailVerification />} />
                         <Route path="/reset-password" element={<ResetPasswordPage />} />
                         <Route path="/reset-password-confirm" element={<ResetPasswordConfirm />} />
-                        <Route path="/debug-auth" element={<DebugAuth />} />
                         <Route
                             path="/dashboard"
                             element={
@@ -52,6 +50,27 @@ function App() {
                             }
                         />
                         <Route
+                            path="/analytics"
+                            element={
+                                <ProtectedRoute>
+                                    <AnalyticsDashboard />
+                                </ProtectedRoute>
+                            }
+                        />
+                        <Route
+                            path="/menu"
+                            element={
+                                <ProtectedRoute>
+                                    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                                        <div className="text-center">
+                                            <h2 className="text-2xl font-bold text-gray-900 mb-2">Menu View</h2>
+                                            <p className="text-gray-600">Coming soon! This will show the restaurant menu for employees.</p>
+                                        </div>
+                                    </div>
+                                </ProtectedRoute>
+                            }
+                        />
+                        <Route
                             path="/menu/manage"
                             element={
                                 <ProtectedRoute>
@@ -60,10 +79,41 @@ function App() {
                             }
                         />
                         <Route
-                            path="/analytics"
+                            path="/orders/new"
                             element={
                                 <ProtectedRoute>
-                                    <AnalyticsDashboard />
+                                    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                                        <div className="text-center">
+                                            <h2 className="text-2xl font-bold text-gray-900 mb-2">New Order</h2>
+                                            <p className="text-gray-600">Coming soon! This will allow you to take new orders.</p>
+                                        </div>
+                                    </div>
+                                </ProtectedRoute>
+                            }
+                        />
+                        <Route
+                            path="/orders/online"
+                            element={
+                                <ProtectedRoute>
+                                    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                                        <div className="text-center">
+                                            <h2 className="text-2xl font-bold text-gray-900 mb-2">Online Orders</h2>
+                                            <p className="text-gray-600">Coming soon! This will show online orders to process.</p>
+                                        </div>
+                                    </div>
+                                </ProtectedRoute>
+                            }
+                        />
+                        <Route
+                            path="/payments"
+                            element={
+                                <ProtectedRoute>
+                                    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                                        <div className="text-center">
+                                            <h2 className="text-2xl font-bold text-gray-900 mb-2">Payment Processing</h2>
+                                            <p className="text-gray-600">Coming soon! This will allow you to process payments.</p>
+                                        </div>
+                                    </div>
                                 </ProtectedRoute>
                             }
                         />

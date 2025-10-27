@@ -1,95 +1,171 @@
-import axios from 'axios';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 class ApiService {
     constructor() {
-        this.baseURL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+        this.baseURL = API_BASE_URL;
     }
 
+    // Get auth token from AWS Cognito
+    async getAuthToken() {
+        try {
+            // Import Auth from aws-amplify
+            const { Auth } = await import('aws-amplify');
+
+            // Get current session
+            const session = await Auth.currentSession();
+            if (session && session.isValid()) {
+                return session.getIdToken().getJwtToken();
+            }
+            return null;
+        } catch (error) {
+            console.error('Error getting Cognito token:', error);
+            return null;
+        }
+    }
+
+    // Set auth token (not needed for Cognito, but keeping for compatibility)
+    setAuthToken(token) {
+        // Cognito handles token storage automatically
+        console.log('Token set via Cognito');
+    }
+
+    // Remove auth token (not needed for Cognito, but keeping for compatibility)
+    removeAuthToken() {
+        // Cognito handles token removal automatically
+        console.log('Token removed via Cognito');
+    }
+
+    // Get headers with auth token
     async getHeaders(includeAuth = true) {
         const headers = {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
         };
 
-        // Temporarily disable authentication for debugging
+        // Temporarily disabled auth for testing - no token required
         if (false && includeAuth) {
-            try {
-                const { Auth } = await import('aws-amplify');
-                const session = await Auth.currentSession();
-                const token = session.getIdToken().getJwtToken();
-                headers.Authorization = `Bearer ${token}`;
-            } catch (error) {
-                console.error('Error getting auth token:', error);
-                throw new Error('User not authenticated');
+            const token = await this.getAuthToken();
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            } else {
+                throw new Error('Please provide a valid access token');
             }
         }
 
         return headers;
     }
 
-    async request(method, endpoint, data = null, includeAuth = true) {
-        try {
-            const headers = await this.getHeaders(includeAuth);
-            const config = {
-                method,
-                url: `${this.baseURL}${endpoint}`,
-                headers,
-                data
-            };
+    // Generic request method
+    async request(endpoint, options = {}) {
+        const url = `${this.baseURL}${endpoint}`;
+        const config = {
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            ...options,
+        };
 
-            const response = await axios(config);
-            return {
-                success: true,
-                data: response.data,
-                status: response.status
-            };
+        try {
+            const response = await fetch(url, config);
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.message || `HTTP error! status: ${response.status}`);
+            }
+
+            return data;
         } catch (error) {
             console.error('API request failed:', error);
-            if (error.response) {
-                return {
-                    success: false,
-                    error: error.response.data?.message || 'API request failed',
-                    status: error.response.status
-                };
-            } else if (error.request) {
-                return {
-                    success: false,
-                    error: 'Network error - please check your connection',
-                    status: 0
-                };
-            } else {
-                return {
-                    success: false,
-                    error: error.message || 'Unknown error occurred',
-                    status: 0
-                };
-            }
+            throw error;
         }
     }
 
-    // HTTP Methods
-    async get(endpoint, includeAuth = true) {
-        return this.request('GET', endpoint, null, includeAuth);
+    // GET request
+    async get(endpoint, options = {}) {
+        return this.request(endpoint, {
+            method: 'GET',
+            ...options,
+        });
     }
 
-    async post(endpoint, data, includeAuth = true) {
-        return this.request('POST', endpoint, data, includeAuth);
+    // POST request
+    async post(endpoint, data, options = {}) {
+        return this.request(endpoint, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            ...options,
+        });
     }
 
-    async put(endpoint, data, includeAuth = true) {
-        return this.request('PUT', endpoint, data, includeAuth);
+    // PUT request
+    async put(endpoint, data, options = {}) {
+        return this.request(endpoint, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+            ...options,
+        });
     }
 
-    async delete(endpoint, includeAuth = true) {
-        return this.request('DELETE', endpoint, null, includeAuth);
+    // PATCH request
+    async patch(endpoint, data, options = {}) {
+        return this.request(endpoint, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            ...options,
+        });
     }
 
-    async patch(endpoint, data, includeAuth = true) {
-        return this.request('PATCH', endpoint, data, includeAuth);
+    // DELETE request
+    async delete(endpoint, options = {}) {
+        return this.request(endpoint, {
+            method: 'DELETE',
+            ...options,
+        });
     }
 
-    // Menu API
-    async getMenuItems() {
-        return this.get('/menu');
+    // Authentication methods
+    async register(userData) {
+        const response = await this.post('/auth/register', userData, { includeAuth: false });
+        if (response.success && response.data.token) {
+            this.setAuthToken(response.data.token);
+        }
+        return response;
+    }
+
+    async login(credentials) {
+        const response = await this.post('/auth/login', credentials, { includeAuth: false });
+        if (response.success && response.data.token) {
+            this.setAuthToken(response.data.token);
+        }
+        return response;
+    }
+
+    async employeeLogin(credentials) {
+        const response = await this.post('/auth/employee-login', credentials, { includeAuth: false });
+        if (response.success && response.data.token) {
+            this.setAuthToken(response.data.token);
+        }
+        return response;
+    }
+
+    async logout() {
+        const response = await this.post('/auth/logout');
+        this.removeAuthToken();
+        return response;
+    }
+
+    async verifyToken() {
+        return this.get('/auth/verify');
+    }
+
+    async changePassword(passwordData) {
+        return this.post('/auth/change-password', passwordData);
+    }
+
+    // Menu methods
+    async getMenuItems(params = {}) {
+        const queryString = new URLSearchParams(params).toString();
+        const endpoint = queryString ? `/menu?${queryString}` : '/menu';
+        return this.get(endpoint);
     }
 
     async getMenuItem(itemId) {
@@ -108,25 +184,23 @@ class ApiService {
         return this.delete(`/menu/${itemId}`);
     }
 
-    async toggleMenuItemAvailability(itemId, isAvailable) {
-        return this.patch(`/menu/${itemId}/availability`, { isAvailable });
+    async toggleItemAvailability(itemId, availability) {
+        return this.patch(`/menu/${itemId}/availability`, { availability });
     }
 
     async getMenuCategories() {
         return this.get('/menu/categories/list');
     }
 
-    async createMenuCategory(categoryData) {
-        return this.post('/menu/categories', categoryData);
-    }
-
     async getMenuStats() {
         return this.get('/menu/stats/overview');
     }
 
-    // Employee API
-    async getEmployees() {
-        return this.get('/employees');
+    // Employee methods
+    async getEmployees(params = {}) {
+        const queryString = new URLSearchParams(params).toString();
+        const endpoint = queryString ? `/employees?${queryString}` : '/employees';
+        return this.get(endpoint);
     }
 
     async getEmployee(employeeId) {
@@ -141,11 +215,7 @@ class ApiService {
         return this.put(`/employees/${employeeId}`, employeeData);
     }
 
-    async deleteEmployee(employeeId) {
-        return this.delete(`/employees/${employeeId}`);
-    }
-
-    async toggleEmployeeStatus(employeeId, isActive) {
+    async updateEmployeeStatus(employeeId, isActive) {
         return this.patch(`/employees/${employeeId}/status`, { isActive });
     }
 
@@ -153,85 +223,101 @@ class ApiService {
         return this.post(`/employees/${employeeId}/reset-password`);
     }
 
-    // Analytics API
-    async getAnalyticsOverview(period = '7d') {
-        return this.get(`/analytics/overview?period=${period}`);
+    async getEmployeePerformance(employeeId, params = {}) {
+        const queryString = new URLSearchParams(params).toString();
+        const endpoint = queryString
+            ? `/employees/${employeeId}/performance?${queryString}`
+            : `/employees/${employeeId}/performance`;
+        return this.get(endpoint);
     }
 
-    async getDailySales(period = '7d') {
-        return this.get(`/analytics/daily-sales?period=${period}`);
+    async getEmployeeActivity(employeeId, params = {}) {
+        const queryString = new URLSearchParams(params).toString();
+        const endpoint = queryString
+            ? `/employees/${employeeId}/activity?${queryString}`
+            : `/employees/${employeeId}/activity`;
+        return this.get(endpoint);
     }
 
-    async getTopItems(period = '7d') {
-        return this.get(`/analytics/top-items?period=${period}`);
+    async getEmployeeStats() {
+        return this.get('/employees/stats/overview');
     }
 
-    async getEmployeePerformance(period = '7d') {
-        return this.get(`/analytics/employee-performance?period=${period}`);
+    // Analytics methods
+    async getSalesAnalytics(params = {}) {
+        const queryString = new URLSearchParams(params).toString();
+        const endpoint = queryString ? `/analytics/sales?${queryString}` : '/analytics/sales';
+        return this.get(endpoint);
     }
 
-    async getRevenueBreakdown(period = '7d') {
-        return this.get(`/analytics/revenue-breakdown?period=${period}`);
+    async getTopItems(params = {}) {
+        const queryString = new URLSearchParams(params).toString();
+        const endpoint = queryString ? `/analytics/top-items?${queryString}` : '/analytics/top-items';
+        return this.get(endpoint);
     }
 
-    // Settings API
-    async getRestaurantSettings() {
+    async getEmployeePerformanceAnalytics(params = {}) {
+        const queryString = new URLSearchParams(params).toString();
+        const endpoint = queryString ? `/analytics/employee-performance?${queryString}` : '/analytics/employee-performance';
+        return this.get(endpoint);
+    }
+
+    async getRevenueBreakdown(params = {}) {
+        const queryString = new URLSearchParams(params).toString();
+        const endpoint = queryString ? `/analytics/revenue-breakdown?${queryString}` : '/analytics/revenue-breakdown';
+        return this.get(endpoint);
+    }
+
+    async getCustomerAnalytics(params = {}) {
+        const queryString = new URLSearchParams(params).toString();
+        const endpoint = queryString ? `/analytics/customers?${queryString}` : '/analytics/customers';
+        return this.get(endpoint);
+    }
+
+    async getAnalyticsOverview(params = {}) {
+        const queryString = new URLSearchParams(params).toString();
+        const endpoint = queryString ? `/analytics/overview?${queryString}` : '/analytics/overview';
+        return this.get(endpoint);
+    }
+
+    // Settings methods
+    async getSettings() {
         return this.get('/settings');
     }
 
-    async updateRestaurantSettings(settings) {
-        return this.put('/settings', settings);
-    }
-
-    async getGeneralSettings() {
-        return this.get('/settings/general');
+    async getSetting(settingType) {
+        return this.get(`/settings/${settingType}`);
     }
 
     async updateGeneralSettings(settings) {
         return this.put('/settings/general', settings);
     }
 
-    async getOperatingHours() {
-        return this.get('/settings/operating-hours');
+    async updateHoursSettings(settings) {
+        return this.put('/settings/hours', settings);
     }
 
-    async updateOperatingHours(hours) {
-        return this.put('/settings/operating-hours', hours);
-    }
-
-    async getPaymentConfig() {
-        return this.get('/settings/payment');
-    }
-
-    async updatePaymentConfig(config) {
-        return this.put('/settings/payment', config);
-    }
-
-    async getNotificationSettings() {
-        return this.get('/settings/notifications');
+    async updatePaymentSettings(settings) {
+        return this.put('/settings/payment', settings);
     }
 
     async updateNotificationSettings(settings) {
         return this.put('/settings/notifications', settings);
     }
 
-    // Auth API
-    async loginOwner(email, password) {
-        return this.post('/auth/login', { email, password }, false);
+    async initializeSettings() {
+        return this.post('/settings/initialize');
     }
 
-    async registerOwner(ownerData) {
-        return this.post('/auth/register', ownerData, false);
+    async testPaymentGateway(gateway) {
+        return this.post('/settings/payment/test', { gateway });
     }
 
-    async loginEmployee(employeeId, password) {
-        return this.post('/auth/login-employee', { employeeId, password }, false);
-    }
-
-    async resetPassword(email) {
-        return this.post('/auth/reset-password', { email }, false);
+    async sendTestNotification(type, recipient) {
+        return this.post('/settings/notifications/test', { type, recipient });
     }
 }
 
+// Create and export a singleton instance
 const apiService = new ApiService();
 export default apiService;

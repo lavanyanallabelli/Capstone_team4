@@ -1,146 +1,153 @@
 // User Roles and Permissions Configuration
 export const USER_ROLES = {
-    ADMIN: 'admin',        // System Administrator
-    OWNER: 'owner',        // Business Owner
-    MANAGER: 'manager',    // Store/Shift Manager
-    CASHIER: 'cashier',    // Sales Staff
-    READONLY: 'readonly'   // Auditor/Accountant
+    OWNER: 'owner',        // Business Owner - Full control over POS system
+    EMPLOYEE: 'employee'   // Employee - Limited operational tasks
 };
 
 export const PERMISSIONS = {
-    // Sales & Transactions
-    CAN_PROCESS_SALES: 'canProcessSales',
-    CAN_PROCESS_REFUNDS: 'canProcessRefunds',
-    CAN_VOID_TRANSACTIONS: 'canVoidTransactions',
+    // User Management (Owner only)
+    CAN_CREATE_EMPLOYEE: 'canCreateEmployee',
+    CAN_EDIT_EMPLOYEE: 'canEditEmployee',
+    CAN_DEACTIVATE_EMPLOYEE: 'canDeactivateEmployee',
+    CAN_VIEW_EMPLOYEE_ACTIVITY: 'canViewEmployeeActivity',
 
-    // Inventory & Products
-    CAN_MANAGE_INVENTORY: 'canManageInventory',
-    CAN_MANAGE_PRODUCTS: 'canManageProducts',
-    CAN_ADJUST_INVENTORY: 'canAdjustInventory',
+    // Menu Management (Owner only)
+    CAN_MANAGE_MENU_ITEMS: 'canManageMenuItems',
+    CAN_MANAGE_MENU_CATEGORIES: 'canManageMenuCategories',
+    CAN_TOGGLE_ITEM_AVAILABILITY: 'canToggleItemAvailability',
 
-    // Reports & Analytics
-    CAN_VIEW_REPORTS: 'canViewReports',
-    CAN_VIEW_ANALYTICS: 'canViewAnalytics',
-    CAN_EXPORT_DATA: 'canExportData',
+    // Order Management
+    CAN_VIEW_ALL_ORDERS: 'canViewAllOrders',
+    CAN_UPDATE_ORDERS: 'canUpdateOrders',
+    CAN_CANCEL_ORDERS: 'canCancelOrders',
+    CAN_TAKE_DINE_IN_ORDERS: 'canTakeDineInOrders',
+    CAN_HANDLE_ONLINE_ORDERS: 'canHandleOnlineOrders',
+    CAN_UPDATE_ORDER_STATUS: 'canUpdateOrderStatus',
+    CAN_GENERATE_BILLS: 'canGenerateBills',
 
-    // User Management
-    CAN_MANAGE_USERS: 'canManageUsers',
-    CAN_MANAGE_ROLES: 'canManageRoles',
+    // Payment Management
+    CAN_VIEW_ALL_TRANSACTIONS: 'canViewAllTransactions',
+    CAN_PROCESS_PAYMENTS: 'canProcessPayments',
+    CAN_HANDLE_REFUNDS: 'canHandleRefunds',
+    CAN_MANAGE_TAX_RATES: 'canManageTaxRates',
+    CAN_MANAGE_DISCOUNTS: 'canManageDiscounts',
+    CAN_APPLY_DISCOUNTS: 'canApplyDiscounts',
 
-    // System & Settings
-    CAN_MANAGE_SETTINGS: 'canManageSettings',
-    CAN_MANAGE_SYSTEM: 'canManageSystem',
+    // Analytics & Reports (Owner only)
+    CAN_VIEW_SALES_ANALYTICS: 'canViewSalesAnalytics',
+    CAN_VIEW_EMPLOYEE_PERFORMANCE: 'canViewEmployeePerformance',
+    CAN_VIEW_REVENUE_BREAKDOWN: 'canViewRevenueBreakdown',
 
-    // Customer Management
-    CAN_VIEW_CUSTOMERS: 'canViewCustomers',
-    CAN_MANAGE_CUSTOMERS: 'canManageCustomers',
+    // System Configuration (Owner only)
+    CAN_MANAGE_RESTAURANT_DETAILS: 'canManageRestaurantDetails',
+    CAN_MANAGE_PAYMENT_GATEWAY: 'canManagePaymentGateway',
+    CAN_MANAGE_NOTIFICATION_SETTINGS: 'canManageNotificationSettings',
 
-    // Financial
-    CAN_VIEW_FINANCIALS: 'canViewFinancials',
-    CAN_MANAGE_BILLING: 'canManageBilling'
+    // Menu Interaction (Employee)
+    CAN_VIEW_MENU_ITEMS: 'canViewMenuItems',
+    CAN_NOTIFY_ITEM_UNAVAILABLE: 'canNotifyItemUnavailable',
+
+    // Account Management
+    CAN_UPDATE_PERSONAL_DETAILS: 'canUpdatePersonalDetails'
 };
 
 // Role-based permissions mapping
 export const ROLE_PERMISSIONS = {
-    [USER_ROLES.ADMIN]: {
-        // System Administrator - Full system access
-        [PERMISSIONS.CAN_PROCESS_SALES]: true,
-        [PERMISSIONS.CAN_PROCESS_REFUNDS]: true,
-        [PERMISSIONS.CAN_VOID_TRANSACTIONS]: true,
-        [PERMISSIONS.CAN_MANAGE_INVENTORY]: true,
-        [PERMISSIONS.CAN_MANAGE_PRODUCTS]: true,
-        [PERMISSIONS.CAN_ADJUST_INVENTORY]: true,
-        [PERMISSIONS.CAN_VIEW_REPORTS]: true,
-        [PERMISSIONS.CAN_VIEW_ANALYTICS]: true,
-        [PERMISSIONS.CAN_EXPORT_DATA]: true,
-        [PERMISSIONS.CAN_MANAGE_USERS]: true,
-        [PERMISSIONS.CAN_MANAGE_ROLES]: true,
-        [PERMISSIONS.CAN_MANAGE_SETTINGS]: true,
-        [PERMISSIONS.CAN_MANAGE_SYSTEM]: true,
-        [PERMISSIONS.CAN_VIEW_CUSTOMERS]: true,
-        [PERMISSIONS.CAN_MANAGE_CUSTOMERS]: true,
-        [PERMISSIONS.CAN_VIEW_FINANCIALS]: true,
-        [PERMISSIONS.CAN_MANAGE_BILLING]: true
-    },
     [USER_ROLES.OWNER]: {
-        // Business Owner - All business operations
-        [PERMISSIONS.CAN_PROCESS_SALES]: true,
-        [PERMISSIONS.CAN_PROCESS_REFUNDS]: true,
-        [PERMISSIONS.CAN_VOID_TRANSACTIONS]: true,
-        [PERMISSIONS.CAN_MANAGE_INVENTORY]: true,
-        [PERMISSIONS.CAN_MANAGE_PRODUCTS]: true,
-        [PERMISSIONS.CAN_ADJUST_INVENTORY]: true,
-        [PERMISSIONS.CAN_VIEW_REPORTS]: true,
-        [PERMISSIONS.CAN_VIEW_ANALYTICS]: true,
-        [PERMISSIONS.CAN_EXPORT_DATA]: true,
-        [PERMISSIONS.CAN_MANAGE_USERS]: true,
-        [PERMISSIONS.CAN_MANAGE_ROLES]: false, // Cannot change admin roles
-        [PERMISSIONS.CAN_MANAGE_SETTINGS]: true,
-        [PERMISSIONS.CAN_MANAGE_SYSTEM]: false, // No system-level changes
-        [PERMISSIONS.CAN_VIEW_CUSTOMERS]: true,
-        [PERMISSIONS.CAN_MANAGE_CUSTOMERS]: true,
-        [PERMISSIONS.CAN_VIEW_FINANCIALS]: true,
-        [PERMISSIONS.CAN_MANAGE_BILLING]: true
+        // Owner - Full control over the entire POS system
+
+        // User Management
+        [PERMISSIONS.CAN_CREATE_EMPLOYEE]: true,
+        [PERMISSIONS.CAN_EDIT_EMPLOYEE]: true,
+        [PERMISSIONS.CAN_DEACTIVATE_EMPLOYEE]: true,
+        [PERMISSIONS.CAN_VIEW_EMPLOYEE_ACTIVITY]: true,
+
+        // Menu Management
+        [PERMISSIONS.CAN_MANAGE_MENU_ITEMS]: true,
+        [PERMISSIONS.CAN_MANAGE_MENU_CATEGORIES]: true,
+        [PERMISSIONS.CAN_TOGGLE_ITEM_AVAILABILITY]: true,
+
+        // Order Management
+        [PERMISSIONS.CAN_VIEW_ALL_ORDERS]: true,
+        [PERMISSIONS.CAN_UPDATE_ORDERS]: true,
+        [PERMISSIONS.CAN_CANCEL_ORDERS]: true,
+        [PERMISSIONS.CAN_TAKE_DINE_IN_ORDERS]: true,
+        [PERMISSIONS.CAN_HANDLE_ONLINE_ORDERS]: true,
+        [PERMISSIONS.CAN_UPDATE_ORDER_STATUS]: true,
+        [PERMISSIONS.CAN_GENERATE_BILLS]: true,
+
+        // Payment Management
+        [PERMISSIONS.CAN_VIEW_ALL_TRANSACTIONS]: true,
+        [PERMISSIONS.CAN_PROCESS_PAYMENTS]: true,
+        [PERMISSIONS.CAN_HANDLE_REFUNDS]: true,
+        [PERMISSIONS.CAN_MANAGE_TAX_RATES]: true,
+        [PERMISSIONS.CAN_MANAGE_DISCOUNTS]: true,
+        [PERMISSIONS.CAN_APPLY_DISCOUNTS]: true,
+
+        // Analytics & Reports
+        [PERMISSIONS.CAN_VIEW_SALES_ANALYTICS]: true,
+        [PERMISSIONS.CAN_VIEW_EMPLOYEE_PERFORMANCE]: true,
+        [PERMISSIONS.CAN_VIEW_REVENUE_BREAKDOWN]: true,
+
+        // System Configuration
+        [PERMISSIONS.CAN_MANAGE_RESTAURANT_DETAILS]: true,
+        [PERMISSIONS.CAN_MANAGE_PAYMENT_GATEWAY]: true,
+        [PERMISSIONS.CAN_MANAGE_NOTIFICATION_SETTINGS]: true,
+
+        // Menu Interaction
+        [PERMISSIONS.CAN_VIEW_MENU_ITEMS]: true,
+        [PERMISSIONS.CAN_NOTIFY_ITEM_UNAVAILABLE]: true,
+
+        // Account Management
+        [PERMISSIONS.CAN_UPDATE_PERSONAL_DETAILS]: true
     },
-    [USER_ROLES.MANAGER]: {
-        // Store/Shift Manager - Daily operations
-        [PERMISSIONS.CAN_PROCESS_SALES]: true,
-        [PERMISSIONS.CAN_PROCESS_REFUNDS]: true,
-        [PERMISSIONS.CAN_VOID_TRANSACTIONS]: true,
-        [PERMISSIONS.CAN_MANAGE_INVENTORY]: true,
-        [PERMISSIONS.CAN_MANAGE_PRODUCTS]: true,
-        [PERMISSIONS.CAN_ADJUST_INVENTORY]: true,
-        [PERMISSIONS.CAN_VIEW_REPORTS]: true,
-        [PERMISSIONS.CAN_VIEW_ANALYTICS]: true,
-        [PERMISSIONS.CAN_EXPORT_DATA]: true,
-        [PERMISSIONS.CAN_MANAGE_USERS]: false, // Cannot manage owners/admins
-        [PERMISSIONS.CAN_MANAGE_ROLES]: false,
-        [PERMISSIONS.CAN_MANAGE_SETTINGS]: false,
-        [PERMISSIONS.CAN_MANAGE_SYSTEM]: false,
-        [PERMISSIONS.CAN_VIEW_CUSTOMERS]: true,
-        [PERMISSIONS.CAN_MANAGE_CUSTOMERS]: true,
-        [PERMISSIONS.CAN_VIEW_FINANCIALS]: true,
-        [PERMISSIONS.CAN_MANAGE_BILLING]: false
-    },
-    [USER_ROLES.CASHIER]: {
-        // Sales Staff - Customer service and sales
-        [PERMISSIONS.CAN_PROCESS_SALES]: true,
-        [PERMISSIONS.CAN_PROCESS_REFUNDS]: false, // Requires manager approval
-        [PERMISSIONS.CAN_VOID_TRANSACTIONS]: false,
-        [PERMISSIONS.CAN_MANAGE_INVENTORY]: false,
-        [PERMISSIONS.CAN_MANAGE_PRODUCTS]: false,
-        [PERMISSIONS.CAN_ADJUST_INVENTORY]: false,
-        [PERMISSIONS.CAN_VIEW_REPORTS]: false,
-        [PERMISSIONS.CAN_VIEW_ANALYTICS]: false,
-        [PERMISSIONS.CAN_EXPORT_DATA]: false,
-        [PERMISSIONS.CAN_MANAGE_USERS]: false,
-        [PERMISSIONS.CAN_MANAGE_ROLES]: false,
-        [PERMISSIONS.CAN_MANAGE_SETTINGS]: false,
-        [PERMISSIONS.CAN_MANAGE_SYSTEM]: false,
-        [PERMISSIONS.CAN_VIEW_CUSTOMERS]: true,
-        [PERMISSIONS.CAN_MANAGE_CUSTOMERS]: false,
-        [PERMISSIONS.CAN_VIEW_FINANCIALS]: false,
-        [PERMISSIONS.CAN_MANAGE_BILLING]: false
-    },
-    [USER_ROLES.READONLY]: {
-        // Auditor/Accountant - View-only access
-        [PERMISSIONS.CAN_PROCESS_SALES]: false,
-        [PERMISSIONS.CAN_PROCESS_REFUNDS]: false,
-        [PERMISSIONS.CAN_VOID_TRANSACTIONS]: false,
-        [PERMISSIONS.CAN_MANAGE_INVENTORY]: false,
-        [PERMISSIONS.CAN_MANAGE_PRODUCTS]: false,
-        [PERMISSIONS.CAN_ADJUST_INVENTORY]: false,
-        [PERMISSIONS.CAN_VIEW_REPORTS]: true,
-        [PERMISSIONS.CAN_VIEW_ANALYTICS]: true,
-        [PERMISSIONS.CAN_EXPORT_DATA]: true,
-        [PERMISSIONS.CAN_MANAGE_USERS]: false,
-        [PERMISSIONS.CAN_MANAGE_ROLES]: false,
-        [PERMISSIONS.CAN_MANAGE_SETTINGS]: false,
-        [PERMISSIONS.CAN_MANAGE_SYSTEM]: false,
-        [PERMISSIONS.CAN_VIEW_CUSTOMERS]: true,
-        [PERMISSIONS.CAN_MANAGE_CUSTOMERS]: false,
-        [PERMISSIONS.CAN_VIEW_FINANCIALS]: true,
-        [PERMISSIONS.CAN_MANAGE_BILLING]: false
+    [USER_ROLES.EMPLOYEE]: {
+        // Employee - Limited operational tasks within the POS
+
+        // User Management
+        [PERMISSIONS.CAN_CREATE_EMPLOYEE]: false,
+        [PERMISSIONS.CAN_EDIT_EMPLOYEE]: false,
+        [PERMISSIONS.CAN_DEACTIVATE_EMPLOYEE]: false,
+        [PERMISSIONS.CAN_VIEW_EMPLOYEE_ACTIVITY]: false,
+
+        // Menu Management
+        [PERMISSIONS.CAN_MANAGE_MENU_ITEMS]: false,
+        [PERMISSIONS.CAN_MANAGE_MENU_CATEGORIES]: false,
+        [PERMISSIONS.CAN_TOGGLE_ITEM_AVAILABILITY]: false,
+
+        // Order Management
+        [PERMISSIONS.CAN_VIEW_ALL_ORDERS]: false, // Can only see assigned orders
+        [PERMISSIONS.CAN_UPDATE_ORDERS]: true,
+        [PERMISSIONS.CAN_CANCEL_ORDERS]: false,
+        [PERMISSIONS.CAN_TAKE_DINE_IN_ORDERS]: true,
+        [PERMISSIONS.CAN_HANDLE_ONLINE_ORDERS]: true,
+        [PERMISSIONS.CAN_UPDATE_ORDER_STATUS]: true,
+        [PERMISSIONS.CAN_GENERATE_BILLS]: true,
+
+        // Payment Management
+        [PERMISSIONS.CAN_VIEW_ALL_TRANSACTIONS]: false,
+        [PERMISSIONS.CAN_PROCESS_PAYMENTS]: true,
+        [PERMISSIONS.CAN_HANDLE_REFUNDS]: false,
+        [PERMISSIONS.CAN_MANAGE_TAX_RATES]: false,
+        [PERMISSIONS.CAN_MANAGE_DISCOUNTS]: false,
+        [PERMISSIONS.CAN_APPLY_DISCOUNTS]: true, // Can apply owner-configured discounts
+
+        // Analytics & Reports
+        [PERMISSIONS.CAN_VIEW_SALES_ANALYTICS]: false,
+        [PERMISSIONS.CAN_VIEW_EMPLOYEE_PERFORMANCE]: false,
+        [PERMISSIONS.CAN_VIEW_REVENUE_BREAKDOWN]: false,
+
+        // System Configuration
+        [PERMISSIONS.CAN_MANAGE_RESTAURANT_DETAILS]: false,
+        [PERMISSIONS.CAN_MANAGE_PAYMENT_GATEWAY]: false,
+        [PERMISSIONS.CAN_MANAGE_NOTIFICATION_SETTINGS]: false,
+
+        // Menu Interaction
+        [PERMISSIONS.CAN_VIEW_MENU_ITEMS]: true,
+        [PERMISSIONS.CAN_NOTIFY_ITEM_UNAVAILABLE]: true,
+
+        // Account Management
+        [PERMISSIONS.CAN_UPDATE_PERSONAL_DETAILS]: true
     }
 };
 
