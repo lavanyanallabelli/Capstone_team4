@@ -11,11 +11,9 @@ import {
     Eye,
     EyeOff,
     Search,
-    Filter,
     DollarSign,
     Clock,
-    Tag,
-    Image as ImageIcon
+    Tag
 } from 'lucide-react';
 
 const MenuManagement = () => {
@@ -45,7 +43,7 @@ const MenuManagement = () => {
         if (!loading) {
             loadMenuItems();
         }
-    }, [searchTerm, selectedCategory]);
+    }, [searchTerm, selectedCategory, loadMenuItems, loading]);
 
     const loadMenuData = async () => {
         try {

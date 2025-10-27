@@ -8,16 +8,10 @@ import {
     Clock,
     CreditCard,
     Bell,
-    Globe,
-    Phone,
-    Mail,
-    MapPin,
     Save,
     Upload,
     Eye,
-    EyeOff,
-    Check,
-    X
+    EyeOff
 } from 'lucide-react';
 
 const RestaurantSettings = () => {
@@ -64,9 +58,9 @@ const RestaurantSettings = () => {
     });
 
     const userRole = currentUser?.userRole || USER_ROLES.EMPLOYEE;
-    const canManageRestaurantDetails = hasPermission(userRole, PERMISSIONS.CAN_MANAGE_RESTAURANT_DETAILS);
-    const canManagePaymentGateway = hasPermission(userRole, PERMISSIONS.CAN_MANAGE_PAYMENT_GATEWAY);
-    const canManageNotificationSettings = hasPermission(userRole, PERMISSIONS.CAN_MANAGE_NOTIFICATION_SETTINGS);
+    // const canManageRestaurantDetails = hasPermission(userRole, PERMISSIONS.CAN_MANAGE_RESTAURANT_DETAILS); // Commented out for future use
+    // const canManagePaymentGateway = hasPermission(userRole, PERMISSIONS.CAN_MANAGE_PAYMENT_GATEWAY); // Commented out for future use
+    // const canManageNotificationSettings = hasPermission(userRole, PERMISSIONS.CAN_MANAGE_NOTIFICATION_SETTINGS); // Commented out for future use
 
     // Only show this component to owners
     if (userRole !== USER_ROLES.OWNER) {

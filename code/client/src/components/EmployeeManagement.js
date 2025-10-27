@@ -85,19 +85,19 @@ const EmployeeManagement = () => {
         }
     };
 
-    const handleResetPassword = async (employeeId) => {
-        if (window.confirm('Are you sure you want to reset this employee\'s password?')) {
-            try {
-                const response = await apiService.resetEmployeePassword(employeeId);
-                if (response.success) {
-                    alert(`Password reset successfully! New temporary password: ${response.tempPassword}`);
-                }
-            } catch (error) {
-                console.error('Error resetting password:', error);
-                alert('Failed to reset password. Please try again.');
-            }
-        }
-    };
+    // const handleResetPassword = async (employeeId) => { // Commented out for future use
+    //     if (window.confirm('Are you sure you want to reset this employee\'s password?')) {
+    //         try {
+    //             const response = await apiService.resetEmployeePassword(employeeId);
+    //             if (response.success) {
+    //                 alert(`Password reset successfully! New temporary password: ${response.tempPassword}`);
+    //             }
+    //         } catch (error) {
+    //             console.error('Error resetting password:', error);
+    //             alert('Failed to reset password. Please try again.');
+    //         }
+    //     }
+    // };
 
     // Only show this component to owners
     if (userRole !== USER_ROLES.OWNER) {

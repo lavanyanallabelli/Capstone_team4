@@ -6,35 +6,29 @@ import apiService from '../services/api';
 import {
     BarChart3,
     TrendingUp,
-    TrendingDown,
     DollarSign,
     ShoppingCart,
     Users,
-    Clock,
-    Calendar,
-    Download,
-    Filter,
-    Eye,
-    PieChart
+    Download
 } from 'lucide-react';
 
 const AnalyticsDashboard = () => {
     const { currentUser } = useAuth();
     const [selectedPeriod, setSelectedPeriod] = useState('7d');
-    const [selectedView, setSelectedView] = useState('overview');
+    // const [selectedView, setSelectedView] = useState('overview'); // Commented out for future use
     const [analyticsData, setAnalyticsData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
     const userRole = currentUser?.userRole || USER_ROLES.EMPLOYEE;
-    const canViewAnalytics = hasPermission(userRole, PERMISSIONS.CAN_VIEW_SALES_ANALYTICS);
-    const canViewEmployeePerformance = hasPermission(userRole, PERMISSIONS.CAN_VIEW_EMPLOYEE_PERFORMANCE);
-    const canViewRevenueBreakdown = hasPermission(userRole, PERMISSIONS.CAN_VIEW_REVENUE_BREAKDOWN);
+    // const canViewAnalytics = hasPermission(userRole, PERMISSIONS.CAN_VIEW_SALES_ANALYTICS); // Commented out for future use
+    // const canViewEmployeePerformance = hasPermission(userRole, PERMISSIONS.CAN_VIEW_EMPLOYEE_PERFORMANCE); // Commented out for future use
+    // const canViewRevenueBreakdown = hasPermission(userRole, PERMISSIONS.CAN_VIEW_REVENUE_BREAKDOWN); // Commented out for future use
 
     // Load analytics data on component mount
     useEffect(() => {
         loadAnalyticsData();
-    }, [selectedPeriod]);
+    }, [selectedPeriod, loadAnalyticsData]);
 
     const loadAnalyticsData = async () => {
         try {

@@ -10,10 +10,8 @@ import {
     CreditCard,
     BarChart3,
     Settings,
-    UserCheck,
     FileText,
     DollarSign,
-    Package,
     LogOut,
     User,
     Calendar
