@@ -7,6 +7,7 @@ const awsConfig = {
         region: process.env.REACT_APP_AWS_REGION || 'us-east-1',
         userPoolId: process.env.REACT_APP_USER_POOL_ID || 'us-east-1_XXXXXXXXX',
         userPoolWebClientId: process.env.REACT_APP_USER_POOL_WEB_CLIENT_ID || 'your-client-id',
+        userPoolWebClientSecret: process.env.REACT_APP_USER_POOL_WEB_CLIENT_SECRET,
         mandatorySignIn: true,
         authenticationFlowType: 'USER_SRP_AUTH',
         oauth: {
@@ -42,6 +43,7 @@ const missingVars = [];
 if (!process.env.REACT_APP_AWS_REGION) missingVars.push('REACT_APP_AWS_REGION');
 if (!process.env.REACT_APP_USER_POOL_ID) missingVars.push('REACT_APP_USER_POOL_ID');
 if (!process.env.REACT_APP_USER_POOL_WEB_CLIENT_ID) missingVars.push('REACT_APP_USER_POOL_WEB_CLIENT_ID');
+if (!process.env.REACT_APP_USER_POOL_WEB_CLIENT_SECRET) missingVars.push('REACT_APP_USER_POOL_WEB_CLIENT_SECRET');
 
 if (missingVars.length > 0) {
     console.error('❌ Missing environment variables:', missingVars);
