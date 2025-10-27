@@ -39,7 +39,18 @@ pipeline {
         stage('Build React Application') {
             steps {
                 dir('code') {
-                    sh 'npm run build:client'
+                    sh '''
+                    echo "Setting environment variables for production build..."
+                    export REACT_APP_AWS_REGION=us-east-1
+                    export REACT_APP_USER_POOL_ID=us-east-1_i2eRulYnD
+                    export REACT_APP_USER_POOL_WEB_CLIENT_ID=4tndsl0apjulg0dattjfv6b60b
+                    export REACT_APP_OAUTH_DOMAIN=your-domain.auth.us-east-1.amazoncognito.com
+                    export REACT_APP_REDIRECT_SIGN_IN=http://3.85.243.29:3000/
+                    export REACT_APP_REDIRECT_SIGN_OUT=http://3.85.243.29:3000/
+                    export REACT_APP_API_URL=http://3.85.243.29:5000/api
+                    echo "Building React application with production environment variables..."
+                    npm run build:client
+                    '''
                 }
             }
         }
