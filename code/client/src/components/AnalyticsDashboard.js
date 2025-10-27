@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
-import { USER_ROLES, PERMISSIONS, hasPermission } from '../aws/userRoles';
+import { USER_ROLES } from '../aws/userRoles';
 import apiService from '../services/api';
 import {
     BarChart3,
@@ -28,9 +28,9 @@ const AnalyticsDashboard = () => {
     // Load analytics data on component mount
     useEffect(() => {
         loadAnalyticsData();
-    }, [selectedPeriod]);
+    }, [selectedPeriod, loadAnalyticsData]);
 
-    const loadAnalyticsData = async () => {
+    const loadAnalyticsData = useCallback(async () => {
         try {
             setLoading(true);
             setError(null);
@@ -44,7 +44,7 @@ const AnalyticsDashboard = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [selectedPeriod]);
 
     // Only show this component to owners
     if (userRole !== USER_ROLES.OWNER) {
