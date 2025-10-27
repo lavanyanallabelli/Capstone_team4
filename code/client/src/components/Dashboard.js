@@ -1,64 +1,121 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
-import { LogOut, User, Calendar, CreditCard, BarChart3, Package, DollarSign, ShoppingCart, Users, Settings, TrendingUp, ChefHat } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { USER_ROLES, PERMISSIONS, hasPermission } from '../aws/userRoles';
 import apiService from '../services/api';
+import {
+    Users,
+    Menu,
+    ShoppingCart,
+    CreditCard,
+    BarChart3,
+    Settings,
+    UserCheck,
+    FileText,
+    DollarSign,
+    Package,
+    LogOut,
+    User,
+    Calendar
+} from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const Dashboard = () => {
-    const { currentUser, logout, userRole } = useAuth();
+    const { currentUser, logout } = useAuth();
     const navigate = useNavigate();
+    const userRole = currentUser?.userRole || USER_ROLES.EMPLOYEE;
+    const isOwner = userRole === USER_ROLES.OWNER;
+
+    console.log('Auth debug - currentUser:', currentUser);
+    console.log('Auth debug - userRole:', userRole);
+    console.log('Auth debug - isOwner:', isOwner);
+
+    // Check if user is logged in
+    if (!currentUser) {
+        console.log('❌ User is not logged in!');
+    } else {
+        console.log('✅ User is logged in');
+    }
+
+    // State for real data
     const [dashboardData, setDashboardData] = useState({
         menuItemsCount: 0,
         employeesCount: 0,
         totalSales: 0,
-        ordersToday: 0
+        ordersToday: 0,
+        myOrders: 0,
+        myPerformance: 0
     });
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
+    const [error, setError] = useState(null);
 
-    const isOwner = userRole === 'owner';
-
+    // Fetch real dashboard data
     useEffect(() => {
-        if (currentUser) {
-            fetchDashboardData();
-        }
-    }, [currentUser, isOwner]);
+        const fetchDashboardData = async () => {
+            try {
+                setLoading(true);
 
-    const fetchDashboardData = async () => {
-        try {
-            setLoading(true);
-            
-            if (isOwner) {
-                const [menuResponse, employeesResponse, analyticsResponse] = await Promise.all([
-                    apiService.getMenuItems(),
-                    apiService.getEmployees(),
-                    apiService.getAnalyticsOverview('7d')
-                ]);
+                // If user is not logged in, don't fetch data
+                if (!currentUser) {
+                    console.log('User not logged in, skipping data fetch');
+                    setLoading(false);
+                    return;
+                }
 
-                const newData = {
-                    menuItemsCount: menuResponse.success ? menuResponse.data.length : 0,
-                    employeesCount: employeesResponse.success ? employeesResponse.data.length : 0,
-                    totalSales: analyticsResponse.success ? (analyticsResponse.data.data?.sales?.totalRevenue || analyticsResponse.data.sales?.totalRevenue || 0) : 0,
-                    ordersToday: analyticsResponse.success ? (analyticsResponse.data.data?.sales?.totalOrders || analyticsResponse.data.sales?.totalOrders || 0) : 0
-                };
-                
-                setDashboardData(newData);
-            } else {
-                const menuResponse = await apiService.getMenuItems();
-                setDashboardData({
-                    menuItemsCount: menuResponse.success ? menuResponse.data.length : 0,
-                    employeesCount: 0,
-                    totalSales: 0,
-                    ordersToday: 0
-                });
+                if (isOwner) {
+                    // Fetch data for owners
+                    const [menuResponse, employeesResponse, analyticsResponse] = await Promise.all([
+                        apiService.getMenuItems(),
+                        apiService.getEmployees(),
+                        apiService.getAnalyticsOverview('7d')
+                    ]);
+
+                    console.log('Dashboard API Responses:', {
+                        menu: menuResponse,
+                        employees: employeesResponse,
+                        analytics: analyticsResponse
+                    });
+
+                    const newData = {
+                        menuItemsCount: menuResponse.success ? menuResponse.data.length : 0,
+                        employeesCount: employeesResponse.success ? employeesResponse.data.length : 0,
+                        totalSales: analyticsResponse.success ? (analyticsResponse.data.data?.sales?.totalRevenue || analyticsResponse.data.sales?.totalRevenue || 0) : 0,
+                        ordersToday: analyticsResponse.success ? (analyticsResponse.data.data?.sales?.totalOrders || analyticsResponse.data.sales?.totalOrders || 0) : 0,
+                        myOrders: 0, // Not applicable for owners
+                        myPerformance: 0 // Not applicable for owners
+                    };
+
+                    console.log('Setting dashboard data:', newData);
+                    setDashboardData(newData);
+                } else {
+                    // Fetch data for employees
+                    const menuResponse = await apiService.getMenuItems();
+
+                    setDashboardData({
+                        menuItemsCount: menuResponse.success ? menuResponse.data.length : 0,
+                        employeesCount: 0, // Not applicable for employees
+                        totalSales: 0, // Not applicable for employees
+                        ordersToday: 0, // Would need to implement employee-specific orders
+                        myOrders: 0, // Would need to implement employee-specific orders
+                        myPerformance: 85 // Placeholder - would need employee performance data
+                    });
+                }
+            } catch (error) {
+                console.error('Error fetching dashboard data:', error);
+                setError('Failed to load dashboard data. Please try again.');
+            } finally {
+                setLoading(false);
             }
-        } catch (error) {
-            console.error('Error fetching dashboard data:', error);
-            setError('Failed to load dashboard data');
-        } finally {
-            setLoading(false);
-        }
+        };
+
+        fetchDashboardData();
+    }, [isOwner, currentUser]);
+
+    const refreshDashboard = () => {
+        setError(null);
+        setLoading(true);
+        // Re-trigger the useEffect
+        window.location.reload();
     };
 
     const handleLogout = async () => {
@@ -70,11 +127,23 @@ const Dashboard = () => {
         }
     };
 
-    const stats = [
+    // Debug current dashboard data
+    console.log('Current dashboard data state:', dashboardData);
+    console.log('Current user:', currentUser);
+    console.log('User role:', userRole);
+    console.log('Is owner:', isOwner);
+
+    // Role-based stats with real data
+    const stats = isOwner ? [
         { label: 'Total Sales', value: `$${dashboardData.totalSales.toFixed(2)}`, icon: DollarSign, color: 'from-green-500 to-green-600' },
         { label: 'Orders Today', value: dashboardData.ordersToday.toString(), icon: ShoppingCart, color: 'from-blue-500 to-blue-600' },
-        { label: 'Menu Items', value: dashboardData.menuItemsCount.toString(), icon: Package, color: 'from-purple-500 to-purple-600' },
+        { label: 'Menu Items', value: dashboardData.menuItemsCount.toString(), icon: Menu, color: 'from-purple-500 to-purple-600' },
         { label: 'Employees', value: dashboardData.employeesCount.toString(), icon: Users, color: 'from-orange-500 to-orange-600' },
+    ] : [
+        { label: 'My Orders', value: dashboardData.myOrders.toString(), icon: ShoppingCart, color: 'from-blue-500 to-blue-600' },
+        { label: 'Orders Today', value: dashboardData.ordersToday.toString(), icon: FileText, color: 'from-green-500 to-green-600' },
+        { label: 'Menu Items', value: dashboardData.menuItemsCount.toString(), icon: Menu, color: 'from-purple-500 to-purple-600' },
+        { label: 'My Performance', value: `${dashboardData.myPerformance}%`, icon: BarChart3, color: 'from-orange-500 to-orange-600' },
     ];
 
     const containerVariants = {
@@ -109,8 +178,27 @@ const Dashboard = () => {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Loading dashboard...</p>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto"></div>
+                    <p className="mt-4 text-gray-600">Loading dashboard data...</p>
+                </div>
+            </div>
+        );
+    }
+
+    // If user is not logged in, redirect to login
+    if (!currentUser) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="text-red-500 text-6xl mb-4">🔒</div>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">Authentication Required</h2>
+                    <p className="text-gray-600 mb-4">Please log in to access the dashboard.</p>
+                    <button
+                        onClick={() => navigate('/login')}
+                        className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
+                    >
+                        Go to Login
+                    </button>
                 </div>
             </div>
         );
@@ -120,21 +208,18 @@ const Dashboard = () => {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="text-center">
-                    <p className="text-red-600 mb-4">{error}</p>
+                    <div className="text-red-500 text-6xl mb-4">⚠️</div>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">Error Loading Dashboard</h2>
+                    <p className="text-gray-600 mb-4">{error}</p>
                     <button
-                        onClick={fetchDashboardData}
-                        className="bg-primary-500 text-white px-4 py-2 rounded-lg hover:bg-primary-600"
+                        onClick={refreshDashboard}
+                        className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
                     >
                         Try Again
                     </button>
                 </div>
             </div>
         );
-    }
-
-    if (!currentUser) {
-        navigate('/login');
-        return null;
     }
 
     return (
@@ -149,7 +234,15 @@ const Dashboard = () => {
                             </div>
                             <div>
                                 <h1 className="text-2xl font-bold text-gray-900">POS Pro Dashboard</h1>
-                                <p className="text-sm text-gray-600">Welcome back, {currentUser?.businessName || 'User'}!</p>
+                                <p className="text-sm text-gray-600">
+                                    Welcome back, {currentUser?.businessName || 'User'}!
+                                    <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${isOwner
+                                        ? 'bg-purple-100 text-purple-800'
+                                        : 'bg-blue-100 text-blue-800'
+                                        }`}>
+                                        {isOwner ? '👑 Owner' : '👨‍🍳 Employee'}
+                                    </span>
+                                </p>
                             </div>
                         </div>
 
@@ -193,26 +286,55 @@ const Dashboard = () => {
                         variants={itemVariants}
                         className="bg-gradient-to-r from-primary-500 to-secondary-500 rounded-2xl p-8 text-white mb-8"
                     >
-                        <h2 className="text-3xl font-bold mb-4">Welcome to Your POS Pro Dashboard! 🚀</h2>
+                        <h2 className="text-3xl font-bold mb-4">
+                            {isOwner ? 'Welcome to Your Restaurant Management Hub! 👑' : 'Welcome to Your POS Station! 👨‍🍳'}
+                        </h2>
                         <p className="text-lg text-blue-100 mb-6">
-                            You're now part of our beta community. Your {daysRemaining}-day free trial has started,
-                            and we're excited to help you grow your business.
+                            {isOwner
+                                ? `You're now managing your restaurant operations. Your ${daysRemaining}-day free trial has started, and you have full control over your POS system.`
+                                : `You're ready to handle orders and serve customers. Your ${daysRemaining}-day free trial gives you access to all operational features.`
+                            }
                         </p>
                         <div className="flex flex-wrap gap-4">
-                            <motion.button
-                                className="bg-white text-primary-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
-                            >
-                                Set Up Your Store
-                            </motion.button>
-                            <motion.button
-                                className="border-2 border-white text-white px-6 py-3 rounded-lg font-semibold hover:bg-white hover:text-primary-600 transition-colors"
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
-                            >
-                                Watch Tutorial
-                            </motion.button>
+                            {isOwner ? (
+                                <>
+                                    <motion.button
+                                        onClick={() => navigate('/employees')}
+                                        className="bg-white text-primary-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+                                        whileHover={{ scale: 1.05 }}
+                                        whileTap={{ scale: 0.95 }}
+                                    >
+                                        Manage Employees
+                                    </motion.button>
+                                    <motion.button
+                                        onClick={() => navigate('/analytics')}
+                                        className="border-2 border-white text-white px-6 py-3 rounded-lg font-semibold hover:bg-white hover:text-primary-600 transition-colors"
+                                        whileHover={{ scale: 1.05 }}
+                                        whileTap={{ scale: 0.95 }}
+                                    >
+                                        View Analytics
+                                    </motion.button>
+                                </>
+                            ) : (
+                                <>
+                                    <motion.button
+                                        onClick={() => navigate('/orders/new')}
+                                        className="bg-white text-primary-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+                                        whileHover={{ scale: 1.05 }}
+                                        whileTap={{ scale: 0.95 }}
+                                    >
+                                        Take New Order
+                                    </motion.button>
+                                    <motion.button
+                                        onClick={() => navigate('/menu')}
+                                        className="border-2 border-white text-white px-6 py-3 rounded-lg font-semibold hover:bg-white hover:text-primary-600 transition-colors"
+                                        whileHover={{ scale: 1.05 }}
+                                        whileTap={{ scale: 0.95 }}
+                                    >
+                                        View Menu
+                                    </motion.button>
+                                </>
+                            )}
                         </div>
                     </motion.div>
 
@@ -242,88 +364,134 @@ const Dashboard = () => {
                         })}
                     </motion.div>
 
-                    {/* Main Features Section */}
+                    {/* Getting Started Section */}
                     <motion.div
                         variants={itemVariants}
                         className="grid lg:grid-cols-2 gap-8"
                     >
-                        {/* Main Features */}
+                        {/* Quick Actions */}
                         <div className="card p-8">
-                            <h3 className="text-xl font-bold text-gray-900 mb-6">Main Features</h3>
+                            <h3 className="text-xl font-bold text-gray-900 mb-6">Quick Actions</h3>
                             <div className="space-y-4">
-                                {isOwner && (
+                                {isOwner ? (
                                     <>
-                                        <button 
-                                            onClick={() => navigate('/employees')}
-                                            className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                                        >
-                                            <div className="flex items-center space-x-3">
-                                                <Users className="w-6 h-6 text-primary-600" />
-                                                <div>
-                                                    <h4 className="font-semibold text-gray-900">Manage Employees</h4>
-                                                    <p className="text-sm text-gray-600">Add, edit, and manage your team members</p>
+                                        {hasPermission(userRole, PERMISSIONS.CAN_CREATE_EMPLOYEE) && (
+                                            <button
+                                                onClick={() => navigate('/employees')}
+                                                className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                                            >
+                                                <div className="flex items-center space-x-3">
+                                                    <Users className="w-6 h-6 text-primary-600" />
+                                                    <div>
+                                                        <h4 className="font-semibold text-gray-900">Add Employee</h4>
+                                                        <p className="text-sm text-gray-600">Create new employee accounts</p>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        </button>
-                                        <button 
-                                            onClick={() => navigate('/menu/manage')}
-                                            className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                                        >
-                                            <div className="flex items-center space-x-3">
-                                                <ChefHat className="w-6 h-6 text-primary-600" />
-                                                <div>
-                                                    <h4 className="font-semibold text-gray-900">Menu Management</h4>
-                                                    <p className="text-sm text-gray-600">Create and manage your restaurant menu</p>
+                                            </button>
+                                        )}
+                                        {hasPermission(userRole, PERMISSIONS.CAN_MANAGE_MENU_ITEMS) && (
+                                            <button
+                                                onClick={() => navigate('/menu/manage')}
+                                                className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                                            >
+                                                <div className="flex items-center space-x-3">
+                                                    <Menu className="w-6 h-6 text-primary-600" />
+                                                    <div>
+                                                        <h4 className="font-semibold text-gray-900">Manage Menu</h4>
+                                                        <p className="text-sm text-gray-600">Add or edit menu items and categories</p>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        </button>
-                                        <button 
-                                            onClick={() => navigate('/analytics')}
-                                            className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                                        >
-                                            <div className="flex items-center space-x-3">
-                                                <TrendingUp className="w-6 h-6 text-primary-600" />
-                                                <div>
-                                                    <h4 className="font-semibold text-gray-900">View Analytics</h4>
-                                                    <p className="text-sm text-gray-600">Track sales, performance, and insights</p>
+                                            </button>
+                                        )}
+                                        {hasPermission(userRole, PERMISSIONS.CAN_VIEW_SALES_ANALYTICS) && (
+                                            <button
+                                                onClick={() => navigate('/analytics')}
+                                                className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                                            >
+                                                <div className="flex items-center space-x-3">
+                                                    <BarChart3 className="w-6 h-6 text-primary-600" />
+                                                    <div>
+                                                        <h4 className="font-semibold text-gray-900">View Analytics</h4>
+                                                        <p className="text-sm text-gray-600">Analyze sales and performance data</p>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        </button>
-                                        <button 
-                                            onClick={() => navigate('/settings')}
-                                            className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                                        >
-                                            <div className="flex items-center space-x-3">
-                                                <Settings className="w-6 h-6 text-primary-600" />
-                                                <div>
-                                                    <h4 className="font-semibold text-gray-900">Restaurant Settings</h4>
-                                                    <p className="text-sm text-gray-600">Configure your restaurant preferences</p>
+                                            </button>
+                                        )}
+                                        {hasPermission(userRole, PERMISSIONS.CAN_MANAGE_RESTAURANT_DETAILS) && (
+                                            <button
+                                                onClick={() => navigate('/settings')}
+                                                className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                                            >
+                                                <div className="flex items-center space-x-3">
+                                                    <Settings className="w-6 h-6 text-primary-600" />
+                                                    <div>
+                                                        <h4 className="font-semibold text-gray-900">Restaurant Settings</h4>
+                                                        <p className="text-sm text-gray-600">Configure restaurant details and preferences</p>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        </button>
+                                            </button>
+                                        )}
+                                    </>
+                                ) : (
+                                    <>
+                                        {hasPermission(userRole, PERMISSIONS.CAN_TAKE_DINE_IN_ORDERS) && (
+                                            <button
+                                                onClick={() => navigate('/orders/new')}
+                                                className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                                            >
+                                                <div className="flex items-center space-x-3">
+                                                    <ShoppingCart className="w-6 h-6 text-primary-600" />
+                                                    <div>
+                                                        <h4 className="font-semibold text-gray-900">Take Order</h4>
+                                                        <p className="text-sm text-gray-600">Start a new dine-in order</p>
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        )}
+                                        {hasPermission(userRole, PERMISSIONS.CAN_HANDLE_ONLINE_ORDERS) && (
+                                            <button
+                                                onClick={() => navigate('/orders/online')}
+                                                className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                                            >
+                                                <div className="flex items-center space-x-3">
+                                                    <FileText className="w-6 h-6 text-primary-600" />
+                                                    <div>
+                                                        <h4 className="font-semibold text-gray-900">Online Orders</h4>
+                                                        <p className="text-sm text-gray-600">View and process online orders</p>
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        )}
+                                        {hasPermission(userRole, PERMISSIONS.CAN_PROCESS_PAYMENTS) && (
+                                            <button
+                                                onClick={() => navigate('/payments')}
+                                                className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                                            >
+                                                <div className="flex items-center space-x-3">
+                                                    <CreditCard className="w-6 h-6 text-primary-600" />
+                                                    <div>
+                                                        <h4 className="font-semibold text-gray-900">Process Payment</h4>
+                                                        <p className="text-sm text-gray-600">Handle customer payments</p>
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        )}
+                                        {hasPermission(userRole, PERMISSIONS.CAN_VIEW_MENU_ITEMS) && (
+                                            <button
+                                                onClick={() => navigate('/menu')}
+                                                className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                                            >
+                                                <div className="flex items-center space-x-3">
+                                                    <Menu className="w-6 h-6 text-primary-600" />
+                                                    <div>
+                                                        <h4 className="font-semibold text-gray-900">View Menu</h4>
+                                                        <p className="text-sm text-gray-600">Browse available menu items</p>
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        )}
                                     </>
                                 )}
-                                <button 
-                                    onClick={() => navigate('/menu')}
-                                    className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                                >
-                                    <div className="flex items-center space-x-3">
-                                        <Package className="w-6 h-6 text-primary-600" />
-                                        <div>
-                                            <h4 className="font-semibold text-gray-900">View Menu</h4>
-                                            <p className="text-sm text-gray-600">Browse available menu items</p>
-                                        </div>
-                                    </div>
-                                </button>
-                                <button className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                                    <div className="flex items-center space-x-3">
-                                        <CreditCard className="w-6 h-6 text-primary-600" />
-                                        <div>
-                                            <h4 className="font-semibold text-gray-900">Process Sale</h4>
-                                            <p className="text-sm text-gray-600">Make your first sale with POS Pro</p>
-                                        </div>
-                                    </div>
-                                </button>
                             </div>
                         </div>
 
@@ -338,6 +506,15 @@ const Dashboard = () => {
                                 <div className="flex justify-between items-center py-2 border-b border-gray-100">
                                     <span className="text-gray-600">Email</span>
                                     <span className="font-medium">{currentUser?.email}</span>
+                                </div>
+                                <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                                    <span className="text-gray-600">Role</span>
+                                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${isOwner
+                                        ? 'bg-purple-100 text-purple-800'
+                                        : 'bg-blue-100 text-blue-800'
+                                        }`}>
+                                        {isOwner ? '👑 Owner' : '👨‍🍳 Employee'}
+                                    </span>
                                 </div>
                                 <div className="flex justify-between items-center py-2 border-b border-gray-100">
                                     <span className="text-gray-600">Business Type</span>

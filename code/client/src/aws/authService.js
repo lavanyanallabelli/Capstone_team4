@@ -52,17 +52,9 @@ class AuthService {
     // Sign in user
     async signIn(email, password) {
         try {
-            console.log('🔐 Attempting to sign in with:', { email, passwordLength: password.length });
             const user = await Auth.signIn(email, password);
-            console.log('✅ Sign in successful:', user);
             return user;
         } catch (error) {
-            console.error('❌ Sign in error details:', {
-                code: error.code,
-                name: error.name,
-                message: error.message,
-                originalError: error
-            });
             throw new Error(this.getErrorMessage(error));
         }
     }
@@ -188,7 +180,7 @@ class AuthService {
 
     // Get user role from attributes
     getUserRole(attributes) {
-        return attributes['custom:userRole'] || USER_ROLES.CASHIER;
+        return attributes['custom:userRole'] || USER_ROLES.EMPLOYEE;
     }
 
     // Get business ID from attributes

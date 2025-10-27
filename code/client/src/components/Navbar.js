@@ -38,7 +38,7 @@ const Navbar = () => {
             <div className="container">
                 <div className="flex items-center justify-between h-16 lg:h-20">
                     {/* Brand */}
-                    <Link to="/">
+                    <Link to={currentUser ? "/dashboard" : "/"}>
                         <motion.div
                             className="flex items-center space-x-3"
                             whileHover={{ scale: 1.05 }}

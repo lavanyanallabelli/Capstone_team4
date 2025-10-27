@@ -17,12 +17,27 @@ const client = jwksClient({
 // Get signing key for JWT verification
 function getKey(header, callback) {
     client.getSigningKey(header.kid, (err, key) => {
+        if (err) {
+            console.error('Error getting signing key:', err);
+            return callback(err);
+        }
+        
+        if (!key) {
+            console.error('No signing key found for kid:', header.kid);
+            return callback(new Error('No signing key found'));
+        }
+        
         const signingKey = key.publicKey || key.rsaPublicKey;
+        if (!signingKey) {
+            console.error('Invalid key format:', key);
+            return callback(new Error('Invalid key format'));
+        }
+        
         callback(null, signingKey);
     });
 }
 
-// Verify JWT token
+// Verify JWT token from Cognito
 function verifyToken(token) {
     return new Promise((resolve, reject) => {
         jwt.verify(token, getKey, {
@@ -56,12 +71,18 @@ const authenticateToken = async (req, res, next) => {
         req.user = {
             sub: decoded.sub,
             email: decoded.email,
-            userRole: decoded['custom:userRole'] || 'cashier',
+            userRole: decoded['custom:userRole'] || 'owner', // Default to owner for Cognito users
             businessId: decoded['custom:businessId'],
             businessName: decoded['custom:businessName'],
             businessType: decoded['custom:businessType'],
             phone: decoded['custom:phone']
         };
+
+        console.log('✅ User authenticated:', {
+            email: req.user.email,
+            role: req.user.userRole,
+            businessId: req.user.businessId
+        });
         next();
     } catch (error) {
         console.error('Token verification error:', error);
@@ -109,100 +130,97 @@ const authorizePermission = (requiredPermission) => {
 
         // Import permissions mapping (you might want to move this to a separate file)
         const rolePermissions = {
-            admin: {
-                canProcessSales: true,
-                canManageInventory: true,
-                canViewReports: true,
-                canManageUsers: true,
-                canManageSettings: true,
-                canProcessRefunds: true,
-                canViewAnalytics: true,
-                canManageProducts: true,
-                canViewCustomers: true,
-                canManageCustomers: true,
-                canVoidTransactions: true,
-                canAdjustInventory: true,
-                canExportData: true,
-                canManageRoles: true,
-                canManageSystem: true,
-                canViewFinancials: true,
-                canManageBilling: true
-            },
             owner: {
-                canProcessSales: true,
-                canManageInventory: true,
-                canViewReports: true,
-                canManageUsers: true,
-                canManageSettings: true,
-                canProcessRefunds: true,
-                canViewAnalytics: true,
-                canManageProducts: true,
-                canViewCustomers: true,
-                canManageCustomers: true,
-                canVoidTransactions: true,
-                canAdjustInventory: true,
-                canExportData: true,
-                canManageRoles: false,
-                canManageSystem: false,
-                canViewFinancials: true,
-                canManageBilling: true
+                // User Management
+                canCreateEmployee: true,
+                canEditEmployee: true,
+                canDeactivateEmployee: true,
+                canViewEmployeeActivity: true,
+
+                // Menu Management
+                canManageMenuItems: true,
+                canManageMenuCategories: true,
+                canToggleItemAvailability: true,
+
+                // Order Management
+                canViewAllOrders: true,
+                canUpdateOrders: true,
+                canCancelOrders: true,
+                canTakeDineInOrders: true,
+                canHandleOnlineOrders: true,
+                canUpdateOrderStatus: true,
+                canGenerateBills: true,
+
+                // Payment Management
+                canViewAllTransactions: true,
+                canProcessPayments: true,
+                canHandleRefunds: true,
+                canManageTaxRates: true,
+                canManageDiscounts: true,
+                canApplyDiscounts: true,
+
+                // Analytics & Reports
+                canViewSalesAnalytics: true,
+                canViewEmployeePerformance: true,
+                canViewRevenueBreakdown: true,
+
+                // System Configuration
+                canManageRestaurantDetails: true,
+                canManagePaymentGateway: true,
+                canManageNotificationSettings: true,
+
+                // Menu Interaction
+                canViewMenuItems: true,
+                canNotifyItemUnavailable: true,
+
+                // Account Management
+                canUpdatePersonalDetails: true
             },
-            manager: {
-                canProcessSales: true,
-                canManageInventory: true,
-                canViewReports: true,
-                canManageUsers: false,
-                canManageSettings: false,
-                canProcessRefunds: true,
-                canViewAnalytics: true,
-                canManageProducts: true,
-                canViewCustomers: true,
-                canManageCustomers: true,
-                canVoidTransactions: true,
-                canAdjustInventory: true,
-                canExportData: true,
-                canManageRoles: false,
-                canManageSystem: false,
-                canViewFinancials: true,
-                canManageBilling: false
-            },
-            cashier: {
-                canProcessSales: true,
-                canManageInventory: false,
-                canViewReports: false,
-                canManageUsers: false,
-                canManageSettings: false,
-                canProcessRefunds: false,
-                canViewAnalytics: false,
-                canManageProducts: false,
-                canViewCustomers: true,
-                canManageCustomers: false,
-                canVoidTransactions: false,
-                canAdjustInventory: false,
-                canExportData: false,
-                canManageRoles: false,
-                canManageSystem: false,
-                canViewFinancials: false,
-                canManageBilling: false
-            },
-            readonly: {
-                canProcessSales: false,
-                canManageInventory: false,
-                canViewReports: true,
-                canManageUsers: false,
-                canManageSettings: false,
-                canProcessRefunds: false,
-                canViewAnalytics: true,
-                canManageProducts: false,
-                canViewCustomers: true,
-                canManageCustomers: false,
-                canVoidTransactions: false,
-                canAdjustInventory: false,
-                canExportData: true,
-                canManageRoles: false,
-                canManageSystem: false,
-                canViewFinancials: true,
-                canManageBilling: false
+            employee: {
+                // User Management
+                canCreateEmployee: false,
+                canEditEmployee: false,
+                canDeactivateEmployee: false,
+                canViewEmployeeActivity: false,
+
+                // Menu Management
+                canManageMenuItems: false,
+                canManageMenuCategories: false,
+                canToggleItemAvailability: false,
+
+                // Order Management
+                canViewAllOrders: false, // Can only see assigned orders
+                canUpdateOrders: true,
+                canCancelOrders: false,
+                canTakeDineInOrders: true,
+                canHandleOnlineOrders: true,
+                canUpdateOrderStatus: true,
+                canGenerateBills: true,
+
+                // Payment Management
+                canViewAllTransactions: false,
+                canProcessPayments: true,
+                canHandleRefunds: false,
+                canManageTaxRates: false,
+                canManageDiscounts: false,
+                canApplyDiscounts: true, // Can apply owner-configured discounts
+
+                // Analytics & Reports
+                canViewSalesAnalytics: false,
+                canViewEmployeePerformance: false,
+                canViewRevenueBreakdown: false,
+
+                // System Configuration
+                canManageRestaurantDetails: false,
+                canManagePaymentGateway: false,
+                canManageNotificationSettings: false,
+
+                // Menu Interaction
+                canViewMenuItems: true,
+                canNotifyItemUnavailable: true,
+
+                // Account Management
+                canUpdatePersonalDetails: true
             }
         };
 
