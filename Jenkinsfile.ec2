@@ -114,7 +114,7 @@ REACT_APP_REDIRECT_SIGN_OUT=${env.REACT_APP_REDIRECT_SIGN_OUT}
                 """
             }
             mail (
-                to: 'cuteamy104@gmail.com',
+                to: 'chetanjogi042@gmail.com',
                 subject: "✅ Jenkins Dev Build Successful - Branch: ${params.BRANCH}",
                 body: """
 Build Successful!
