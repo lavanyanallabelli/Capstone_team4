@@ -43,7 +43,7 @@ const MenuManagement = () => {
         if (!loading) {
             loadMenuItems();
         }
-    }, [searchTerm, selectedCategory, loadMenuItems, loading]);
+    }, [searchTerm, selectedCategory, loading]);
 
     const loadMenuData = async () => {
         try {
