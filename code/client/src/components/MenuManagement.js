@@ -81,11 +81,12 @@ const MenuManagement = () => {
                 setMenuItems([]);
             }
 
-            if (categoriesResponse.success && categoriesResponse.data) {
+            if (categoriesResponse.success && categoriesResponse.data && categoriesResponse.data.length > 0) {
                 setCategories(categoriesResponse.data);
             } else {
-                console.log('Categories data not available, setting empty array');
-                setCategories([]);
+                console.log('No categories found, using default categories');
+                // Provide default categories if none exist
+                setCategories(['Appetizers', 'Main Course', 'Desserts', 'Beverages', 'Specials']);
             }
         } catch (error) {
             console.error('Error loading menu data:', error);
@@ -426,7 +427,7 @@ const MenuManagement = () => {
 const CreateMenuItemForm = ({ categories, onSubmit, onCancel }) => {
     const [formData, setFormData] = useState({
         name: '',
-        category: categories[0] || '',
+        category: categories && categories.length > 0 ? categories[0] : '',
         description: '',
         price: '',
         prepTime: '',
@@ -474,9 +475,13 @@ const CreateMenuItemForm = ({ categories, onSubmit, onCancel }) => {
                             onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
-                            {categories && categories.map(category => (
-                                <option key={category} value={category}>{category}</option>
-                            ))}
+                            {categories && categories.length > 0 ? (
+                                categories.map(category => (
+                                    <option key={category} value={category}>{category}</option>
+                                ))
+                            ) : (
+                                <option value="">No categories available</option>
+                            )}
                         </select>
                     </div>
                     <div className="mb-4">
@@ -601,9 +606,13 @@ const EditMenuItemForm = ({ item, categories, onSubmit, onCancel }) => {
                             onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
-                            {categories && categories.map(category => (
-                                <option key={category} value={category}>{category}</option>
-                            ))}
+                            {categories && categories.length > 0 ? (
+                                categories.map(category => (
+                                    <option key={category} value={category}>{category}</option>
+                                ))
+                            ) : (
+                                <option value="">No categories available</option>
+                            )}
                         </select>
                     </div>
                     <div className="mb-4">
