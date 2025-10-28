@@ -12,6 +12,14 @@ const cognito = new AWS.CognitoIdentityServiceProvider({
     region: process.env.AWS_REGION || 'us-east-1'
 });
 
+// Generate user-specific business ID for testing
+const generateUserBusinessId = (req) => {
+    // Use email from request body or headers to generate consistent business ID
+    const email = req.body?.email || req.headers['x-user-email'] || 'default@example.com';
+    const hash = require('crypto').createHash('md5').update(email).digest('hex').substring(0, 8);
+    return `biz_${hash}_${Date.now()}`;
+};
+
 const router = express.Router();
 
 // Function to create Cognito user
@@ -81,8 +89,8 @@ const updateEmployeeSchema = Joi.object({
 // Get all employees for a business
 router.get('/', async (req, res) => {
     try {
-        // Use default business ID for testing (temporarily disabled auth)
-        const businessId = req.user?.businessId || 'biz_fg27sj9ld_1760831311628';
+        // Generate user-specific business ID for testing
+        const businessId = req.user?.businessId || generateUserBusinessId(req);
 
         console.log('📋 Fetching employees for businessId:', businessId);
         const { isActive, search } = req.query;
@@ -138,8 +146,8 @@ router.get('/', async (req, res) => {
 // Get employee by ID
 router.get('/:employeeId', async (req, res) => {
     try {
-        // Use default business ID for testing (temporarily disabled auth)
-        const businessId = req.user?.businessId || 'biz_fg27sj9ld_1760831311628';
+        // Generate user-specific business ID for testing
+        const businessId = req.user?.businessId || generateUserBusinessId(req);
         const { employeeId } = req.params;
 
         const params = {
@@ -179,8 +187,8 @@ router.get('/:employeeId', async (req, res) => {
 // Create new employee
 router.post('/', async (req, res) => {
     try {
-        // Use default business ID for testing (temporarily disabled auth)
-        const businessId = req.user?.businessId || 'biz_fg27sj9ld_1760831311628';
+        // Generate user-specific business ID for testing
+        const businessId = req.user?.businessId || generateUserBusinessId(req);
 
         // Debug: Log the request data
         console.log('📝 Employee creation request:', {
@@ -317,8 +325,8 @@ router.post('/', async (req, res) => {
 // Update employee
 router.put('/:employeeId', async (req, res) => {
     try {
-        // Use default business ID for testing (temporarily disabled auth)
-        const businessId = req.user?.businessId || 'biz_fg27sj9ld_1760831311628';
+        // Generate user-specific business ID for testing
+        const businessId = req.user?.businessId || generateUserBusinessId(req);
         const { employeeId } = req.params;
 
         // Validate input
@@ -411,8 +419,8 @@ router.put('/:employeeId', async (req, res) => {
 // Deactivate/Activate employee
 router.patch('/:employeeId/status', async (req, res) => {
     try {
-        // Use default business ID for testing (temporarily disabled auth)
-        const businessId = req.user?.businessId || 'biz_fg27sj9ld_1760831311628';
+        // Generate user-specific business ID for testing
+        const businessId = req.user?.businessId || generateUserBusinessId(req);
         const { employeeId } = req.params;
         const { isActive } = req.body;
 
@@ -457,8 +465,8 @@ router.patch('/:employeeId/status', async (req, res) => {
 // Reset employee password
 router.post('/:employeeId/reset-password', async (req, res) => {
     try {
-        // Use default business ID for testing (temporarily disabled auth)
-        const businessId = req.user?.businessId || 'biz_fg27sj9ld_1760831311628';
+        // Generate user-specific business ID for testing
+        const businessId = req.user?.businessId || generateUserBusinessId(req);
         const { employeeId } = req.params;
 
         // Check if employee exists
@@ -511,8 +519,8 @@ router.post('/:employeeId/reset-password', async (req, res) => {
 // Get employee performance stats
 router.get('/:employeeId/performance', async (req, res) => {
     try {
-        // Use default business ID for testing (temporarily disabled auth)
-        const businessId = req.user?.businessId || 'biz_fg27sj9ld_1760831311628';
+        // Generate user-specific business ID for testing
+        const businessId = req.user?.businessId || generateUserBusinessId(req);
         const { employeeId } = req.params;
         const { startDate, endDate } = req.query;
 
@@ -556,8 +564,8 @@ router.get('/:employeeId/performance', async (req, res) => {
 // Get employee activity log
 router.get('/:employeeId/activity', async (req, res) => {
     try {
-        // Use default business ID for testing (temporarily disabled auth)
-        const businessId = req.user?.businessId || 'biz_fg27sj9ld_1760831311628';
+        // Generate user-specific business ID for testing
+        const businessId = req.user?.businessId || generateUserBusinessId(req);
         const { employeeId } = req.params;
         const { limit = 50, offset = 0 } = req.query;
 
@@ -609,8 +617,8 @@ router.get('/:employeeId/activity', async (req, res) => {
 // Get employee statistics
 router.get('/stats/overview', async (req, res) => {
     try {
-        // Use default business ID for testing (temporarily disabled auth)
-        const businessId = req.user?.businessId || 'biz_fg27sj9ld_1760831311628';
+        // Generate user-specific business ID for testing
+        const businessId = req.user?.businessId || generateUserBusinessId(req);
 
         const params = {
             TableName: 'pos-employees',

@@ -4,6 +4,14 @@ const Joi = require('joi');
 const { docClient } = require('../config/dynamodb');
 const { authorizePermission } = require('../middleware/auth');
 
+// Generate user-specific business ID for testing
+const generateUserBusinessId = (req) => {
+    // Use email from request body or headers to generate consistent business ID
+    const email = req.body?.email || req.headers['x-user-email'] || 'default@example.com';
+    const hash = require('crypto').createHash('md5').update(email).digest('hex').substring(0, 8);
+    return `biz_${hash}_${Date.now()}`;
+};
+
 const router = express.Router();
 
 // Validation schemas
@@ -32,8 +40,8 @@ const updateMenuItemSchema = Joi.object({
 // Get all menu items for a business
 router.get('/', async (req, res) => {
     try {
-        // Use default business ID for testing (temporarily disabled auth)
-        const businessId = req.user?.businessId || 'biz_fg27sj9ld_1760831311628';
+        // Generate user-specific business ID for testing
+        const businessId = req.user?.businessId || generateUserBusinessId(req);
         const { category, search, availability } = req.query;
 
         let params = {
@@ -124,8 +132,8 @@ router.get('/:itemId', authorizePermission('canViewMenuItems'), async (req, res)
 // Create new menu item
 router.post('/', async (req, res) => {
     try {
-        // Use default business ID for testing (temporarily disabled auth)
-        const businessId = req.user?.businessId || 'biz_fg27sj9ld_1760831311628';
+        // Generate user-specific business ID for testing
+        const businessId = req.user?.businessId || generateUserBusinessId(req);
 
         // Validate input
         const { error, value } = menuItemSchema.validate(req.body);
@@ -171,8 +179,8 @@ router.post('/', async (req, res) => {
 // Update menu item
 router.put('/:itemId', async (req, res) => {
     try {
-        // Use default business ID for testing (temporarily disabled auth)
-        const businessId = req.user?.businessId || 'biz_fg27sj9ld_1760831311628';
+        // Generate user-specific business ID for testing
+        const businessId = req.user?.businessId || generateUserBusinessId(req);
         const { itemId } = req.params;
 
         // Validate input
@@ -243,8 +251,8 @@ router.put('/:itemId', async (req, res) => {
 // Delete menu item
 router.delete('/:itemId', async (req, res) => {
     try {
-        // Use default business ID for testing (temporarily disabled auth)
-        const businessId = req.user?.businessId || 'biz_fg27sj9ld_1760831311628';
+        // Generate user-specific business ID for testing
+        const businessId = req.user?.businessId || generateUserBusinessId(req);
         const { itemId } = req.params;
 
         const params = {
@@ -271,8 +279,8 @@ router.delete('/:itemId', async (req, res) => {
 // Toggle item availability
 router.patch('/:itemId/availability', async (req, res) => {
     try {
-        // Use default business ID for testing (temporarily disabled auth)
-        const businessId = req.user?.businessId || 'biz_fg27sj9ld_1760831311628';
+        // Generate user-specific business ID for testing
+        const businessId = req.user?.businessId || generateUserBusinessId(req);
         const { itemId } = req.params;
         const { availability } = req.body;
 
@@ -314,8 +322,8 @@ router.patch('/:itemId/availability', async (req, res) => {
 // Get menu categories
 router.get('/categories/list', async (req, res) => {
     try {
-        // Use default business ID for testing (temporarily disabled auth)
-        const businessId = req.user?.businessId || 'biz_fg27sj9ld_1760831311628';
+        // Generate user-specific business ID for testing
+        const businessId = req.user?.businessId || generateUserBusinessId(req);
 
         const params = {
             TableName: 'pos-menu-items',

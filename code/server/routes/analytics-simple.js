@@ -1,13 +1,21 @@
 const express = require('express');
 const { docClient } = require('../config/dynamodb');
 
+// Generate user-specific business ID for testing
+const generateUserBusinessId = (req) => {
+    // Use email from request body or headers to generate consistent business ID
+    const email = req.body?.email || req.headers['x-user-email'] || 'default@example.com';
+    const hash = require('crypto').createHash('md5').update(email).digest('hex').substring(0, 8);
+    return `biz_${hash}_${Date.now()}`;
+};
+
 const router = express.Router();
 
 // Get dashboard overview - simplified version
 router.get('/overview', async (req, res) => {
     try {
-        // Use default business ID for testing (temporarily disabled auth)
-        const businessId = req.user?.businessId || 'biz_fg27sj9ld_1760831311628';
+        // Generate user-specific business ID for testing
+        const businessId = req.user?.businessId || generateUserBusinessId(req);
         const { period = '7d' } = req.query;
 
         // Get analytics data from the pre-populated analytics table
