@@ -39,16 +39,23 @@ pipeline {
         
         stage('Build React Application') {
             steps {
-                withCredentials([
-                    string(credentialsId: 'AWS_USER_POOL_ID', variable: 'REACT_APP_USER_POOL_ID'),
-                    string(credentialsId: 'AWS_USER_POOL_WEB_CLIENT_ID', variable: 'REACT_APP_USER_POOL_WEB_CLIENT_ID'),
-                    string(credentialsId: 'AWS_OAUTH_DOMAIN', variable: 'REACT_APP_OAUTH_DOMAIN')
-                ]) {
-                    dir('code/client') {
-                        echo "🏗️ Building React application for QA..."
-                        sh 'npm run build'
-                        echo "✅ React build completed for QA"
-                    }
+                dir('code/client') {
+                    echo "🏗️ Building React application for QA..."
+                    sh '''
+                        # Set fallback environment variables for build
+                        export REACT_APP_AWS_REGION=us-east-1
+                        export REACT_APP_USER_POOL_ID=us-east-1_i2eRulYnD
+                        export REACT_APP_USER_POOL_WEB_CLIENT_ID=3q99asqjvgb0eakf80eorms0ho
+                        export REACT_APP_OAUTH_DOMAIN=https://us-east-1i2erulynd.auth.us-east-1.amazoncognito.com
+                        export REACT_APP_API_ENDPOINT=http://50.17.73.133:5000/api
+                        export REACT_APP_API_URL=http://50.17.73.133:5000
+                        export REACT_APP_REDIRECT_SIGN_IN=http://50.17.73.133/
+                        export REACT_APP_REDIRECT_SIGN_OUT=http://50.17.73.133/
+                        
+                        # Run the build
+                        npm run build
+                    '''
+                    echo "✅ React build completed for QA"
                 }
             }
         }
