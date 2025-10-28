@@ -13,7 +13,7 @@ A modern Point of Sale system built with React frontend and Express.js backend.
 - Node.js (v14 or higher)
 - npm
 
-### Installation
+### Installation procedure
 
 1. Install all dependencies:
 ```bash
