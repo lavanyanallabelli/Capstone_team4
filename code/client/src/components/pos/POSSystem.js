@@ -1,22 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
 import apiService from '../../services/api';
 import MenuDisplay from './MenuDisplay';
 import OrderCart from './OrderCart';
 import OrderTypes from './OrderTypes';
-import OrderHistory from './OrderHistory';
 import EmployeeQuickAccess from './EmployeeQuickAccess';
 import {
-    ShoppingCart,
-    Clock,
-    Users,
-    DollarSign,
-    Plus,
-    Minus,
-    Trash2,
-    CheckCircle,
-    X
+    Users
 } from 'lucide-react';
 
 const POSSystem = () => {
@@ -29,7 +19,6 @@ const POSSystem = () => {
     const [tableNumber, setTableNumber] = useState('');
     const [customerName, setCustomerName] = useState('');
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
     const [showEmployeeAccess, setShowEmployeeAccess] = useState(false);
 
     // Load menu items and categories
@@ -48,7 +37,6 @@ const POSSystem = () => {
                 }
             } catch (error) {
                 console.error('Error loading menu:', error);
-                setError('Failed to load menu items');
             } finally {
                 setLoading(false);
             }
