@@ -316,6 +316,45 @@ class ApiService {
     async sendTestNotification(type, recipient) {
         return this.post('/settings/notifications/test', { type, recipient });
     }
+
+    // POS Orders API methods
+    async createOrder(orderData) {
+        return this.post('/orders', orderData);
+    }
+
+    async getOrders(params = {}) {
+        const queryString = new URLSearchParams(params).toString();
+        return this.get(`/orders${queryString ? `?${queryString}` : ''}`);
+    }
+
+    async getOrder(orderId) {
+        return this.get(`/orders/${orderId}`);
+    }
+
+    async updateOrderStatus(orderId, status) {
+        return this.patch(`/orders/${orderId}/status`, { status });
+    }
+
+    async updateOrder(orderId, orderData) {
+        return this.put(`/orders/${orderId}`, orderData);
+    }
+
+    async deleteOrder(orderId) {
+        return this.delete(`/orders/${orderId}`);
+    }
+
+    async getOrderStats(period = 'today') {
+        return this.get(`/orders/stats/overview?period=${period}`);
+    }
+
+    // Employee management API methods
+    async resendEmployeeCredentials(employeeId) {
+        return this.post(`/employees/${employeeId}/resend-credentials`);
+    }
+
+    async deleteEmployee(employeeId) {
+        return this.delete(`/employees/${employeeId}`);
+    }
 }
 
 // Create and export a singleton instance

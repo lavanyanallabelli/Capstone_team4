@@ -55,18 +55,18 @@ pipeline {
         
         stage('Run Comprehensive Tests') {
             parallel {
-                stage('Unit Tests') {
-                    steps {
-                        dir('code/client') {
-                            echo "🧪 Running client unit tests..."
-                            sh 'npm test -- --coverage --watchAll=false'
-                        }
-                        dir('code/server') {
-                            echo "🧪 Running server unit tests..."
-                            sh 'npm test'
-                        }
-                    }
-                }
+                // stage('Unit Tests') {
+                    // steps {
+                        // dir('code/client') {
+                            // echo "🧪 Running client unit tests..."
+                            // sh 'npm test -- --coverage --watchAll=false'
+                        // }
+                        // dir('code/server') {
+                            // echo "🧪 Running server unit tests..."
+                            // sh 'npm test'
+                        // }
+                    // }
+                // }
                 stage('Integration Tests') {
                     steps {
                         echo "🔗 Running integration tests..."

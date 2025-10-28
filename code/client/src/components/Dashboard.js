@@ -434,14 +434,14 @@ const Dashboard = () => {
                                     <>
                                         {hasPermission(userRole, PERMISSIONS.CAN_TAKE_DINE_IN_ORDERS) && (
                                             <button
-                                                onClick={() => navigate('/orders/new')}
+                                                onClick={() => navigate('/pos')}
                                                 className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                                             >
                                                 <div className="flex items-center space-x-3">
                                                     <ShoppingCart className="w-6 h-6 text-primary-600" />
                                                     <div>
-                                                        <h4 className="font-semibold text-gray-900">Take Order</h4>
-                                                        <p className="text-sm text-gray-600">Start a new dine-in order</p>
+                                                        <h4 className="font-semibold text-gray-900">POS System</h4>
+                                                        <p className="text-sm text-gray-600">Access the point of sale system</p>
                                                     </div>
                                                 </div>
                                             </button>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import { USER_ROLES, PERMISSIONS, hasPermission } from '../aws/userRoles';
-import { Users, UserPlus, Edit, Trash2, Eye, UserCheck } from 'lucide-react';
+import { Users, UserPlus, Edit, Trash2, Eye, UserCheck, Mail, AlertTriangle, UserX } from 'lucide-react';
 import apiService from '../services/api';
 
 const EmployeeManagement = () => {
@@ -82,6 +82,50 @@ const EmployeeManagement = () => {
         } catch (error) {
             console.error('Error updating employee status:', error);
             alert('Failed to update employee status. Please try again.');
+        }
+    };
+
+    const handleResendCredentials = async (employeeId, employeeName) => {
+        if (window.confirm(`Resend login credentials to ${employeeName}?`)) {
+            try {
+                const response = await apiService.resendEmployeeCredentials(employeeId);
+                if (response.success) {
+                    alert(`Login credentials resent successfully!\n\nEmail: ${response.loginCredentials.email}\nTemporary Password: ${response.loginCredentials.tempPassword}\nLogin URL: ${response.loginCredentials.loginUrl}`);
+                }
+            } catch (error) {
+                console.error('Error resending credentials:', error);
+                alert('Failed to resend credentials. Please try again.');
+            }
+        }
+    };
+
+    const handleViewActivity = (employee) => {
+        // Show employee activity in a modal or alert for now
+        const activityInfo = `
+Employee: ${employee.firstName} ${employee.lastName}
+Email: ${employee.email}
+Position: ${employee.position || 'Employee'}
+Status: ${employee.isActive ? 'Active' : 'Inactive'}
+Hire Date: ${employee.hireDate ? new Date(employee.hireDate).toLocaleDateString() : 'N/A'}
+Last Login: ${employee.lastLogin ? new Date(employee.lastLogin).toLocaleString() : 'Never'}
+Login Count: ${employee.loginCount || 0}
+Created: ${new Date(employee.createdAt).toLocaleString()}
+        `;
+        alert(activityInfo);
+    };
+
+    const handleDeleteEmployee = async (employeeId, employeeName) => {
+        if (window.confirm(`Are you sure you want to PERMANENTLY DELETE ${employeeName}?\n\nThis action cannot be undone and will:\n- Remove the employee from the system\n- Delete their login credentials\n- Remove all associated data`)) {
+            try {
+                const response = await apiService.deleteEmployee(employeeId);
+                if (response.success) {
+                    setEmployees(employees.filter(emp => emp.employeeId !== employeeId));
+                    alert('Employee deleted successfully!');
+                }
+            } catch (error) {
+                console.error('Error deleting employee:', error);
+                alert('Failed to delete employee. Please try again.');
+            }
         }
     };
 
@@ -300,7 +344,11 @@ const EmployeeManagement = () => {
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                                     <div className="flex space-x-2">
                                                         {canViewEmployeeActivity && (
-                                                            <button className="text-blue-600 hover:text-blue-900">
+                                                            <button
+                                                                onClick={() => handleViewActivity(employee)}
+                                                                className="text-blue-600 hover:text-blue-900"
+                                                                title="View employee activity"
+                                                            >
                                                                 <Eye className="w-4 h-4" />
                                                             </button>
                                                         )}
@@ -308,18 +356,34 @@ const EmployeeManagement = () => {
                                                             <button
                                                                 onClick={() => setEditingEmployee(employee)}
                                                                 className="text-green-600 hover:text-green-900"
+                                                                title="Edit employee"
                                                             >
                                                                 <Edit className="w-4 h-4" />
                                                             </button>
                                                         )}
+                                                        <button
+                                                            onClick={() => handleResendCredentials(employee.employeeId, `${employee.firstName} ${employee.lastName}`)}
+                                                            className="text-blue-600 hover:text-blue-900"
+                                                            title="Resend login credentials"
+                                                        >
+                                                            <Mail className="w-4 h-4" />
+                                                        </button>
                                                         {canDeactivateEmployee && (
                                                             <button
                                                                 onClick={() => handleToggleEmployeeStatus(employee.employeeId, !employee.isActive)}
-                                                                className={`${employee.isActive ? 'text-red-600 hover:text-red-900' : 'text-green-600 hover:text-green-900'}`}
+                                                                className={`${employee.isActive ? 'text-orange-600 hover:text-orange-900' : 'text-green-600 hover:text-green-900'}`}
+                                                                title={employee.isActive ? 'Deactivate employee' : 'Activate employee'}
                                                             >
-                                                                {employee.isActive ? <Trash2 className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+                                                                {employee.isActive ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
                                                             </button>
                                                         )}
+                                                        <button
+                                                            onClick={() => handleDeleteEmployee(employee.employeeId, `${employee.firstName} ${employee.lastName}`)}
+                                                            className="text-red-600 hover:text-red-900"
+                                                            title="Permanently delete employee"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
                                                     </div>
                                                 </td>
                                             </tr>

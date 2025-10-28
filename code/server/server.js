@@ -11,6 +11,7 @@ const menuRoutes = require('./routes/menu');
 const employeeRoutes = require('./routes/employees');
 const analyticsRoutes = require('./routes/analytics-simple');
 const settingsRoutes = require('./routes/settings');
+const orderRoutes = require('./routes/orders');
 
 // Import middleware
 const { authenticateToken } = require('./middleware/auth');
@@ -62,6 +63,7 @@ app.use('/api/menu', menuRoutes); // Temporarily disabled auth for testing
 app.use('/api/employees', employeeRoutes); // Temporarily disabled auth for testing
 app.use('/api/analytics', analyticsRoutes); // Temporarily disabled auth for testing
 app.use('/api/settings', settingsRoutes); // Temporarily disabled auth for testing
+app.use('/api/orders', orderRoutes); // POS orders
 
 // Error handling middleware
 app.use((err, req, res, next) => {
