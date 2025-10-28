@@ -5,7 +5,7 @@ A modern Point of Sale system built with React frontend and Express.js backend.
 ## Project Structure
 ```
 
-## Getting Started
+## Getting started now
 
 ### Prerequisites
 - Node.js (v14 or higher)
