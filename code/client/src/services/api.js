@@ -57,9 +57,21 @@ class ApiService {
     // Generic request method
     async request(endpoint, options = {}) {
         const url = `${this.baseURL}${endpoint}`;
+        
+        // Get current user email for business ID generation
+        let userEmail = null;
+        try {
+            const { Auth } = await import('aws-amplify');
+            const user = await Auth.currentAuthenticatedUser();
+            userEmail = user.attributes?.email || user.username;
+        } catch (error) {
+            // User not authenticated, will use default
+        }
+        
         const config = {
             headers: {
                 'Content-Type': 'application/json',
+                ...(userEmail && { 'x-user-email': userEmail }),
             },
             ...options,
         };
