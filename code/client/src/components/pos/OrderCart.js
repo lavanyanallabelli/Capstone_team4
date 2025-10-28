@@ -7,7 +7,6 @@ import {
     ShoppingCart,
     CheckCircle,
     X,
-    DollarSign,
     Clock,
     User
 } from 'lucide-react';
