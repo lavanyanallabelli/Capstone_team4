@@ -17,7 +17,8 @@ const generateUserBusinessId = (req) => {
     // Use email from request body or headers to generate consistent business ID
     const email = req.body?.email || req.headers['x-user-email'] || 'default@example.com';
     const hash = require('crypto').createHash('md5').update(email).digest('hex').substring(0, 8);
-    return `biz_${hash}_${Date.now()}`;
+    // Use a fixed timestamp to ensure same user always gets same business ID
+    return `biz_${hash}_1730123456789`;
 };
 
 const router = express.Router();
