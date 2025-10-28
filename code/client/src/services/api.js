@@ -57,7 +57,7 @@ class ApiService {
     // Generic request method
     async request(endpoint, options = {}) {
         const url = `${this.baseURL}${endpoint}`;
-        
+
         // Get current user email for business ID generation
         let userEmail = null;
         try {
@@ -67,7 +67,7 @@ class ApiService {
         } catch (error) {
             // User not authenticated, will use default
         }
-        
+
         const config = {
             headers: {
                 'Content-Type': 'application/json',
