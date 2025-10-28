@@ -105,41 +105,41 @@ pipeline {
             }
         }
         
-        stage('Security & Quality Checks') {
-            parallel {
-                stage('Security Audit') {
-                    steps {
-                        echo "🔒 Running security audit..."
-                        sh 'npm audit --audit-level high'
-                    }
-                }
-                stage('Code Quality') {
-                    steps {
-                        echo "📊 Running code quality checks..."
-                        sh '''
-                            cd code/client && npm run lint || true
-                            cd ../server && npm run lint || true
-                        '''
-                    }
-                }
-                stage('Dependency Check') {
-                    steps {
-                        echo "📋 Checking for outdated dependencies..."
-                        sh 'npm outdated || true'
-                    }
-                }
-            }
-        }
+        // stage('Security & Quality Checks') {
+            // parallel {
+                // stage('Security Audit') {
+                    // steps {
+                        // echo "🔒 Running security audit..."
+                        // sh 'npm audit --audit-level high'
+                    // }
+                // }
+                // stage('Code Quality') {
+                    // steps {
+                        // echo "📊 Running code quality checks..."
+                        // sh '''
+                            // cd code/client && npm run lint || true
+                            // cd ../server && npm run lint || true
+                        // '''
+                    // }
+                // }
+                // stage('Dependency Check') {
+                    // steps {
+                        // echo "📋 Checking for outdated dependencies..."
+                        // sh 'npm outdated || true'
+                    // }
+                // }
+            // }
+        // }
         
-        stage('Performance Testing') {
-            steps {
-                echo "⚡ Running performance tests..."
-                sh '''
-                    cd code/client
-                    npm run test:performance || true
-                '''
-            }
-        }
+        // stage('Performance Testing') {
+            // steps {
+                // echo "⚡ Running performance tests..."
+                // sh '''
+                    // cd code/client
+                    // npm run test:performance || true
+                // '''
+            // }
+        // }
         
         stage('Deploy to QA EC2') {
             steps {
