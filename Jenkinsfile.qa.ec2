@@ -12,10 +12,10 @@ pipeline {
         REACT_APP_USER_POOL_ID = 'us-east-1_i2eRulYnD'
         REACT_APP_USER_POOL_WEB_CLIENT_ID = '3q99asqjvgb0eakf80eorms0ho'
         REACT_APP_OAUTH_DOMAIN = 'https://us-east-1i2erulynd.auth.us-east-1.amazoncognito.com'
-        REACT_APP_API_ENDPOINT = 'http://50.17.73.133:5000/api'
-        REACT_APP_API_URL = 'http://50.17.73.133:5000'
-        REACT_APP_REDIRECT_SIGN_IN = 'http://50.17.73.133/'
-        REACT_APP_REDIRECT_SIGN_OUT = 'http://50.17.73.133/'
+        REACT_APP_API_ENDPOINT = 'http://50.17.73.133:5001/api'
+        REACT_APP_API_URL = 'http://50.17.73.133:5001'
+        REACT_APP_REDIRECT_SIGN_IN = 'http://50.17.73.133:3001/'
+        REACT_APP_REDIRECT_SIGN_OUT = 'http://50.17.73.133:3001/'
     }
     
     stages {
@@ -153,8 +153,8 @@ REACT_APP_REDIRECT_SIGN_OUT=${env.REACT_APP_REDIRECT_SIGN_OUT}
                         ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@50.17.73.133 "mkdir -p /home/ec2-user/pos_system/build"
                         scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/client/build/* $SSH_USER@50.17.73.133:/home/ec2-user/pos_system/build/
                         ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@50.17.73.133 "
-                            pm2 stop pos-system || true
-                            pm2 serve /home/ec2-user/pos_system/build 3000 --name pos-system --spa
+                            pm2 stop pos-system-qa || true
+                            pm2 serve /home/ec2-user/pos_system/build 3001 --name pos-system-qa --spa
                             pm2 save
                             pm2 startup -u ec2-user --hp /home/ec2-user || echo 'PM2 startup may require manual setup'
                         "
@@ -173,8 +173,8 @@ REACT_APP_REDIRECT_SIGN_OUT=${env.REACT_APP_REDIRECT_SIGN_OUT}
                         ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@50.17.73.133 "
                             cd /home/ec2-user/pos_system/server
                             npm install
-                            pm2 delete pos-backend || true
-                            pm2 start server.js --name pos-backend
+                            pm2 delete pos-backend-qa || true
+                            PORT=5001 pm2 start server.js --name pos-backend-qa
                             pm2 save
                         "
                     '''
@@ -190,8 +190,8 @@ REACT_APP_REDIRECT_SIGN_OUT=${env.REACT_APP_REDIRECT_SIGN_OUT}
                     sleep 30
                     
                     # Run health checks
-                    curl -f http://50.17.73.133:3000/ || echo "Frontend health check passed"
-                    curl -f http://50.17.73.133:5000/health || echo "Backend health check passed"
+                    curl -f http://50.17.73.133:3001/ || echo "Frontend health check passed"
+                    curl -f http://50.17.73.133:5001/health || echo "Backend health check passed"
                     
                     echo "✅ QA validation completed successfully"
                 '''
@@ -220,8 +220,8 @@ The POS system has been successfully deployed to QA environment.
 Build Number: ${env.BUILD_NUMBER}
 Branch: ${env.BRANCH_NAME}
 Environment: QA
-QA Testing URL: http://50.17.73.133:3000
-Backend API: http://50.17.73.133:5000
+QA Testing URL: http://50.17.73.133:3001
+Backend API: http://50.17.73.133:5001
 
 Please proceed with QA testing and validation.
                 """
