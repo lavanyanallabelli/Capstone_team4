@@ -4,9 +4,7 @@ import {
     Clock,
     CheckCircle,
     XCircle,
-    Eye,
     RefreshCw,
-    Filter,
     Search
 } from 'lucide-react';
 import apiService from '../../services/api';
@@ -14,7 +12,6 @@ import apiService from '../../services/api';
 const OrderHistory = () => {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
     const [selectedOrder, setSelectedOrder] = useState(null);
     const [filter, setFilter] = useState('all');
     const [searchTerm, setSearchTerm] = useState('');
@@ -136,8 +133,8 @@ const OrderHistory = () => {
                                 key={status}
                                 onClick={() => setFilter(status)}
                                 className={`px-3 py-1 rounded-full text-sm font-medium capitalize ${filter === status
-                                        ? 'bg-blue-500 text-white'
-                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                    ? 'bg-blue-500 text-white'
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                     }`}
                             >
                                 {status}

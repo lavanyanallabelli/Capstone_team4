@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import { USER_ROLES, PERMISSIONS, hasPermission } from '../aws/userRoles';
-import { Users, UserPlus, Edit, Trash2, Eye, UserCheck, Mail, AlertTriangle, UserX } from 'lucide-react';
+import { Users, UserPlus, Edit, Trash2, Eye, UserCheck, Mail, UserX } from 'lucide-react';
 import apiService from '../services/api';
 
 const EmployeeManagement = () => {
