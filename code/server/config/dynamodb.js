@@ -170,6 +170,49 @@ const tableSchemas = {
             ReadCapacityUnits: 5,
             WriteCapacityUnits: 5
         }
+    },
+    'pos-orders': {
+        TableName: 'pos-orders',
+        KeySchema: [
+            { AttributeName: 'id', KeyType: 'HASH' },
+            { AttributeName: 'businessId', KeyType: 'RANGE' }
+        ],
+        AttributeDefinitions: [
+            { AttributeName: 'id', AttributeType: 'S' },
+            { AttributeName: 'businessId', AttributeType: 'S' },
+            { AttributeName: 'timestamp', AttributeType: 'S' },
+            { AttributeName: 'status', AttributeType: 'S' }
+        ],
+        GlobalSecondaryIndexes: [
+            {
+                IndexName: 'businessId-timestamp-index',
+                KeySchema: [
+                    { AttributeName: 'businessId', KeyType: 'HASH' },
+                    { AttributeName: 'timestamp', KeyType: 'RANGE' }
+                ],
+                Projection: { ProjectionType: 'ALL' },
+                ProvisionedThroughput: {
+                    ReadCapacityUnits: 5,
+                    WriteCapacityUnits: 5
+                }
+            },
+            {
+                IndexName: 'businessId-status-index',
+                KeySchema: [
+                    { AttributeName: 'businessId', KeyType: 'HASH' },
+                    { AttributeName: 'status', KeyType: 'RANGE' }
+                ],
+                Projection: { ProjectionType: 'ALL' },
+                ProvisionedThroughput: {
+                    ReadCapacityUnits: 5,
+                    WriteCapacityUnits: 5
+                }
+            }
+        ],
+        ProvisionedThroughput: {
+            ReadCapacityUnits: 5,
+            WriteCapacityUnits: 5
+        }
     }
 };
 

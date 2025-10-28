@@ -21,18 +21,18 @@ function getKey(header, callback) {
             console.error('Error getting signing key:', err);
             return callback(err);
         }
-        
+
         if (!key) {
             console.error('No signing key found for kid:', header.kid);
             return callback(new Error('No signing key found'));
         }
-        
+
         const signingKey = key.publicKey || key.rsaPublicKey;
         if (!signingKey) {
             console.error('Invalid key format:', key);
             return callback(new Error('Invalid key format'));
         }
-        
+
         callback(null, signingKey);
     });
 }

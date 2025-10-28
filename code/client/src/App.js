@@ -12,6 +12,8 @@ import SignupPage from './pages/SignupPage';
 import PricingPage from './pages/PricingPage';
 import AboutPage from './pages/AboutPage';
 import ContactPage from './pages/ContactPage';
+import POSPage from './pages/POSPage';
+import EmployeeLoginPage from './pages/EmployeeLoginPage';
 import EmailVerification from './components/auth/EmailVerification';
 import ResetPasswordConfirm from './components/auth/ResetPasswordConfirm';
 import ResetPasswordPage from './pages/ResetPasswordPage';
@@ -29,6 +31,7 @@ function App() {
                         <Route path="/about" element={<AboutPage />} />
                         <Route path="/contact" element={<ContactPage />} />
                         <Route path="/login" element={<LoginPage />} />
+                        <Route path="/employee-login" element={<EmployeeLoginPage />} />
                         <Route path="/signup" element={<SignupPage />} />
                         <Route path="/verify-email" element={<EmailVerification />} />
                         <Route path="/reset-password" element={<ResetPasswordPage />} />
@@ -79,15 +82,18 @@ function App() {
                             }
                         />
                         <Route
+                            path="/pos"
+                            element={
+                                <ProtectedRoute>
+                                    <POSPage />
+                                </ProtectedRoute>
+                            }
+                        />
+                        <Route
                             path="/orders/new"
                             element={
                                 <ProtectedRoute>
-                                    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-                                        <div className="text-center">
-                                            <h2 className="text-2xl font-bold text-gray-900 mb-2">New Order</h2>
-                                            <p className="text-gray-600">Coming soon! This will allow you to take new orders.</p>
-                                        </div>
-                                    </div>
+                                    <POSPage />
                                 </ProtectedRoute>
                             }
                         />

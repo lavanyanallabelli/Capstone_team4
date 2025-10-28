@@ -3,9 +3,55 @@ const { v4: uuidv4 } = require('uuid');
 const Joi = require('joi');
 const bcrypt = require('bcryptjs');
 const { docClient } = require('../config/dynamodb');
+const AWS = require('aws-sdk');
+const { sendEmployeeCredentials } = require('../services/emailService');
 // Authentication temporarily disabled for testing
 
+// Initialize Cognito
+const cognito = new AWS.CognitoIdentityServiceProvider({
+    region: process.env.AWS_REGION || 'us-east-1'
+});
+
 const router = express.Router();
+
+// Function to create Cognito user
+const createCognitoUser = async (email, tempPassword, businessId) => {
+    try {
+        const userPoolId = process.env.AWS_USER_POOL_ID;
+
+        const params = {
+            UserPoolId: userPoolId,
+            Username: email,
+            UserAttributes: [
+                {
+                    Name: 'email',
+                    Value: email
+                },
+                {
+                    Name: 'email_verified',
+                    Value: 'true'
+                },
+                {
+                    Name: 'custom:userRole',
+                    Value: 'employee'
+                },
+                {
+                    Name: 'custom:businessId',
+                    Value: businessId
+                }
+            ],
+            TemporaryPassword: tempPassword,
+            MessageAction: 'SUPPRESS' // Don't send welcome email
+        };
+
+        const result = await cognito.adminCreateUser(params).promise();
+        console.log('✅ Cognito user created:', email);
+        return result;
+    } catch (error) {
+        console.error('❌ Error creating Cognito user:', error);
+        throw error;
+    }
+};
 
 // Validation schemas
 const employeeSchema = Joi.object({
@@ -198,8 +244,48 @@ router.post('/', async (req, res) => {
         });
 
         try {
+            // Save to DynamoDB
             await docClient.put(params).promise();
             console.log('✅ Employee saved to DynamoDB successfully');
+
+            // Create Cognito user
+            try {
+                await createCognitoUser(value.email, tempPassword, businessId);
+                console.log('✅ Cognito user created successfully');
+            } catch (cognitoError) {
+                console.error('❌ Cognito user creation failed:', cognitoError);
+                // Don't fail the entire operation if Cognito fails
+                // The employee is still created in DynamoDB
+            }
+
+            // Send login credentials email
+            try {
+                const businessName = req.user?.businessName || 'Your Restaurant';
+                console.log('📧 Attempting to send email to:', value.email);
+                console.log('📧 SMTP Config:', {
+                    host: process.env.SMTP_HOST,
+                    port: process.env.SMTP_PORT,
+                    user: process.env.SMTP_USER ? 'Set' : 'Not set',
+                    pass: process.env.SMTP_PASS ? 'Set' : 'Not set'
+                });
+
+                const emailSent = await sendEmployeeCredentials(
+                    value.email,
+                    `${value.firstName} ${value.lastName}`,
+                    tempPassword,
+                    businessName
+                );
+
+                if (emailSent) {
+                    console.log('✅ Employee credentials email sent successfully');
+                } else {
+                    console.log('⚠️ Email sending returned false');
+                }
+            } catch (emailError) {
+                console.error('❌ Email sending failed:', emailError);
+                // Don't fail the entire operation if email fails
+            }
+
         } catch (dynamoError) {
             console.error('❌ DynamoDB Error:', dynamoError);
             throw dynamoError;
@@ -211,8 +297,12 @@ router.post('/', async (req, res) => {
         res.status(201).json({
             success: true,
             data: safeEmployee,
-            message: 'Employee created successfully',
-            tempPassword: tempPassword // Include temp password for owner to share with employee
+            message: 'Employee created successfully with login credentials',
+            loginCredentials: {
+                email: value.email,
+                tempPassword: tempPassword,
+                loginUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/employee-login`
+            }
         });
     } catch (error) {
         console.error('Error creating employee:', error);
@@ -553,6 +643,158 @@ router.get('/stats/overview', async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Failed to fetch employee statistics',
+            message: error.message
+        });
+    }
+});
+
+// Resend login credentials to employee
+router.post('/:employeeId/resend-credentials', async (req, res) => {
+    try {
+        const businessId = req.user?.businessId || 'biz_fg27sj9ld_1760831311628';
+        const { employeeId } = req.params;
+
+        // Get employee details
+        const getParams = {
+            TableName: 'pos-employees',
+            Key: { businessId, employeeId }
+        };
+
+        const existingEmployee = await docClient.get(getParams).promise();
+        if (!existingEmployee.Item) {
+            return res.status(404).json({
+                success: false,
+                error: 'Employee not found'
+            });
+        }
+
+        const employee = existingEmployee.Item;
+
+        // Generate new temporary password
+        const tempPassword = Math.random().toString(36).slice(-8);
+        const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+        // Update employee with new password
+        const updateParams = {
+            TableName: 'pos-employees',
+            Key: { businessId, employeeId },
+            UpdateExpression: 'SET password = :password, tempPassword = :tempPassword, updatedAt = :updatedAt',
+            ExpressionAttributeValues: {
+                ':password': hashedPassword,
+                ':tempPassword': tempPassword,
+                ':updatedAt': new Date().toISOString()
+            }
+        };
+
+        await docClient.update(updateParams).promise();
+
+        // Update Cognito user password
+        try {
+            const userPoolId = process.env.AWS_USER_POOL_ID;
+            await cognito.adminSetUserPassword({
+                UserPoolId: userPoolId,
+                Username: employee.email,
+                Password: tempPassword,
+                Permanent: false
+            }).promise();
+            console.log('✅ Cognito password updated for:', employee.email);
+        } catch (cognitoError) {
+            console.error('❌ Cognito password update failed:', cognitoError);
+        }
+
+        // Send new credentials email
+        try {
+            const businessName = req.user?.businessName || 'Your Restaurant';
+            await sendEmployeeCredentials(
+                employee.email,
+                `${employee.firstName} ${employee.lastName}`,
+                tempPassword,
+                businessName
+            );
+            console.log('✅ New credentials email sent to:', employee.email);
+        } catch (emailError) {
+            console.error('❌ Email sending failed:', emailError);
+        }
+
+        res.json({
+            success: true,
+            message: 'Login credentials resent successfully',
+            loginCredentials: {
+                email: employee.email,
+                tempPassword: tempPassword,
+                loginUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/employee-login`
+            }
+        });
+
+    } catch (error) {
+        console.error('Error resending credentials:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to resend credentials',
+            message: error.message
+        });
+    }
+});
+
+// Delete employee
+router.delete('/:employeeId', async (req, res) => {
+    try {
+        const businessId = req.user?.businessId || 'biz_fg27sj9ld_1760831311628';
+        const { employeeId } = req.params;
+
+        // Get employee details first
+        const getParams = {
+            TableName: 'pos-employees',
+            Key: { businessId, employeeId }
+        };
+
+        const existingEmployee = await docClient.get(getParams).promise();
+        if (!existingEmployee.Item) {
+            return res.status(404).json({
+                success: false,
+                error: 'Employee not found'
+            });
+        }
+
+        const employee = existingEmployee.Item;
+
+        // Delete from DynamoDB
+        const deleteParams = {
+            TableName: 'pos-employees',
+            Key: { businessId, employeeId }
+        };
+
+        await docClient.delete(deleteParams).promise();
+
+        // Delete from Cognito
+        try {
+            const userPoolId = process.env.AWS_USER_POOL_ID;
+            await cognito.adminDeleteUser({
+                UserPoolId: userPoolId,
+                Username: employee.email
+            }).promise();
+            console.log('✅ Cognito user deleted:', employee.email);
+        } catch (cognitoError) {
+            console.error('❌ Cognito user deletion failed:', cognitoError);
+            // Don't fail the entire operation if Cognito fails
+        }
+
+        console.log('✅ Employee deleted:', {
+            employeeId,
+            email: employee.email,
+            businessId
+        });
+
+        res.json({
+            success: true,
+            message: 'Employee deleted successfully'
+        });
+
+    } catch (error) {
+        console.error('Error deleting employee:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to delete employee',
             message: error.message
         });
     }
