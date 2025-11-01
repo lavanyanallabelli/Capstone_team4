@@ -56,13 +56,17 @@ const EmployeeManagement = () => {
 
     const handleUpdateEmployee = async (employeeId, employeeData) => {
         try {
+            console.log('📝 Updating employee:', employeeId, employeeData);
             const response = await apiService.updateEmployee(employeeId, employeeData);
             if (response.success) {
+                // Use emp.id (from backend) or emp.employeeId (fallback)
                 setEmployees(employees.map(emp =>
-                    emp.employeeId === employeeId ? response.data : emp
+                    (emp.id === employeeId || emp.employeeId === employeeId) ? response.data : emp
                 ));
                 setEditingEmployee(null);
                 alert('Employee updated successfully!');
+                // Reload employees to ensure consistency
+                loadEmployees();
             }
         } catch (error) {
             console.error('Error updating employee:', error);
@@ -72,10 +76,12 @@ const EmployeeManagement = () => {
 
     const handleToggleEmployeeStatus = async (employeeId, isActive) => {
         try {
+            console.log('🔄 Toggling employee status:', employeeId, '→', isActive);
             const response = await apiService.updateEmployeeStatus(employeeId, isActive);
             if (response.success) {
+                // Use emp.id (from backend) or emp.employeeId (fallback)
                 setEmployees(employees.map(emp =>
-                    emp.employeeId === employeeId ? response.data : emp
+                    (emp.id === employeeId || emp.employeeId === employeeId) ? response.data : emp
                 ));
                 alert(`Employee ${isActive ? 'activated' : 'deactivated'} successfully!`);
             }
@@ -117,10 +123,16 @@ Created: ${new Date(employee.createdAt).toLocaleString()}
     const handleDeleteEmployee = async (employeeId, employeeName) => {
         if (window.confirm(`Are you sure you want to PERMANENTLY DELETE ${employeeName}?\n\nThis action cannot be undone and will:\n- Remove the employee from the system\n- Delete their login credentials\n- Remove all associated data`)) {
             try {
+                console.log('🗑️ Deleting employee:', employeeId);
                 const response = await apiService.deleteEmployee(employeeId);
                 if (response.success) {
-                    setEmployees(employees.filter(emp => emp.employeeId !== employeeId));
+                    // Use emp.id (from backend) or emp.employeeId (fallback)
+                    setEmployees(employees.filter(emp => 
+                        emp.id !== employeeId && emp.employeeId !== employeeId
+                    ));
                     alert('Employee deleted successfully!');
+                    // Reload employees to ensure consistency
+                    loadEmployees();
                 }
             } catch (error) {
                 console.error('Error deleting employee:', error);
@@ -300,8 +312,11 @@ Created: ${new Date(employee.createdAt).toLocaleString()}
                                             </td>
                                         </tr>
                                     ) : (
-                                        employees.map((employee) => (
-                                            <tr key={employee.employeeId} className="hover:bg-gray-50">
+                                        employees.map((employee) => {
+                                            // Backend returns 'id' (UUID), frontend might use 'employeeId' - use both for compatibility
+                                            const employeeId = employee.id || employee.employeeId;
+                                            return (
+                                            <tr key={employeeId} className="hover:bg-gray-50">
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <div className="flex items-center">
                                                         <div className="flex-shrink-0 h-10 w-10">
@@ -316,7 +331,7 @@ Created: ${new Date(employee.createdAt).toLocaleString()}
                                                                 {`${employee.firstName} ${employee.lastName}`}
                                                             </div>
                                                             <div className="text-sm text-gray-500">
-                                                                ID: {employee.employeeId}
+                                                                ID: {employeeId}
                                                             </div>
                                                         </div>
                                                     </div>
@@ -362,7 +377,7 @@ Created: ${new Date(employee.createdAt).toLocaleString()}
                                                             </button>
                                                         )}
                                                         <button
-                                                            onClick={() => handleResendCredentials(employee.employeeId, `${employee.firstName} ${employee.lastName}`)}
+                                                            onClick={() => handleResendCredentials(employeeId, `${employee.firstName} ${employee.lastName}`)}
                                                             className="text-blue-600 hover:text-blue-900"
                                                             title="Resend login credentials"
                                                         >
@@ -370,7 +385,7 @@ Created: ${new Date(employee.createdAt).toLocaleString()}
                                                         </button>
                                                         {canDeactivateEmployee && (
                                                             <button
-                                                                onClick={() => handleToggleEmployeeStatus(employee.employeeId, !employee.isActive)}
+                                                                onClick={() => handleToggleEmployeeStatus(employeeId, !employee.isActive)}
                                                                 className={`${employee.isActive ? 'text-orange-600 hover:text-orange-900' : 'text-green-600 hover:text-green-900'}`}
                                                                 title={employee.isActive ? 'Deactivate employee' : 'Activate employee'}
                                                             >
@@ -378,7 +393,7 @@ Created: ${new Date(employee.createdAt).toLocaleString()}
                                                             </button>
                                                         )}
                                                         <button
-                                                            onClick={() => handleDeleteEmployee(employee.employeeId, `${employee.firstName} ${employee.lastName}`)}
+                                                            onClick={() => handleDeleteEmployee(employeeId, `${employee.firstName} ${employee.lastName}`)}
                                                             className="text-red-600 hover:text-red-900"
                                                             title="Permanently delete employee"
                                                         >
@@ -387,7 +402,8 @@ Created: ${new Date(employee.createdAt).toLocaleString()}
                                                     </div>
                                                 </td>
                                             </tr>
-                                        ))
+                                            );
+                                        })
                                     )}
                                 </tbody>
                             </table>
@@ -407,7 +423,7 @@ Created: ${new Date(employee.createdAt).toLocaleString()}
                 {editingEmployee && (
                     <EditEmployeeForm
                         employee={editingEmployee}
-                        onSubmit={(data) => handleUpdateEmployee(editingEmployee.employeeId, data)}
+                        onSubmit={(data) => handleUpdateEmployee(editingEmployee.id || editingEmployee.employeeId, data)}
                         onCancel={() => setEditingEmployee(null)}
                     />
                 )}
@@ -522,14 +538,21 @@ const CreateEmployeeForm = ({ onSubmit, onCancel }) => {
 // Edit Employee Form Component
 const EditEmployeeForm = ({ employee, onSubmit, onCancel }) => {
     const [formData, setFormData] = useState({
-        name: employee.name,
-        email: employee.email,
-        phone: employee.phone
+        firstName: employee.firstName || '',
+        lastName: employee.lastName || '',
+        email: employee.email || '',
+        phone: employee.phone || ''
     });
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        onSubmit(formData);
+        // Only pass the fields that the backend expects
+        onSubmit({
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            email: formData.email,
+            phone: formData.phone
+        });
     };
 
     return (
@@ -543,13 +566,25 @@ const EditEmployeeForm = ({ employee, onSubmit, onCancel }) => {
                 <form onSubmit={handleSubmit}>
                     <div className="mb-4">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Full Name
+                            First Name
                         </label>
                         <input
                             type="text"
                             required
-                            value={formData.name}
-                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                            value={formData.firstName}
+                            onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                    </div>
+                    <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Last Name
+                        </label>
+                        <input
+                            type="text"
+                            required
+                            value={formData.lastName}
+                            onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                     </div>

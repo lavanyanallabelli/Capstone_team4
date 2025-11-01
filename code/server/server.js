@@ -3,7 +3,10 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const dotenv = require('dotenv');
-const AWS = require('aws-sdk');
+
+// Import database
+const { connectDB, sequelize } = require('./config/database');
+const models = require('./models');
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -12,9 +15,11 @@ const employeeRoutes = require('./routes/employees');
 const analyticsRoutes = require('./routes/analytics-simple');
 const settingsRoutes = require('./routes/settings');
 const orderRoutes = require('./routes/orders');
+const ownerRoutes = require('./routes/owner');
 
 // Import middleware
 const { authenticateToken } = require('./middleware/auth');
+const { syncCognitoUserToOwner } = require('./middleware/cognitoSync');
 
 // Load environment variables
 dotenv.config();
@@ -22,21 +27,6 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 8000;
 const HOST = '0.0.0.0'; // allow external traffic
-
-// Configure AWS
-console.log('🔧 AWS Configuration:');
-console.log('   Region:', process.env.AWS_REGION || 'us-east-1');
-console.log('   Access Key ID:', process.env.AWS_ACCESS_KEY_ID ? 'Set' : 'Not set');
-console.log('   Secret Access Key:', process.env.AWS_SECRET_ACCESS_KEY ? 'Set' : 'Not set');
-
-AWS.config.update({
-    region: process.env.AWS_REGION || 'us-east-1',
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-});
-
-// Initialize DynamoDB
-const dynamodb = new AWS.DynamoDB.DocumentClient();
 
 // Middleware
 app.use(helmet());
@@ -59,11 +49,13 @@ app.get('/health', (req, res) => {
 
 // API Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/menu', menuRoutes); // Temporarily disabled auth for testing
-app.use('/api/employees', employeeRoutes); // Temporarily disabled auth for testing
-app.use('/api/analytics', analyticsRoutes); // Temporarily disabled auth for testing
-app.use('/api/settings', settingsRoutes); // Temporarily disabled auth for testing
-app.use('/api/orders', orderRoutes); // POS orders
+// Apply authentication and Cognito sync middleware to protected routes
+app.use('/api/menu', authenticateToken, syncCognitoUserToOwner, menuRoutes);
+app.use('/api/employees', authenticateToken, syncCognitoUserToOwner, employeeRoutes);
+app.use('/api/analytics', authenticateToken, syncCognitoUserToOwner, analyticsRoutes);
+app.use('/api/settings', authenticateToken, syncCognitoUserToOwner, settingsRoutes);
+app.use('/api/orders', authenticateToken, syncCognitoUserToOwner, orderRoutes);
+app.use('/api/owner', authenticateToken, syncCognitoUserToOwner, ownerRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -98,11 +90,28 @@ app.use('*', (req, res) => {
     });
 });
 
-// Start server
-app.listen(PORT, HOST, () => {
-    console.log(`🚀 Server running on http://${HOST}:${PORT}`);
-    console.log(`📊 Health check: http://${HOST}:${PORT}/health`);
-    console.log(`🔗 API Base URL: http://${HOST}:${PORT}/api`);
-});
+// Initialize database and start server
+const startServer = async () => {
+    try {
+        // Connect to PostgreSQL
+        await connectDB();
+        
+        // Sync models (creates tables if they don't exist)
+        await sequelize.sync({ alter: false });
+        console.log('✅ Database models synchronized');
+        
+        // Start server
+        app.listen(PORT, HOST, () => {
+            console.log(`🚀 Server running on http://${HOST}:${PORT}`);
+            console.log(`📊 Health check: http://${HOST}:${PORT}/health`);
+            console.log(`🔗 API Base URL: http://${HOST}:${PORT}/api`);
+        });
+    } catch (error) {
+        console.error('❌ Failed to start server:', error);
+        process.exit(1);
+    }
+};
 
-module.exports = { app, dynamodb };
+startServer();
+
+module.exports = { app, sequelize };

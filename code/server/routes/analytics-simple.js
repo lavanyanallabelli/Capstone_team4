@@ -1,13 +1,14 @@
 const express = require('express');
-const { docClient } = require('../config/dynamodb');
+const { Order, Payment } = require('../models');
 
-// Generate user-specific business ID for testing
-const generateUserBusinessId = (req) => {
-    // Use email from request body or headers to generate consistent business ID
-    const email = req.body?.email || req.headers['x-user-email'] || 'default@example.com';
-    const hash = require('crypto').createHash('md5').update(email).digest('hex').substring(0, 8);
-    // Use a fixed timestamp to ensure same user always gets same business ID
-    return `biz_${hash}_1730123456789`;
+// Helper to get ownerId from request
+const getOwnerId = (req) => {
+    // ONLY use ownerId from cognitoSync middleware - it's the PostgreSQL UUID
+    if (req.user?.ownerId) {
+        return req.user.ownerId;
+    }
+    console.warn('⚠️ ownerId not set - cognitoSync middleware may have failed');
+    return null;
 };
 
 const router = express.Router();
@@ -15,24 +16,19 @@ const router = express.Router();
 // Get dashboard overview - simplified version
 router.get('/overview', async (req, res) => {
     try {
-        // Generate user-specific business ID for testing
-        const businessId = req.user?.businessId || generateUserBusinessId(req);
+        const ownerId = getOwnerId(req);
+        if (!ownerId) {
+            return res.status(401).json({
+                success: false,
+                error: 'Unauthorized',
+                message: 'Owner ID is required'
+            });
+        }
+
         const { period = '7d' } = req.query;
 
-        // Get analytics data from the pre-populated analytics table
-        const analyticsParams = {
-            TableName: 'pos-analytics',
-            KeyConditionExpression: 'businessId = :businessId',
-            ExpressionAttributeValues: {
-                ':businessId': businessId
-            }
-        };
-
-        // Always return zero data since no real orders have been made yet
-        // const analyticsResult = await docClient.query(analyticsParams).promise();
-
-        // if (analyticsResult.Items.length === 0) {
-        // Return zero data since no real orders have been made yet
+        // Return analytics data based on orders in PostgreSQL
+        // For now, return mock data since we're just getting started
         const mockData = {
             sales: {
                 totalRevenue: 0,
@@ -67,21 +63,6 @@ router.get('/overview', async (req, res) => {
         return res.json({
             success: true,
             data: mockData
-        });
-        // }
-
-        const analyticsData = analyticsResult.Items[0];
-
-        res.json({
-            success: true,
-            data: {
-                sales: analyticsData.sales,
-                customers: analyticsData.customers,
-                salesData: analyticsData.salesData,
-                topItems: analyticsData.topItems,
-                employeePerformance: analyticsData.employeePerformance,
-                revenueBreakdown: analyticsData.revenueBreakdown
-            }
         });
 
     } catch (error) {

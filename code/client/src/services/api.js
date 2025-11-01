@@ -41,13 +41,16 @@ class ApiService {
             'Content-Type': 'application/json',
         };
 
-        // Temporarily disabled auth for testing - no token required
-        if (false && includeAuth) {
-            const token = await this.getAuthToken();
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`;
-            } else {
-                throw new Error('Please provide a valid access token');
+        // Send Cognito token if available
+        if (includeAuth) {
+            try {
+                const token = await this.getAuthToken();
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`;
+                }
+            } catch (error) {
+                // If token fetch fails, continue without auth (for testing)
+                console.warn('Could not get auth token:', error.message);
             }
         }
 
@@ -58,22 +61,15 @@ class ApiService {
     async request(endpoint, options = {}) {
         const url = `${this.baseURL}${endpoint}`;
 
-        // Get current user email for business ID generation
-        let userEmail = null;
-        try {
-            const { Auth } = await import('aws-amplify');
-            const user = await Auth.currentAuthenticatedUser();
-            userEmail = user.attributes?.email || user.username;
-        } catch (error) {
-            // User not authenticated, will use default
-        }
-
+        // Get auth headers (includes Cognito token if available)
+        const authHeaders = await this.getHeaders(options.includeAuth !== false);
+        
         const config = {
-            headers: {
-                'Content-Type': 'application/json',
-                ...(userEmail && { 'x-user-email': userEmail }),
-            },
             ...options,
+            headers: {
+                ...authHeaders,
+                ...(options.headers || {}), // Allow overriding headers if needed
+            },
         };
 
         try {
@@ -293,6 +289,19 @@ class ApiService {
     }
 
     // Settings methods
+    // Owner/Restaurant Profile methods
+    async getOwnerProfile() {
+        return this.get('/owner/profile');
+    }
+
+    async updateOwnerProfile(profileData) {
+        return this.put('/owner/profile', profileData);
+    }
+
+    async deleteOwnerAccount() {
+        return this.delete('/owner/profile');
+    }
+
     async getSettings() {
         return this.get('/settings');
     }

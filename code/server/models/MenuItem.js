@@ -1,0 +1,81 @@
+const { Sequelize, DataTypes } = require('sequelize');
+const { sequelize } = require('../config/database');
+
+const MenuItem = sequelize.define('MenuItem', {
+    id: {
+        type: DataTypes.UUID,
+        defaultValue: DataTypes.UUIDV4,
+        primaryKey: true
+    },
+    ownerId: {
+        type: DataTypes.UUID,
+        allowNull: false,
+        references: {
+            model: 'owners',
+            key: 'id'
+        },
+        onDelete: 'CASCADE'
+    },
+    name: {
+        type: DataTypes.STRING(100),
+        allowNull: false
+    },
+    description: {
+        type: DataTypes.TEXT,
+        allowNull: true
+    },
+    price: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: false,
+        validate: {
+            min: 0
+        }
+    },
+    category: {
+        type: DataTypes.STRING(50),
+        allowNull: true
+    },
+    prepTime: {
+        type: DataTypes.STRING(20),
+        allowNull: true
+    },
+    tags: {
+        type: DataTypes.ARRAY(DataTypes.STRING),
+        allowNull: true,
+        defaultValue: []
+    },
+    availability: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: true
+    },
+    image: {
+        type: DataTypes.STRING(500),
+        allowNull: true
+    },
+    createdAt: {
+        type: DataTypes.DATE,
+        allowNull: false,
+        defaultValue: DataTypes.NOW
+    },
+    updatedAt: {
+        type: DataTypes.DATE,
+        allowNull: false,
+        defaultValue: DataTypes.NOW
+    }
+}, {
+    tableName: 'menu_items',
+    timestamps: true,
+    indexes: [
+        {
+            fields: ['ownerId']
+        },
+        {
+            fields: ['category']
+        },
+        {
+            fields: ['availability']
+        }
+    ]
+});
+
+module.exports = MenuItem;

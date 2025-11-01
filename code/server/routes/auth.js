@@ -3,7 +3,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const Joi = require('joi');
-const { docClient } = require('../config/dynamodb');
+const { Owner, Employee } = require('../models');
 
 const router = express.Router();
 
@@ -44,17 +44,8 @@ router.post('/register', async (req, res) => {
         const { firstName, lastName, email, password, businessName, businessType, phone } = value;
 
         // Check if user already exists
-        const existingUserParams = {
-            TableName: 'pos-users',
-            IndexName: 'email-index',
-            KeyConditionExpression: 'email = :email',
-            ExpressionAttributeValues: {
-                ':email': email
-            }
-        };
-
-        const existingUser = await docClient.query(existingUserParams).promise();
-        if (existingUser.Items.length > 0) {
+        const existingUser = await Owner.findOne({ where: { email } });
+        if (existingUser) {
             return res.status(409).json({
                 success: false,
                 error: 'User already exists',
@@ -64,42 +55,26 @@ router.post('/register', async (req, res) => {
 
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
-        const userId = uuidv4();
-        const businessId = uuidv4();
 
         // Create user
-        const user = {
-            userId,
-            businessId,
+        const user = await Owner.create({
+            name: `${firstName} ${lastName}`,
             email,
             password: hashedPassword,
-            firstName,
-            lastName,
+            phone,
             businessName,
             businessType,
-            phone,
-            userRole: 'owner',
             isActive: true,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            lastLogin: null,
             loginCount: 0
-        };
-
-        const userParams = {
-            TableName: 'pos-users',
-            Item: user
-        };
-
-        await docClient.put(userParams).promise();
+        });
 
         // Generate JWT token
         const token = jwt.sign(
             {
-                sub: userId,
+                sub: user.id,
                 email: user.email,
-                'custom:userRole': user.userRole,
-                'custom:businessId': businessId,
+                'custom:userRole': 'owner',
+                'custom:businessId': user.id,
                 'custom:businessName': businessName,
                 'custom:businessType': businessType,
                 'custom:phone': phone
@@ -109,7 +84,8 @@ router.post('/register', async (req, res) => {
         );
 
         // Remove sensitive data from response
-        const { password: _, ...safeUser } = user;
+        const safeUser = user.toJSON();
+        delete safeUser.password;
 
         res.status(201).json({
             success: true,
@@ -145,25 +121,14 @@ router.post('/login', async (req, res) => {
         const { email, password } = value;
 
         // Find user by email
-        const userParams = {
-            TableName: 'pos-users',
-            IndexName: 'email-index',
-            KeyConditionExpression: 'email = :email',
-            ExpressionAttributeValues: {
-                ':email': email
-            }
-        };
-
-        const userResult = await docClient.query(userParams).promise();
-        if (userResult.Items.length === 0) {
+        const user = await Owner.findOne({ where: { email } });
+        if (!user) {
             return res.status(401).json({
                 success: false,
                 error: 'Invalid credentials',
                 message: 'Email or password is incorrect'
             });
         }
-
-        const user = userResult.Items[0];
 
         // Check if user is active
         if (!user.isActive) {
@@ -185,26 +150,17 @@ router.post('/login', async (req, res) => {
         }
 
         // Update last login and login count
-        const updateParams = {
-            TableName: 'pos-users',
-            Key: { userId: user.userId },
-            UpdateExpression: 'SET lastLogin = :lastLogin, loginCount = :loginCount, updatedAt = :updatedAt',
-            ExpressionAttributeValues: {
-                ':lastLogin': new Date().toISOString(),
-                ':loginCount': (user.loginCount || 0) + 1,
-                ':updatedAt': new Date().toISOString()
-            }
-        };
-
-        await docClient.update(updateParams).promise();
+        user.lastLogin = new Date();
+        user.loginCount = (user.loginCount || 0) + 1;
+        await user.save();
 
         // Generate JWT token
         const token = jwt.sign(
             {
-                sub: user.userId,
+                sub: user.id,
                 email: user.email,
-                'custom:userRole': user.userRole,
-                'custom:businessId': user.businessId,
+                'custom:userRole': 'owner',
+                'custom:businessId': user.id,
                 'custom:businessName': user.businessName,
                 'custom:businessType': user.businessType,
                 'custom:phone': user.phone
@@ -214,7 +170,8 @@ router.post('/login', async (req, res) => {
         );
 
         // Remove sensitive data from response
-        const { password: _, ...safeUser } = user;
+        const safeUser = user.toJSON();
+        delete safeUser.password;
 
         res.json({
             success: true,
@@ -247,25 +204,15 @@ router.post('/employee-login', async (req, res) => {
             });
         }
 
-        // Find employee by employeeId
-        const employeeParams = {
-            TableName: 'pos-employees',
-            FilterExpression: 'employeeId = :employeeId',
-            ExpressionAttributeValues: {
-                ':employeeId': employeeId
-            }
-        };
-
-        const employeeResult = await docClient.scan(employeeParams).promise();
-        if (employeeResult.Items.length === 0) {
+        // Find employee by ID
+        const employee = await Employee.findByPk(employeeId);
+        if (!employee) {
             return res.status(401).json({
                 success: false,
                 error: 'Invalid credentials',
                 message: 'Employee ID or password is incorrect'
             });
         }
-
-        const employee = employeeResult.Items[0];
 
         // Check if employee is active
         if (!employee.isActive) {
@@ -277,7 +224,7 @@ router.post('/employee-login', async (req, res) => {
         }
 
         // Verify password (check both hashed password and temporary password)
-        const isValidPassword = await bcrypt.compare(password, employee.password) ||
+        const isValidPassword = (employee.password && await bcrypt.compare(password, employee.password)) ||
             password === employee.tempPassword;
 
         if (!isValidPassword) {
@@ -289,31 +236,22 @@ router.post('/employee-login', async (req, res) => {
         }
 
         // Update last login
-        const updateParams = {
-            TableName: 'pos-employees',
-            Key: {
-                businessId: employee.businessId,
-                employeeId: employee.employeeId
-            },
-            UpdateExpression: 'SET lastLogin = :lastLogin, loginCount = :loginCount, updatedAt = :updatedAt',
-            ExpressionAttributeValues: {
-                ':lastLogin': new Date().toISOString(),
-                ':loginCount': (employee.loginCount || 0) + 1,
-                ':updatedAt': new Date().toISOString()
-            }
-        };
+        employee.lastLogin = new Date();
+        employee.loginCount = (employee.loginCount || 0) + 1;
+        await employee.save();
 
-        await docClient.update(updateParams).promise();
+        // Get owner/business info
+        const owner = await Owner.findByPk(employee.ownerId);
 
         // Generate JWT token
         const token = jwt.sign(
             {
-                sub: employee.employeeId,
+                sub: employee.id,
                 email: employee.email,
                 'custom:userRole': 'employee',
-                'custom:businessId': employee.businessId,
-                'custom:businessName': employee.businessName || 'Restaurant',
-                'custom:businessType': 'Restaurant',
+                'custom:businessId': employee.ownerId,
+                'custom:businessName': owner?.businessName || 'Restaurant',
+                'custom:businessType': owner?.businessType || 'Restaurant',
                 'custom:phone': employee.phone
             },
             process.env.JWT_SECRET || 'fallback-secret',
@@ -321,7 +259,9 @@ router.post('/employee-login', async (req, res) => {
         );
 
         // Remove sensitive data from response
-        const { password: _, tempPassword: __, ...safeEmployee } = employee;
+        const safeEmployee = employee.toJSON();
+        delete safeEmployee.password;
+        delete safeEmployee.tempPassword;
 
         res.json({
             success: true,
@@ -371,20 +311,13 @@ router.post('/change-password', async (req, res) => {
         const { currentPassword, newPassword } = value;
 
         // Get user
-        const userParams = {
-            TableName: 'pos-users',
-            Key: { userId }
-        };
-
-        const userResult = await docClient.get(userParams).promise();
-        if (!userResult.Item) {
+        const user = await Owner.findByPk(userId);
+        if (!user) {
             return res.status(404).json({
                 success: false,
                 error: 'User not found'
             });
         }
-
-        const user = userResult.Item;
 
         // Verify current password
         const isValidPassword = await bcrypt.compare(currentPassword, user.password);
@@ -395,21 +328,9 @@ router.post('/change-password', async (req, res) => {
             });
         }
 
-        // Hash new password
-        const hashedNewPassword = await bcrypt.hash(newPassword, 10);
-
-        // Update password
-        const updateParams = {
-            TableName: 'pos-users',
-            Key: { userId },
-            UpdateExpression: 'SET password = :password, updatedAt = :updatedAt',
-            ExpressionAttributeValues: {
-                ':password': hashedNewPassword,
-                ':updatedAt': new Date().toISOString()
-            }
-        };
-
-        await docClient.update(updateParams).promise();
+        // Hash new password and update
+        user.password = await bcrypt.hash(newPassword, 10);
+        await user.save();
 
         res.json({
             success: true,
@@ -448,7 +369,7 @@ router.get('/verify', async (req, res) => {
                 user: {
                     sub: decoded.sub,
                     email: decoded.email,
-                    userRole: decoded['custom:userRole'],
+                    userRole: decoded['custom:userRole'] || 'owner',
                     businessId: decoded['custom:businessId'],
                     businessName: decoded['custom:businessName'],
                     businessType: decoded['custom:businessType'],

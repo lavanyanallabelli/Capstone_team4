@@ -1,8 +1,19 @@
 const express = require('express');
-const { docClient } = require('../config/dynamodb');
+const { Order, Payment, Owner, Employee } = require('../models');
 const { authenticateToken } = require('../middleware/auth');
+const { Op } = require('sequelize');
 
 const router = express.Router();
+
+// Helper to get ownerId from request
+const getOwnerId = (req) => {
+    // ONLY use ownerId from cognitoSync middleware - it's the PostgreSQL UUID
+    if (req.user?.ownerId) {
+        return req.user.ownerId;
+    }
+    console.warn('⚠️ ownerId not set - cognitoSync middleware may have failed');
+    return null;
+};
 
 // Create a new order
 router.post('/', authenticateToken, async (req, res) => {
@@ -16,9 +27,8 @@ router.post('/', authenticateToken, async (req, res) => {
             status = 'pending'
         } = req.body;
 
-        const businessId = req.user.businessId;
+        const ownerId = getOwnerId(req);
         const employeeId = req.user.sub;
-        const orderId = `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         const orderNumber = `ORD-${Date.now().toString().slice(-6)}`;
 
         // Validate required fields
@@ -36,38 +46,33 @@ router.post('/', authenticateToken, async (req, res) => {
             });
         }
 
-        // Create order object
-        const order = {
-            id: orderId,
+        // Normalize orderType: frontend uses 'to-go', backend accepts both 'to-go' and 'takeout'
+        const normalizedOrderType = orderType === 'to-go' ? 'takeout' : orderType;
+
+        const totalAmount = parseFloat(total) || 0;
+        const tax = totalAmount * 0.08; // 8% tax
+        const finalTotal = totalAmount * 1.08;
+
+        // Create order
+        const order = await Order.create({
             orderNumber,
-            businessId,
+            ownerId,
             employeeId,
-            employeeEmail: req.user.email,
+            orderDate: new Date(),
             items,
-            orderType,
-            tableNumber: orderType === 'dine-in' ? tableNumber : null,
-            customerName: (orderType === 'delivery' || orderType === 'pickup') ? customerName : null,
-            total: parseFloat(total) || 0,
-            tax: parseFloat(total) * 0.08 || 0, // 8% tax
-            finalTotal: parseFloat(total) * 1.08 || 0,
-            status,
-            timestamp: new Date().toISOString(),
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-        };
-
-        // Save to DynamoDB
-        const params = {
-            TableName: 'pos-orders',
-            Item: order
-        };
-
-        await docClient.put(params).promise();
+            orderType: normalizedOrderType,
+            tableNumber: normalizedOrderType === 'dine-in' ? tableNumber : null,
+            customerName: (normalizedOrderType === 'delivery' || normalizedOrderType === 'pickup') ? customerName : null,
+            totalAmount,
+            tax,
+            finalTotal,
+            status
+        });
 
         console.log('✅ Order created:', {
-            orderId,
+            orderId: order.id,
             orderNumber,
-            businessId,
+            ownerId,
             orderType,
             total: order.finalTotal
         });
@@ -91,40 +96,29 @@ router.post('/', authenticateToken, async (req, res) => {
 // Get all orders for a business
 router.get('/', authenticateToken, async (req, res) => {
     try {
-        const businessId = req.user.businessId;
-        const { status, limit = 50, startKey } = req.query;
+        const ownerId = getOwnerId(req);
+        const { status, limit = 50, offset = 0 } = req.query;
 
-        let params = {
-            TableName: 'pos-orders',
-            IndexName: 'businessId-timestamp-index',
-            KeyConditionExpression: 'businessId = :businessId',
-            ExpressionAttributeValues: {
-                ':businessId': businessId
-            },
-            ScanIndexForward: false, // Most recent first
-            Limit: parseInt(limit)
-        };
+        const where = { ownerId };
 
-        // Filter by status if provided
         if (status && status !== 'all') {
-            params.FilterExpression = '#status = :status';
-            params.ExpressionAttributeNames = {
-                '#status': 'status'
-            };
-            params.ExpressionAttributeValues[':status'] = status;
+            where.status = status;
         }
 
-        // Pagination
-        if (startKey) {
-            params.ExclusiveStartKey = JSON.parse(startKey);
-        }
-
-        const result = await docClient.query(params).promise();
+        const orders = await Order.findAll({
+            where,
+            limit: parseInt(limit),
+            offset: parseInt(offset),
+            order: [['orderDate', 'DESC']],
+            include: [
+                { model: Employee, as: 'employee', attributes: ['id', 'firstName', 'lastName', 'email'] }
+            ]
+        });
 
         res.json({
             success: true,
-            data: result.Items,
-            lastEvaluatedKey: result.LastEvaluatedKey
+            data: orders,
+            count: orders.length
         });
 
     } catch (error) {
@@ -141,19 +135,20 @@ router.get('/', authenticateToken, async (req, res) => {
 router.get('/:orderId', authenticateToken, async (req, res) => {
     try {
         const { orderId } = req.params;
-        const businessId = req.user.businessId;
+        const ownerId = getOwnerId(req);
 
-        const params = {
-            TableName: 'pos-orders',
-            Key: {
+        const order = await Order.findOne({
+            where: {
                 id: orderId,
-                businessId: businessId
-            }
-        };
+                ownerId: ownerId
+            },
+            include: [
+                { model: Employee, as: 'employee', attributes: ['id', 'firstName', 'lastName', 'email'] },
+                { model: Payment, as: 'payments' }
+            ]
+        });
 
-        const result = await docClient.get(params).promise();
-
-        if (!result.Item) {
+        if (!order) {
             return res.status(404).json({
                 success: false,
                 error: 'Order not found'
@@ -162,7 +157,7 @@ router.get('/:orderId', authenticateToken, async (req, res) => {
 
         res.json({
             success: true,
-            data: result.Item
+            data: order
         });
 
     } catch (error) {
@@ -180,7 +175,7 @@ router.patch('/:orderId/status', authenticateToken, async (req, res) => {
     try {
         const { orderId } = req.params;
         const { status } = req.body;
-        const businessId = req.user.businessId;
+        const ownerId = getOwnerId(req);
 
         const validStatuses = ['pending', 'preparing', 'ready', 'completed', 'cancelled'];
         if (!validStatuses.includes(status)) {
@@ -191,34 +186,32 @@ router.patch('/:orderId/status', authenticateToken, async (req, res) => {
             });
         }
 
-        const params = {
-            TableName: 'pos-orders',
-            Key: {
+        const order = await Order.findOne({
+            where: {
                 id: orderId,
-                businessId: businessId
-            },
-            UpdateExpression: 'SET #status = :status, updatedAt = :updatedAt',
-            ExpressionAttributeNames: {
-                '#status': 'status'
-            },
-            ExpressionAttributeValues: {
-                ':status': status,
-                ':updatedAt': new Date().toISOString()
-            },
-            ReturnValues: 'ALL_NEW'
-        };
+                ownerId: ownerId
+            }
+        });
 
-        const result = await docClient.update(params).promise();
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                error: 'Order not found'
+            });
+        }
+
+        order.status = status;
+        await order.save();
 
         console.log('✅ Order status updated:', {
             orderId,
             status,
-            businessId
+            ownerId
         });
 
         res.json({
             success: true,
-            data: result.Attributes,
+            data: order,
             message: 'Order status updated successfully'
         });
 
@@ -236,51 +229,39 @@ router.patch('/:orderId/status', authenticateToken, async (req, res) => {
 router.put('/:orderId', authenticateToken, async (req, res) => {
     try {
         const { orderId } = req.params;
-        const businessId = req.user.businessId;
+        const ownerId = getOwnerId(req);
         const updates = req.body;
 
         // Remove fields that shouldn't be updated
         delete updates.id;
-        delete updates.businessId;
+        delete updates.ownerId;
         delete updates.createdAt;
 
-        // Build update expression
-        const updateExpressions = [];
-        const expressionAttributeNames = {};
-        const expressionAttributeValues = {};
-
-        Object.keys(updates).forEach((key, index) => {
-            updateExpressions.push(`#${key} = :val${index}`);
-            expressionAttributeNames[`#${key}`] = key;
-            expressionAttributeValues[`:val${index}`] = updates[key];
+        const order = await Order.findOne({
+            where: {
+                id: orderId,
+                ownerId: ownerId
+            }
         });
 
-        updateExpressions.push('updatedAt = :updatedAt');
-        expressionAttributeValues[':updatedAt'] = new Date().toISOString();
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                error: 'Order not found'
+            });
+        }
 
-        const params = {
-            TableName: 'pos-orders',
-            Key: {
-                id: orderId,
-                businessId: businessId
-            },
-            UpdateExpression: `SET ${updateExpressions.join(', ')}`,
-            ExpressionAttributeNames: expressionAttributeNames,
-            ExpressionAttributeValues: expressionAttributeValues,
-            ReturnValues: 'ALL_NEW'
-        };
-
-        const result = await docClient.update(params).promise();
+        await order.update(updates);
 
         console.log('✅ Order updated:', {
             orderId,
-            businessId,
+            ownerId,
             updates: Object.keys(updates)
         });
 
         res.json({
             success: true,
-            data: result.Attributes,
+            data: order,
             message: 'Order updated successfully'
         });
 
@@ -298,21 +279,27 @@ router.put('/:orderId', authenticateToken, async (req, res) => {
 router.delete('/:orderId', authenticateToken, async (req, res) => {
     try {
         const { orderId } = req.params;
-        const businessId = req.user.businessId;
+        const ownerId = getOwnerId(req);
 
-        const params = {
-            TableName: 'pos-orders',
-            Key: {
+        const order = await Order.findOne({
+            where: {
                 id: orderId,
-                businessId: businessId
+                ownerId: ownerId
             }
-        };
+        });
 
-        await docClient.delete(params).promise();
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                error: 'Order not found'
+            });
+        }
+
+        await order.destroy();
 
         console.log('✅ Order deleted:', {
             orderId,
-            businessId
+            ownerId
         });
 
         res.json({
@@ -333,7 +320,7 @@ router.delete('/:orderId', authenticateToken, async (req, res) => {
 // Get order statistics
 router.get('/stats/overview', authenticateToken, async (req, res) => {
     try {
-        const businessId = req.user.businessId;
+        const ownerId = getOwnerId(req);
         const { period = 'today' } = req.query;
 
         // Calculate date range based on period
@@ -358,43 +345,38 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
                 endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000);
         }
 
-        const params = {
-            TableName: 'pos-orders',
-            IndexName: 'businessId-timestamp-index',
-            KeyConditionExpression: 'businessId = :businessId AND #timestamp BETWEEN :startDate AND :endDate',
-            ExpressionAttributeNames: {
-                '#timestamp': 'timestamp'
-            },
-            ExpressionAttributeValues: {
-                ':businessId': businessId,
-                ':startDate': startDate.toISOString(),
-                ':endDate': endDate.toISOString()
+        const orders = await Order.findAll({
+            where: {
+                ownerId: ownerId,
+                orderDate: {
+                    [Op.between]: [startDate, endDate]
+                }
             }
-        };
-
-        const result = await docClient.query(params).promise();
-        const orders = result.Items;
+        });
 
         // Calculate statistics
         const stats = {
             totalOrders: orders.length,
-            totalRevenue: orders.reduce((sum, order) => sum + (order.finalTotal || 0), 0),
+            totalRevenue: orders.reduce((sum, order) => sum + parseFloat(order.finalTotal || 0), 0),
             averageOrderValue: orders.length > 0 ?
-                orders.reduce((sum, order) => sum + (order.finalTotal || 0), 0) / orders.length : 0,
+                orders.reduce((sum, order) => sum + parseFloat(order.finalTotal || 0), 0) / orders.length : 0,
             ordersByStatus: {},
             ordersByType: {},
             topItems: {}
         };
 
-        // Count by status
+        // Count by status and type
         orders.forEach(order => {
             stats.ordersByStatus[order.status] = (stats.ordersByStatus[order.status] || 0) + 1;
             stats.ordersByType[order.orderType] = (stats.ordersByType[order.orderType] || 0) + 1;
 
             // Count items
-            order.items?.forEach(item => {
-                stats.topItems[item.name] = (stats.topItems[item.name] || 0) + item.quantity;
-            });
+            if (order.items && Array.isArray(order.items)) {
+                order.items.forEach(item => {
+                    const itemName = item.name || 'Unknown';
+                    stats.topItems[itemName] = (stats.topItems[itemName] || 0) + (item.quantity || 1);
+                });
+            }
         });
 
         res.json({

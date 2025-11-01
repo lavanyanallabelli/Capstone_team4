@@ -2,23 +2,25 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const Joi = require('joi');
 const bcrypt = require('bcryptjs');
-const { docClient } = require('../config/dynamodb');
 const AWS = require('aws-sdk');
+const { Employee, Owner } = require('../models');
 const { sendEmployeeCredentials } = require('../services/emailService');
-// Authentication temporarily disabled for testing
 
-// Initialize Cognito
+// Initialize Cognito (keeping for employee authentication)
 const cognito = new AWS.CognitoIdentityServiceProvider({
     region: process.env.AWS_REGION || 'us-east-1'
 });
 
-// Generate user-specific business ID for testing
-const generateUserBusinessId = (req) => {
-    // Use email from request body or headers to generate consistent business ID
-    const email = req.body?.email || req.headers['x-user-email'] || 'default@example.com';
-    const hash = require('crypto').createHash('md5').update(email).digest('hex').substring(0, 8);
-    // Use a fixed timestamp to ensure same user always gets same business ID
-    return `biz_${hash}_1730123456789`;
+// Helper to get ownerId from request
+const getOwnerId = (req) => {
+    // ONLY use ownerId from cognitoSync middleware - it's the PostgreSQL UUID
+    // DO NOT use businessId (Cognito string) or sub (Cognito UUID) - they're not the same!
+    if (req.user?.ownerId) {
+        return req.user.ownerId;
+    }
+    // If ownerId not set, sync middleware failed - return null to force error
+    console.warn('⚠️ ownerId not set - cognitoSync middleware may have failed');
+    return null;
 };
 
 const router = express.Router();
@@ -90,49 +92,60 @@ const updateEmployeeSchema = Joi.object({
 // Get all employees for a business
 router.get('/', async (req, res) => {
     try {
-        // Generate user-specific business ID for testing
-        const businessId = req.user?.businessId || generateUserBusinessId(req);
+        console.log('👥 GET /api/employees - req.user:', {
+            ownerId: req.user?.ownerId,
+            businessId: req.user?.businessId,
+            sub: req.user?.sub
+        });
+        const ownerId = getOwnerId(req);
+        console.log('👥 Extracted ownerId:', ownerId, typeof ownerId);
+        
+        if (!ownerId) {
+            console.error('❌ No ownerId found in request');
+            return res.status(401).json({
+                success: false,
+                error: 'Unauthorized',
+                message: 'Owner ID is required'
+            });
+        }
 
-        console.log('📋 Fetching employees for businessId:', businessId);
+        // Validate UUID format
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(ownerId)) {
+            console.error('❌ Invalid UUID format:', ownerId);
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid owner ID format',
+                message: 'Owner ID must be a valid UUID'
+            });
+        }
+
         const { isActive, search } = req.query;
-
-        let params = {
-            TableName: 'pos-employees',
-            KeyConditionExpression: 'businessId = :businessId',
-            ExpressionAttributeValues: {
-                ':businessId': businessId
-            }
-        };
-
-        // Add filters
-        let filterExpressions = [];
+        const where = { ownerId };
 
         if (isActive !== undefined) {
-            filterExpressions.push('isActive = :isActive');
-            params.ExpressionAttributeValues[':isActive'] = isActive === 'true';
+            where.isActive = isActive === 'true';
         }
 
         if (search) {
-            filterExpressions.push('(contains(firstName, :search) OR contains(lastName, :search) OR contains(email, :search))');
-            params.ExpressionAttributeValues[':search'] = search.toLowerCase();
+            const { Op } = require('sequelize');
+            where[Op.or] = [
+                { firstName: { [Op.iLike]: `%${search}%` } },
+                { lastName: { [Op.iLike]: `%${search}%` } },
+                { email: { [Op.iLike]: `%${search}%` } }
+            ];
         }
 
-        if (filterExpressions.length > 0) {
-            params.FilterExpression = filterExpressions.join(' AND ');
-        }
-
-        const result = await docClient.query(params).promise();
-
-        // Remove sensitive data
-        const employees = result.Items.map(employee => {
-            const { password, ...safeEmployee } = employee;
-            return safeEmployee;
+        const employees = await Employee.findAll({
+            where,
+            attributes: { exclude: ['password', 'tempPassword'] },
+            order: [['createdAt', 'DESC']]
         });
 
         res.json({
             success: true,
             data: employees,
-            count: result.Count
+            count: employees.length
         });
     } catch (error) {
         console.error('Error fetching employees:', error);
@@ -147,29 +160,23 @@ router.get('/', async (req, res) => {
 // Get employee by ID
 router.get('/:employeeId', async (req, res) => {
     try {
-        // Generate user-specific business ID for testing
-        const businessId = req.user?.businessId || generateUserBusinessId(req);
+        const ownerId = getOwnerId(req);
         const { employeeId } = req.params;
 
-        const params = {
-            TableName: 'pos-employees',
-            Key: {
-                businessId,
-                employeeId
-            }
-        };
+        const employee = await Employee.findOne({
+            where: {
+                id: employeeId,
+                ownerId: ownerId
+            },
+            attributes: { exclude: ['password', 'tempPassword'] }
+        });
 
-        const result = await docClient.get(params).promise();
-
-        if (!result.Item) {
+        if (!employee) {
             return res.status(404).json({
                 success: false,
                 error: 'Employee not found'
             });
         }
-
-        // Remove sensitive data
-        const { password, ...employee } = result.Item;
 
         res.json({
             success: true,
@@ -188,19 +195,18 @@ router.get('/:employeeId', async (req, res) => {
 // Create new employee
 router.post('/', async (req, res) => {
     try {
-        // Generate user-specific business ID for testing
-        const businessId = req.user?.businessId || generateUserBusinessId(req);
-
-        // Debug: Log the request data
-        console.log('📝 Employee creation request:', {
-            body: req.body,
-            businessId: businessId
-        });
+        const ownerId = getOwnerId(req);
+        if (!ownerId) {
+            return res.status(401).json({
+                success: false,
+                error: 'Unauthorized',
+                message: 'Owner ID is required'
+            });
+        }
 
         // Validate input
         const { error, value } = employeeSchema.validate(req.body);
         if (error) {
-            console.log('❌ Validation error:', error.details);
             return res.status(400).json({
                 success: false,
                 error: 'Validation error',
@@ -208,100 +214,59 @@ router.post('/', async (req, res) => {
             });
         }
 
-        // Check if employee with email already exists (using scan since GSI is not available)
-        const existingEmployeeParams = {
-            TableName: 'pos-employees',
-            FilterExpression: 'email = :email',
-            ExpressionAttributeValues: {
-                ':email': value.email
-            }
-        };
-
-        const existingEmployee = await docClient.scan(existingEmployeeParams).promise();
-        if (existingEmployee.Items.length > 0) {
+        // Check if employee with email already exists
+        const existingEmployee = await Employee.findOne({
+            where: { email: value.email }
+        });
+        if (existingEmployee) {
             return res.status(409).json({
                 success: false,
                 error: 'Employee with this email already exists'
             });
         }
 
-        const employeeId = uuidv4();
-        const tempPassword = Math.random().toString(36).slice(-8); // Generate temporary password
+        const tempPassword = Math.random().toString(36).slice(-8);
         const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
-        const employee = {
-            businessId,
-            employeeId,
-            ...value,
+        const employee = await Employee.create({
+            ownerId,
+            firstName: value.firstName,
+            lastName: value.lastName,
+            email: value.email,
+            phone: value.phone,
+            position: value.position,
             password: hashedPassword,
             tempPassword,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            lastLogin: null,
+            isActive: value.isActive !== undefined ? value.isActive : true,
             loginCount: 0
-        };
-
-        const params = {
-            TableName: 'pos-employees',
-            Item: employee
-        };
-
-        console.log('📝 Saving employee to DynamoDB:', {
-            tableName: 'pos-employees',
-            businessId: businessId,
-            employeeId: employeeId
         });
 
+        // Create Cognito user (optional)
         try {
-            // Save to DynamoDB
-            await docClient.put(params).promise();
-            console.log('✅ Employee saved to DynamoDB successfully');
-
-            // Create Cognito user
-            try {
-                await createCognitoUser(value.email, tempPassword, businessId);
-                console.log('✅ Cognito user created successfully');
-            } catch (cognitoError) {
-                console.error('❌ Cognito user creation failed:', cognitoError);
-                // Don't fail the entire operation if Cognito fails
-                // The employee is still created in DynamoDB
-            }
-
-            // Send login credentials email
-            try {
-                const businessName = req.user?.businessName || 'Your Restaurant';
-                console.log('📧 Attempting to send email to:', value.email);
-                console.log('📧 SMTP Config:', {
-                    host: process.env.SMTP_HOST,
-                    port: process.env.SMTP_PORT,
-                    user: process.env.SMTP_USER ? 'Set' : 'Not set',
-                    pass: process.env.SMTP_PASS ? 'Set' : 'Not set'
-                });
-
-                const emailSent = await sendEmployeeCredentials(
-                    value.email,
-                    `${value.firstName} ${value.lastName}`,
-                    tempPassword,
-                    businessName
-                );
-
-                if (emailSent) {
-                    console.log('✅ Employee credentials email sent successfully');
-                } else {
-                    console.log('⚠️ Email sending returned false');
-                }
-            } catch (emailError) {
-                console.error('❌ Email sending failed:', emailError);
-                // Don't fail the entire operation if email fails
-            }
-
-        } catch (dynamoError) {
-            console.error('❌ DynamoDB Error:', dynamoError);
-            throw dynamoError;
+            await createCognitoUser(value.email, tempPassword, ownerId);
+            console.log('✅ Cognito user created successfully');
+        } catch (cognitoError) {
+            console.error('❌ Cognito user creation failed:', cognitoError);
         }
 
-        // Remove sensitive data from response
-        const { password, ...safeEmployee } = employee;
+        // Send login credentials email
+        try {
+            const owner = await Owner.findByPk(ownerId);
+            const businessName = owner?.businessName || 'Your Restaurant';
+            await sendEmployeeCredentials(
+                value.email,
+                `${value.firstName} ${value.lastName}`,
+                tempPassword,
+                businessName
+            );
+            console.log('✅ Employee credentials email sent successfully');
+        } catch (emailError) {
+            console.error('❌ Email sending failed:', emailError);
+        }
+
+        const safeEmployee = employee.toJSON();
+        delete safeEmployee.password;
+        delete safeEmployee.tempPassword;
 
         res.status(201).json({
             success: true,
@@ -326,13 +291,25 @@ router.post('/', async (req, res) => {
 // Update employee
 router.put('/:employeeId', async (req, res) => {
     try {
-        // Generate user-specific business ID for testing
-        const businessId = req.user?.businessId || generateUserBusinessId(req);
+        console.log('📝 PUT /api/employees/:employeeId - Updating employee');
+        const ownerId = getOwnerId(req);
+        
+        if (!ownerId) {
+            console.error('❌ No ownerId in update request');
+            return res.status(401).json({
+                success: false,
+                error: 'Unauthorized',
+                message: 'Owner ID is required'
+            });
+        }
+
         const { employeeId } = req.params;
+        console.log('📝 Update request - employeeId:', employeeId, 'ownerId:', ownerId);
 
         // Validate input
         const { error, value } = updateEmployeeSchema.validate(req.body);
         if (error) {
+            console.error('❌ Validation error:', error.details);
             return res.status(400).json({
                 success: false,
                 error: 'Validation error',
@@ -341,31 +318,28 @@ router.put('/:employeeId', async (req, res) => {
         }
 
         // Check if employee exists
-        const getParams = {
-            TableName: 'pos-employees',
-            Key: { businessId, employeeId }
-        };
+        const employee = await Employee.findOne({
+            where: {
+                id: employeeId,
+                ownerId: ownerId
+            }
+        });
 
-        const existingEmployee = await docClient.get(getParams).promise();
-        if (!existingEmployee.Item) {
+        if (!employee) {
+            console.error('❌ Employee not found:', employeeId);
             return res.status(404).json({
                 success: false,
-                error: 'Employee not found'
+                error: 'Employee not found',
+                message: 'The employee does not exist or you do not have permission to update them'
             });
         }
 
-        // If email is being updated, check for duplicates (using scan since GSI is not available)
-        if (value.email && value.email !== existingEmployee.Item.email) {
-            const emailCheckParams = {
-                TableName: 'pos-employees',
-                FilterExpression: 'email = :email',
-                ExpressionAttributeValues: {
-                    ':email': value.email
-                }
-            };
-
-            const emailCheck = await docClient.scan(emailCheckParams).promise();
-            if (emailCheck.Items.length > 0) {
+        // If email is being updated, check for duplicates
+        if (value.email && value.email !== employee.email) {
+            const emailCheck = await Employee.findOne({
+                where: { email: value.email }
+            });
+            if (emailCheck) {
                 return res.status(409).json({
                     success: false,
                     error: 'Employee with this email already exists'
@@ -374,37 +348,17 @@ router.put('/:employeeId', async (req, res) => {
         }
 
         // Update employee
-        const updateExpressions = [];
-        const expressionAttributeNames = {};
-        const expressionAttributeValues = {};
+        await employee.update(value);
+        await employee.reload(); // Reload to get updated values
 
-        Object.keys(value).forEach(key => {
-            updateExpressions.push(`#${key} = :${key}`);
-            expressionAttributeNames[`#${key}`] = key;
-            expressionAttributeValues[`:${key}`] = value[key];
-        });
+        const safeEmployee = employee.toJSON();
+        delete safeEmployee.password;
+        delete safeEmployee.tempPassword;
 
-        updateExpressions.push('#updatedAt = :updatedAt');
-        expressionAttributeNames['#updatedAt'] = 'updatedAt';
-        expressionAttributeValues[':updatedAt'] = new Date().toISOString();
-
-        const updateParams = {
-            TableName: 'pos-employees',
-            Key: { businessId, employeeId },
-            UpdateExpression: `SET ${updateExpressions.join(', ')}`,
-            ExpressionAttributeNames: expressionAttributeNames,
-            ExpressionAttributeValues: expressionAttributeValues,
-            ReturnValues: 'ALL_NEW'
-        };
-
-        const result = await docClient.update(updateParams).promise();
-
-        // Remove sensitive data
-        const { password, ...updatedEmployee } = result.Attributes;
-
+        console.log('✅ Employee updated successfully:', employee.id);
         res.json({
             success: true,
-            data: updatedEmployee,
+            data: safeEmployee,
             message: 'Employee updated successfully'
         });
     } catch (error) {
@@ -420,37 +374,58 @@ router.put('/:employeeId', async (req, res) => {
 // Deactivate/Activate employee
 router.patch('/:employeeId/status', async (req, res) => {
     try {
-        // Generate user-specific business ID for testing
-        const businessId = req.user?.businessId || generateUserBusinessId(req);
+        console.log('🔄 PATCH /api/employees/:employeeId/status - Toggling employee status');
+        const ownerId = getOwnerId(req);
+        
+        if (!ownerId) {
+            console.error('❌ No ownerId in toggle status request');
+            return res.status(401).json({
+                success: false,
+                error: 'Unauthorized',
+                message: 'Owner ID is required'
+            });
+        }
+
         const { employeeId } = req.params;
         const { isActive } = req.body;
+        console.log('🔄 Toggle status request - employeeId:', employeeId, 'isActive:', isActive, 'ownerId:', ownerId);
 
         if (typeof isActive !== 'boolean') {
+            console.error('❌ Invalid isActive type:', typeof isActive);
             return res.status(400).json({
                 success: false,
                 error: 'isActive must be a boolean value'
             });
         }
 
-        const params = {
-            TableName: 'pos-employees',
-            Key: { businessId, employeeId },
-            UpdateExpression: 'SET isActive = :isActive, updatedAt = :updatedAt',
-            ExpressionAttributeValues: {
-                ':isActive': isActive,
-                ':updatedAt': new Date().toISOString()
-            },
-            ReturnValues: 'ALL_NEW'
-        };
+        const employee = await Employee.findOne({
+            where: {
+                id: employeeId,
+                ownerId: ownerId
+            }
+        });
 
-        const result = await docClient.update(params).promise();
+        if (!employee) {
+            console.error('❌ Employee not found:', employeeId);
+            return res.status(404).json({
+                success: false,
+                error: 'Employee not found',
+                message: 'The employee does not exist or you do not have permission to update them'
+            });
+        }
 
-        // Remove sensitive data
-        const { password, ...updatedEmployee } = result.Attributes;
+        employee.isActive = isActive;
+        await employee.save();
+        await employee.reload(); // Reload to get updated values
 
+        const safeEmployee = employee.toJSON();
+        delete safeEmployee.password;
+        delete safeEmployee.tempPassword;
+
+        console.log('✅ Employee status updated successfully:', employee.id, '→', isActive);
         res.json({
             success: true,
-            data: updatedEmployee,
+            data: safeEmployee,
             message: `Employee ${isActive ? 'activated' : 'deactivated'} successfully`
         });
     } catch (error) {
@@ -466,18 +441,17 @@ router.patch('/:employeeId/status', async (req, res) => {
 // Reset employee password
 router.post('/:employeeId/reset-password', async (req, res) => {
     try {
-        // Generate user-specific business ID for testing
-        const businessId = req.user?.businessId || generateUserBusinessId(req);
+        const ownerId = getOwnerId(req);
         const { employeeId } = req.params;
 
-        // Check if employee exists
-        const getParams = {
-            TableName: 'pos-employees',
-            Key: { businessId, employeeId }
-        };
+        const employee = await Employee.findOne({
+            where: {
+                id: employeeId,
+                ownerId: ownerId
+            }
+        });
 
-        const existingEmployee = await docClient.get(getParams).promise();
-        if (!existingEmployee.Item) {
+        if (!employee) {
             return res.status(404).json({
                 success: false,
                 error: 'Employee not found'
@@ -486,21 +460,9 @@ router.post('/:employeeId/reset-password', async (req, res) => {
 
         // Generate new temporary password
         const tempPassword = Math.random().toString(36).slice(-8);
-        const hashedPassword = await bcrypt.hash(tempPassword, 10);
-
-        const updateParams = {
-            TableName: 'pos-employees',
-            Key: { businessId, employeeId },
-            UpdateExpression: 'SET password = :password, tempPassword = :tempPassword, updatedAt = :updatedAt',
-            ExpressionAttributeValues: {
-                ':password': hashedPassword,
-                ':tempPassword': tempPassword,
-                ':updatedAt': new Date().toISOString()
-            },
-            ReturnValues: 'ALL_NEW'
-        };
-
-        const result = await docClient.update(updateParams).promise();
+        employee.password = await bcrypt.hash(tempPassword, 10);
+        employee.tempPassword = tempPassword;
+        await employee.save();
 
         res.json({
             success: true,
@@ -618,28 +580,22 @@ router.get('/:employeeId/activity', async (req, res) => {
 // Get employee statistics
 router.get('/stats/overview', async (req, res) => {
     try {
-        // Generate user-specific business ID for testing
-        const businessId = req.user?.businessId || generateUserBusinessId(req);
+        const ownerId = getOwnerId(req);
+        
+        const employees = await Employee.findAll({
+            where: { ownerId }
+        });
 
-        const params = {
-            TableName: 'pos-employees',
-            KeyConditionExpression: 'businessId = :businessId',
-            ExpressionAttributeValues: {
-                ':businessId': businessId
-            }
-        };
-
-        const result = await docClient.query(params).promise();
+        const thisMonth = new Date();
+        thisMonth.setDate(1);
 
         const stats = {
-            totalEmployees: result.Count,
-            activeEmployees: result.Items.filter(emp => emp.isActive).length,
-            inactiveEmployees: result.Items.filter(emp => !emp.isActive).length,
-            newThisMonth: result.Items.filter(emp => {
-                const hireDate = new Date(emp.hireDate || emp.createdAt);
-                const thisMonth = new Date();
-                thisMonth.setDate(1);
-                return hireDate >= thisMonth;
+            totalEmployees: employees.length,
+            activeEmployees: employees.filter(emp => emp.isActive).length,
+            inactiveEmployees: employees.filter(emp => !emp.isActive).length,
+            newThisMonth: employees.filter(emp => {
+                const createdDate = new Date(emp.createdAt);
+                return createdDate >= thisMonth;
             }).length
         };
 
@@ -660,42 +616,28 @@ router.get('/stats/overview', async (req, res) => {
 // Resend login credentials to employee
 router.post('/:employeeId/resend-credentials', async (req, res) => {
     try {
-        const businessId = req.user?.businessId || 'biz_fg27sj9ld_1760831311628';
+        const ownerId = getOwnerId(req);
         const { employeeId } = req.params;
 
-        // Get employee details
-        const getParams = {
-            TableName: 'pos-employees',
-            Key: { businessId, employeeId }
-        };
+        const employee = await Employee.findOne({
+            where: {
+                id: employeeId,
+                ownerId: ownerId
+            }
+        });
 
-        const existingEmployee = await docClient.get(getParams).promise();
-        if (!existingEmployee.Item) {
+        if (!employee) {
             return res.status(404).json({
                 success: false,
                 error: 'Employee not found'
             });
         }
 
-        const employee = existingEmployee.Item;
-
         // Generate new temporary password
         const tempPassword = Math.random().toString(36).slice(-8);
-        const hashedPassword = await bcrypt.hash(tempPassword, 10);
-
-        // Update employee with new password
-        const updateParams = {
-            TableName: 'pos-employees',
-            Key: { businessId, employeeId },
-            UpdateExpression: 'SET password = :password, tempPassword = :tempPassword, updatedAt = :updatedAt',
-            ExpressionAttributeValues: {
-                ':password': hashedPassword,
-                ':tempPassword': tempPassword,
-                ':updatedAt': new Date().toISOString()
-            }
-        };
-
-        await docClient.update(updateParams).promise();
+        employee.password = await bcrypt.hash(tempPassword, 10);
+        employee.tempPassword = tempPassword;
+        await employee.save();
 
         // Update Cognito user password
         try {
@@ -713,7 +655,8 @@ router.post('/:employeeId/resend-credentials', async (req, res) => {
 
         // Send new credentials email
         try {
-            const businessName = req.user?.businessName || 'Your Restaurant';
+            const owner = await Owner.findByPk(ownerId);
+            const businessName = owner?.businessName || 'Your Restaurant';
             await sendEmployeeCredentials(
                 employee.email,
                 `${employee.firstName} ${employee.lastName}`,
@@ -748,32 +691,39 @@ router.post('/:employeeId/resend-credentials', async (req, res) => {
 // Delete employee
 router.delete('/:employeeId', async (req, res) => {
     try {
-        const businessId = req.user?.businessId || 'biz_fg27sj9ld_1760831311628';
-        const { employeeId } = req.params;
-
-        // Get employee details first
-        const getParams = {
-            TableName: 'pos-employees',
-            Key: { businessId, employeeId }
-        };
-
-        const existingEmployee = await docClient.get(getParams).promise();
-        if (!existingEmployee.Item) {
-            return res.status(404).json({
+        console.log('🗑️ DELETE /api/employees/:employeeId - Deleting employee');
+        const ownerId = getOwnerId(req);
+        
+        if (!ownerId) {
+            console.error('❌ No ownerId in delete request');
+            return res.status(401).json({
                 success: false,
-                error: 'Employee not found'
+                error: 'Unauthorized',
+                message: 'Owner ID is required'
             });
         }
 
-        const employee = existingEmployee.Item;
+        const { employeeId } = req.params;
+        console.log('🗑️ Delete request - employeeId:', employeeId, 'ownerId:', ownerId);
 
-        // Delete from DynamoDB
-        const deleteParams = {
-            TableName: 'pos-employees',
-            Key: { businessId, employeeId }
-        };
+        const employee = await Employee.findOne({
+            where: {
+                id: employeeId,
+                ownerId: ownerId
+            }
+        });
 
-        await docClient.delete(deleteParams).promise();
+        if (!employee) {
+            console.error('❌ Employee not found:', employeeId);
+            return res.status(404).json({
+                success: false,
+                error: 'Employee not found',
+                message: 'The employee does not exist or you do not have permission to delete them'
+            });
+        }
+
+        // Delete from database
+        await employee.destroy();
 
         // Delete from Cognito
         try {
@@ -785,13 +735,12 @@ router.delete('/:employeeId', async (req, res) => {
             console.log('✅ Cognito user deleted:', employee.email);
         } catch (cognitoError) {
             console.error('❌ Cognito user deletion failed:', cognitoError);
-            // Don't fail the entire operation if Cognito fails
         }
 
         console.log('✅ Employee deleted:', {
             employeeId,
             email: employee.email,
-            businessId
+            ownerId
         });
 
         res.json({

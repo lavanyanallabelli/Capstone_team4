@@ -127,13 +127,17 @@ const MenuManagement = () => {
 
     const handleEditItem = async (itemId, updatedData) => {
         try {
+            console.log('📝 Editing menu item:', itemId, updatedData);
             const response = await apiService.updateMenuItem(itemId, updatedData);
             if (response.success) {
+                // Use item.id (from backend) or item.itemId (fallback)
                 setMenuItems(menuItems.map(item =>
-                    item.itemId === itemId ? response.data : item
+                    (item.id === itemId || item.itemId === itemId) ? response.data : item
                 ));
                 setEditingItem(null);
                 alert('Menu item updated successfully!');
+                // Reload menu items to ensure consistency
+                loadMenuItems();
             }
         } catch (error) {
             console.error('Error updating menu item:', error);
@@ -144,10 +148,16 @@ const MenuManagement = () => {
     const handleDeleteItem = async (itemId) => {
         if (window.confirm('Are you sure you want to delete this menu item?')) {
             try {
+                console.log('🗑️ Deleting menu item:', itemId);
                 const response = await apiService.deleteMenuItem(itemId);
                 if (response.success) {
-                    setMenuItems(menuItems.filter(item => item.itemId !== itemId));
+                    // Use item.id (from backend) or item.itemId (fallback)
+                    setMenuItems(menuItems.filter(item => 
+                        item.id !== itemId && item.itemId !== itemId
+                    ));
                     alert('Menu item deleted successfully!');
+                    // Reload menu items to ensure consistency
+                    loadMenuItems();
                 }
             } catch (error) {
                 console.error('Error deleting menu item:', error);
@@ -158,13 +168,21 @@ const MenuManagement = () => {
 
     const handleToggleAvailability = async (itemId) => {
         try {
-            const item = menuItems.find(item => item.itemId === itemId);
+            // Use item.id (from backend) or item.itemId (fallback)
+            const item = menuItems.find(item => item.id === itemId || item.itemId === itemId);
+            if (!item) {
+                console.error('Item not found:', itemId);
+                alert('Menu item not found');
+                return;
+            }
+            
             const newAvailability = !item.availability;
+            console.log('🔄 Toggling availability:', itemId, '→', newAvailability);
 
             const response = await apiService.toggleItemAvailability(itemId, newAvailability);
             if (response.success) {
                 setMenuItems(menuItems.map(item =>
-                    item.itemId === itemId ? response.data : item
+                    (item.id === itemId || item.itemId === itemId) ? response.data : item
                 ));
             }
         } catch (error) {
@@ -322,8 +340,11 @@ const MenuManagement = () => {
                         animate={{ opacity: 1, y: 0 }}
                         className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
                     >
-                        {menuItems && menuItems.map((item) => (
-                            <div key={item.itemId} className="bg-white rounded-lg shadow-md overflow-hidden">
+                        {menuItems && menuItems.map((item) => {
+                            // Backend returns 'id' (UUID), frontend might use 'itemId' - use both for compatibility
+                            const itemId = item.id || item.itemId;
+                            return (
+                            <div key={itemId} className="bg-white rounded-lg shadow-md overflow-hidden">
                                 <div className="p-6">
                                     <div className="flex items-start justify-between mb-4">
                                         <div className="flex-1">
@@ -340,7 +361,7 @@ const MenuManagement = () => {
                                         <div className="flex items-center space-x-2">
                                             {canToggleAvailability && (
                                                 <button
-                                                    onClick={() => handleToggleAvailability(item.itemId)}
+                                                    onClick={() => handleToggleAvailability(itemId)}
                                                     className={`p-2 rounded-lg transition-colors ${item.availability
                                                         ? 'bg-green-100 text-green-600 hover:bg-green-200'
                                                         : 'bg-red-100 text-red-600 hover:bg-red-200'
@@ -358,7 +379,7 @@ const MenuManagement = () => {
                                                         <Edit className="w-4 h-4" />
                                                     </button>
                                                     <button
-                                                        onClick={() => handleDeleteItem(item.itemId)}
+                                                        onClick={() => handleDeleteItem(itemId)}
                                                         className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
                                                     >
                                                         <Trash2 className="w-4 h-4" />
@@ -388,7 +409,8 @@ const MenuManagement = () => {
                                     </div>
                                 </div>
                             </div>
-                        ))}
+                            );
+                        })}
                     </motion.div>
                 )}
 
@@ -556,18 +578,21 @@ const CreateMenuItemForm = ({ categories, onSubmit, onCancel }) => {
 
 // Edit Menu Item Form Component
 const EditMenuItemForm = ({ item, categories, onSubmit, onCancel }) => {
+    // Use item.id (from PostgreSQL) or item.itemId (fallback)
+    const itemId = item.id || item.itemId;
     const [formData, setFormData] = useState({
         name: item.name,
         category: item.category,
         description: item.description,
         price: item.price.toString(),
         prepTime: item.prepTime,
-        tags: item.tags.join(', ')
+        tags: (item.tags && Array.isArray(item.tags)) ? item.tags.join(', ') : (item.tags || '')
     });
-
+    
     const handleSubmit = (e) => {
         e.preventDefault();
         const tags = formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
+        // Only pass the data - itemId is already captured in the parent's onSubmit callback
         onSubmit({
             ...formData,
             price: parseFloat(formData.price),
