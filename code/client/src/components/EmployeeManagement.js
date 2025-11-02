@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { USER_ROLES, PERMISSIONS, hasPermission } from '../aws/userRoles';
 import { Users, UserPlus, Edit, Trash2, Eye, UserCheck, Mail, UserX } from 'lucide-react';
 import apiService from '../services/api';
+import EmailModal from './EmailModal';
 
 const EmployeeManagement = () => {
     const { currentUser } = useAuth();
@@ -12,6 +13,8 @@ const EmployeeManagement = () => {
     const [editingEmployee, setEditingEmployee] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [emailModalOpen, setEmailModalOpen] = useState(false);
+    const [selectedEmployeeForEmail, setSelectedEmployeeForEmail] = useState(null);
 
     const userRole = currentUser?.userRole || USER_ROLES.EMPLOYEE;
     const canCreateEmployee = hasPermission(userRole, PERMISSIONS.CAN_CREATE_EMPLOYEE);
@@ -91,18 +94,14 @@ const EmployeeManagement = () => {
         }
     };
 
-    const handleResendCredentials = async (employeeId, employeeName) => {
-        if (window.confirm(`Resend login credentials to ${employeeName}?`)) {
-            try {
-                const response = await apiService.resendEmployeeCredentials(employeeId);
-                if (response.success) {
-                    alert(`Login credentials sent successfully!\n\nEmployee ID: ${response.loginCredentials.employeeId}\nEmail: ${response.loginCredentials.email}\nTemporary Password: ${response.loginCredentials.tempPassword}\nLogin URL: ${response.loginCredentials.loginUrl}`);
-                }
-            } catch (error) {
-                console.error('Error resending credentials:', error);
-                alert('Failed to resend credentials. Please try again.');
-            }
-        }
+    const handleOpenEmailModal = (employee) => {
+        setSelectedEmployeeForEmail(employee);
+        setEmailModalOpen(true);
+    };
+
+    const handleCloseEmailModal = () => {
+        setEmailModalOpen(false);
+        setSelectedEmployeeForEmail(null);
     };
 
     const handleViewActivity = (employee) => {
@@ -377,9 +376,9 @@ Created: ${new Date(employee.createdAt).toLocaleString()}
                                                             </button>
                                                         )}
                                                         <button
-                                                            onClick={() => handleResendCredentials(employeeId, `${employee.firstName} ${employee.lastName}`)}
+                                                            onClick={() => handleOpenEmailModal(employee)}
                                                             className="text-blue-600 hover:text-blue-900"
-                                                            title="Resend login credentials"
+                                                            title="Send email to employee"
                                                         >
                                                             <Mail className="w-4 h-4" />
                                                         </button>
@@ -427,6 +426,13 @@ Created: ${new Date(employee.createdAt).toLocaleString()}
                         onCancel={() => setEditingEmployee(null)}
                     />
                 )}
+
+                {/* Email Modal */}
+                <EmailModal
+                    isOpen={emailModalOpen}
+                    onClose={handleCloseEmailModal}
+                    employee={selectedEmployeeForEmail}
+                />
             </div>
         </div>
     );

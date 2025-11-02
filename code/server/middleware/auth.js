@@ -11,19 +11,38 @@ const cognitoIdentityServiceProvider = new AWS.CognitoIdentityServiceProvider();
 
 // JWKS client for token verification
 const client = jwksClient({
-    jwksUri: process.env.JWKS_URI || `https://cognito-idp.${process.env.AWS_REGION}.amazonaws.com/${process.env.AWS_USER_POOL_ID}/.well-known/jwks.json`
+    jwksUri: process.env.JWKS_URI || `https://cognito-idp.${process.env.AWS_REGION}.amazonaws.com/${process.env.AWS_USER_POOL_ID}/.well-known/jwks.json`,
+    requestHeaders: {}, // Additional headers
+    timeout: 30000, // 30s timeout
+    cache: true,
+    cacheMaxEntries: 5,
+    cacheMaxAge: 600000 // 10 minutes
 });
 
 // Get signing key for JWT verification
 function getKey(header, callback) {
-    client.getSigningKey(header.kid, (err, key) => {
+    // Extract kid from header
+    const kid = header.kid;
+    
+    if (!kid) {
+        console.error('No KID found in token header');
+        return callback(new Error('Token header missing Key ID (kid)'));
+    }
+
+    console.log('🔑 Looking up signing key for kid:', kid);
+    
+    client.getSigningKey(kid, (err, key) => {
         if (err) {
-            console.error('Error getting signing key:', err);
+            console.error('Error getting signing key:', err.message);
+            // If the error is about multiple keys and no KID, try to handle it
+            if (err.message && err.message.includes('No KID specified')) {
+                console.error('⚠️ JWKS endpoint has multiple keys but token has no KID. This might indicate a token format issue.');
+            }
             return callback(err);
         }
 
         if (!key) {
-            console.error('No signing key found for kid:', header.kid);
+            console.error('No signing key found for kid:', kid);
             return callback(new Error('No signing key found'));
         }
 
@@ -33,6 +52,7 @@ function getKey(header, callback) {
             return callback(new Error('Invalid key format'));
         }
 
+        console.log('✅ Signing key found for kid:', kid);
         callback(null, signingKey);
     });
 }
@@ -40,6 +60,23 @@ function getKey(header, callback) {
 // Verify JWT token from Cognito
 function verifyToken(token) {
     return new Promise((resolve, reject) => {
+        // First, decode the token header to check for kid
+        try {
+            const decodedHeader = jwt.decode(token, { complete: true });
+            if (decodedHeader && decodedHeader.header) {
+                const kid = decodedHeader.header.kid;
+                if (!kid) {
+                    console.error('⚠️ Token missing KID in header. Header:', decodedHeader.header);
+                    // Continue anyway - getKey will handle it
+                } else {
+                    console.log('📋 Token KID found:', kid);
+                }
+            }
+        } catch (decodeError) {
+            console.error('❌ Error decoding token header:', decodeError.message);
+            // Continue with verification anyway
+        }
+
         jwt.verify(token, getKey, {
             audience: process.env.AWS_USER_POOL_WEB_CLIENT_ID,
             issuer: `https://cognito-idp.${process.env.AWS_REGION}.amazonaws.com/${process.env.AWS_USER_POOL_ID}`,

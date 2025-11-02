@@ -121,7 +121,7 @@ const OrderCart = ({
                                         </button>
                                     </div>
                                     <span className="font-semibold text-gray-900">
-                                        ${(item.price * item.quantity).toFixed(2)}
+                                        ${(parseFloat(item.price || 0) * item.quantity).toFixed(2)}
                                     </span>
                                 </div>
                             </motion.div>

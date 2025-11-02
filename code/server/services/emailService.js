@@ -1,22 +1,76 @@
 const nodemailer = require('nodemailer');
 
-// Create email transporter
+// Create email transporter with support for multiple providers
 const createTransporter = () => {
-    return nodemailer.createTransporter({
-        host: process.env.SMTP_HOST || 'smtp.gmail.com',
-        port: process.env.SMTP_PORT || 587,
-        secure: false,
+    const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+    const smtpPort = parseInt(process.env.SMTP_PORT) || 587;
+    const smtpSecure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
+    
+    // Default config
+    const config = {
+        host: smtpHost,
+        port: smtpPort,
+        secure: smtpSecure, // true for 465, false for other ports
         auth: {
             user: process.env.SMTP_USER,
             pass: process.env.SMTP_PASS
+        },
+        // Add timeout and connection pool settings
+        connectionTimeout: 10000, // 10 seconds
+        greetingTimeout: 10000,
+        socketTimeout: 10000,
+        // Ignore TLS errors for some providers
+        tls: {
+            rejectUnauthorized: false
         }
+    };
+
+    // Provider-specific configurations
+    if (smtpHost.includes('outlook.com') || smtpHost.includes('hotmail.com') || smtpHost.includes('live.com')) {
+        // Outlook/Hotmail configuration
+        config.host = 'smtp-mail.outlook.com';
+        config.port = 587;
+        config.secure = false;
+        console.log('📧 Using Outlook/Hotmail SMTP configuration');
+    } else if (smtpHost.includes('yahoo.com')) {
+        // Yahoo configuration
+        config.host = 'smtp.mail.yahoo.com';
+        config.port = 587;
+        config.secure = false;
+        console.log('📧 Using Yahoo SMTP configuration');
+    } else if (smtpHost.includes('gmail.com')) {
+        // Gmail configuration
+        config.host = 'smtp.gmail.com';
+        config.port = 587;
+        config.secure = false;
+        console.log('📧 Using Gmail SMTP configuration');
+    }
+
+    console.log('📧 Creating email transporter with config:', {
+        host: config.host,
+        port: config.port,
+        secure: config.secure,
+        user: config.auth.user ? `${config.auth.user.substring(0, 3)}***` : 'NOT SET'
     });
+
+    return nodemailer.createTransport(config);
 };
 
 // Send employee login credentials
 const sendEmployeeCredentials = async (employeeEmail, employeeName, tempPassword, businessName, employeeId) => {
+    // Validate SMTP configuration
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+        const error = new Error('SMTP configuration missing. Please set SMTP_USER and SMTP_PASS in your .env file');
+        console.error('❌ Email configuration error:', error.message);
+        throw error;
+    }
+
     try {
         const transporter = createTransporter();
+
+        // Verify connection before sending
+        await transporter.verify();
+        console.log('✅ SMTP server connection verified');
 
         const mailOptions = {
             from: process.env.SMTP_USER,
@@ -81,12 +135,23 @@ const sendEmployeeCredentials = async (employeeEmail, employeeName, tempPassword
             `
         };
 
-        await transporter.sendMail(mailOptions);
-        console.log('✅ Employee credentials email sent to:', employeeEmail);
+        const info = await transporter.sendMail(mailOptions);
+        console.log('✅ Employee credentials email sent successfully!');
+        console.log('   📧 To:', employeeEmail);
+        console.log('   📨 Message ID:', info.messageId);
         return true;
     } catch (error) {
-        console.error('❌ Error sending employee credentials email:', error);
-        return false;
+        console.error('❌ Error sending employee credentials email:');
+        console.error('   📧 To:', employeeEmail);
+        console.error('   🔴 Error:', error.message);
+        if (error.code) {
+            console.error('   🔴 Error Code:', error.code);
+        }
+        if (error.response) {
+            console.error('   🔴 SMTP Response:', error.response);
+        }
+        // Re-throw the error so calling code can handle it
+        throw error;
     }
 };
 

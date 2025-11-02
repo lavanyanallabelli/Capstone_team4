@@ -12,8 +12,8 @@ class ApiService {
             // This is important because owners use Cognito, employees use JWT
             const { Auth } = await import('aws-amplify');
             try {
-                const session = await Auth.currentSession();
-                if (session && session.isValid()) {
+            const session = await Auth.currentSession();
+            if (session && session.isValid()) {
                     // Cognito session exists - this is an owner login
                     const cognitoToken = session.getIdToken().getJwtToken();
                     console.log('✅ Using Cognito token (Owner)');
@@ -64,9 +64,9 @@ class ApiService {
         // Send Cognito token if available
         if (includeAuth) {
             try {
-                const token = await this.getAuthToken();
-                if (token) {
-                    headers['Authorization'] = `Bearer ${token}`;
+            const token = await this.getAuthToken();
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
                 }
             } catch (error) {
                 // If token fetch fails, continue without auth (for testing)
@@ -83,7 +83,7 @@ class ApiService {
 
         // Get auth headers (includes Cognito token if available)
         const authHeaders = await this.getHeaders(options.includeAuth !== false);
-        
+
         const config = {
             ...options,
             headers: {
@@ -389,6 +389,10 @@ class ApiService {
     }
 
     // Employee management API methods
+    async sendEmployeeEmail(employeeId, emailData) {
+        return this.post(`/employees/${employeeId}/send-email`, emailData);
+    }
+
     async resendEmployeeCredentials(employeeId) {
         return this.post(`/employees/${employeeId}/resend-credentials`);
     }

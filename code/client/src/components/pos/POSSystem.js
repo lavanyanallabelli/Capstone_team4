@@ -63,7 +63,12 @@ const POSSystem = () => {
                 )
             );
         } else {
-            setCurrentOrder(prev => [...prev, { ...item, quantity: 1 }]);
+            // Ensure price is a number when adding to order
+            setCurrentOrder(prev => [...prev, { 
+                ...item, 
+                quantity: 1, 
+                price: parseFloat(item.price || 0) 
+            }]);
         }
     };
 
@@ -95,7 +100,7 @@ const POSSystem = () => {
     };
 
     // Calculate order total
-    const orderTotal = currentOrder.reduce((total, item) => total + (item.price * item.quantity), 0);
+    const orderTotal = currentOrder.reduce((total, item) => total + (parseFloat(item.price || 0) * item.quantity), 0);
 
     // Submit order
     const submitOrder = async () => {

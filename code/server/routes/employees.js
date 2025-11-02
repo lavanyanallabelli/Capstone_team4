@@ -29,7 +29,7 @@ const router = express.Router();
 const generateEmployeeId = async (ownerId) => {
     try {
         const prefix = '100200';
-        
+
         // Find the highest employeeId for this owner that starts with the prefix
         const { Op } = require('sequelize');
         const lastEmployee = await Employee.findOne({
@@ -133,7 +133,7 @@ router.get('/', async (req, res) => {
         });
         const ownerId = getOwnerId(req);
         console.log('👥 Extracted ownerId:', ownerId, typeof ownerId);
-        
+
         if (!ownerId) {
             console.error('❌ No ownerId found in request');
             return res.status(401).json({
@@ -288,21 +288,7 @@ router.post('/', async (req, res) => {
             console.error('❌ Cognito user creation failed:', cognitoError);
         }
 
-        // Send login credentials email
-        try {
-            const owner = await Owner.findByPk(ownerId);
-            const businessName = owner?.businessName || 'Your Restaurant';
-            await sendEmployeeCredentials(
-                value.email,
-                `${value.firstName} ${value.lastName}`,
-                tempPassword,
-                businessName,
-                employeeId // Pass the generated employee ID
-            );
-            console.log('✅ Employee credentials email sent successfully with Employee ID:', employeeId);
-        } catch (emailError) {
-            console.error('❌ Email sending failed:', emailError);
-        }
+        // Email sending removed - owner will send emails manually via the email modal
 
         const safeEmployee = employee.toJSON();
         delete safeEmployee.password;
@@ -311,8 +297,9 @@ router.post('/', async (req, res) => {
         res.status(201).json({
             success: true,
             data: safeEmployee,
-            message: 'Employee created successfully with login credentials',
+            message: 'Employee created successfully. Use the email icon to send login credentials.',
             loginCredentials: {
+                employeeId: employeeId,
                 email: value.email,
                 tempPassword: tempPassword,
                 loginUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/employee-login`
@@ -333,7 +320,7 @@ router.put('/:employeeId', async (req, res) => {
     try {
         console.log('📝 PUT /api/employees/:employeeId - Updating employee');
         const ownerId = getOwnerId(req);
-        
+
         if (!ownerId) {
             console.error('❌ No ownerId in update request');
             return res.status(401).json({
@@ -416,7 +403,7 @@ router.patch('/:employeeId/status', async (req, res) => {
     try {
         console.log('🔄 PATCH /api/employees/:employeeId/status - Toggling employee status');
         const ownerId = getOwnerId(req);
-        
+
         if (!ownerId) {
             console.error('❌ No ownerId in toggle status request');
             return res.status(401).json({
@@ -621,7 +608,7 @@ router.get('/:employeeId/activity', async (req, res) => {
 router.get('/stats/overview', async (req, res) => {
     try {
         const ownerId = getOwnerId(req);
-        
+
         const employees = await Employee.findAll({
             where: { ownerId }
         });
@@ -653,7 +640,199 @@ router.get('/stats/overview', async (req, res) => {
     }
 });
 
-// Resend login credentials to employee
+// Send email to employee (manual email sending)
+router.post('/:employeeId/send-email', async (req, res) => {
+    try {
+        const ownerId = getOwnerId(req);
+        const { employeeId } = req.params;
+        const { to, subject, message } = req.body;
+
+        if (!to || !subject || !message) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing required fields',
+                message: 'to, subject, and message are required'
+            });
+        }
+
+        const employee = await Employee.findOne({
+            where: {
+                id: employeeId,
+                ownerId: ownerId
+            }
+        });
+
+        if (!employee) {
+            return res.status(404).json({
+                success: false,
+                error: 'Employee not found'
+            });
+        }
+
+        // Use Gmail email (SMTP_USER) - no business email
+        const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+        const smtpUser = process.env.SMTP_USER;
+        const smtpPass = process.env.SMTP_PASS;
+        const smtpPort = parseInt(process.env.SMTP_PORT) || 587;
+        const smtpSecure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
+
+        // Debug logging (mask sensitive data)
+        console.log('🔍 SMTP Configuration Check:');
+        console.log('   SMTP_HOST:', smtpHost);
+        console.log('   SMTP_USER:', smtpUser ? `${smtpUser.substring(0, 3)}***${smtpUser.substring(smtpUser.indexOf('@'))}` : 'NOT SET');
+        console.log('   SMTP_PASS:', smtpPass ? `${smtpPass.substring(0, 4)}***` : 'NOT SET');
+        console.log('   SMTP_PORT:', smtpPort);
+
+        if (!smtpUser || !smtpPass) {
+            console.error('❌ SMTP configuration missing!');
+            console.error('   SMTP_USER:', smtpUser || 'MISSING');
+            console.error('   SMTP_PASS:', smtpPass ? 'SET' : 'MISSING');
+            return res.status(500).json({
+                success: false,
+                error: 'SMTP configuration missing',
+                message: 'Please configure SMTP_HOST, SMTP_USER, and SMTP_PASS (App Password) in your .env file. Make sure you restarted the server after updating .env!'
+            });
+        }
+
+        // Get owner info for business name in email content only
+        const owner = await Owner.findByPk(ownerId);
+        const businessName = owner?.businessName || 'Your Restaurant';
+
+        // Send email using SMTP (Gmail with App Password)
+        try {
+            const nodemailer = require('nodemailer');
+
+            // Detect email provider and configure accordingly
+            let config;
+            const isGmail = smtpHost.includes('gmail.com') || smtpUser.includes('@gmail.com');
+            const isOutlook = smtpHost.includes('outlook.com') || smtpHost.includes('hotmail.com') || smtpHost.includes('live.com');
+
+            if (isGmail) {
+                // Gmail SMTP configuration
+                config = {
+                    host: 'smtp.gmail.com',
+                    port: 587,
+                    secure: false, // false for 587 (STARTTLS)
+                    auth: {
+                        user: smtpUser.trim(), // Gmail email
+                        pass: smtpPass.trim().replace(/\s+/g, '') // Gmail App Password (remove spaces)
+                    },
+                    tls: {
+                        rejectUnauthorized: false
+                    },
+                    connectionTimeout: 20000,
+                    greetingTimeout: 20000,
+                    socketTimeout: 20000
+                };
+                console.log('📧 Using Gmail SMTP configuration');
+            } else if (isOutlook) {
+                // Outlook SMTP configuration
+                config = {
+                    host: 'smtp-mail.outlook.com',
+                    port: 587,
+                    secure: false,
+                    requireTLS: true,
+                    auth: {
+                        user: smtpUser.trim().toLowerCase(),
+                        pass: smtpPass.trim().replace(/\s+/g, '')
+                    },
+                    tls: {
+                        rejectUnauthorized: false
+                    },
+                    connectionTimeout: 20000,
+                    greetingTimeout: 20000,
+                    socketTimeout: 20000
+                };
+                console.log('📧 Using Outlook SMTP configuration');
+            } else {
+                // Generic SMTP configuration
+                config = {
+                    host: smtpHost,
+                    port: smtpPort,
+                    secure: smtpSecure,
+                    auth: {
+                        user: smtpUser.trim(),
+                        pass: smtpPass.trim().replace(/\s+/g, '')
+                    },
+                    tls: {
+                        rejectUnauthorized: false
+                    },
+                    connectionTimeout: 20000,
+                    greetingTimeout: 20000,
+                    socketTimeout: 20000
+                };
+                console.log('📧 Using generic SMTP configuration');
+            }
+
+            console.log('📧 Attempting SMTP connection...');
+            console.log('   Host:', config.host);
+            console.log('   Port:', config.port);
+            console.log('   User:', smtpUser.substring(0, 3) + '***' + smtpUser.substring(smtpUser.indexOf('@')));
+
+            const transporter = nodemailer.createTransport(config);
+
+            // Test connection
+            try {
+                await transporter.verify();
+                console.log('✅ SMTP connection verified');
+                console.log('   📧 Authenticated as:', smtpUser);
+            } catch (verifyError) {
+                console.error('❌ SMTP verification failed:', verifyError.message);
+                throw verifyError;
+            }
+
+            // Use Gmail/email (SMTP_USER) for everything - sender and reply-to
+            const mailOptions = {
+                from: `"${businessName}" <${smtpUser}>`, // Gmail email as sender
+                replyTo: smtpUser, // Replies also go to Gmail email
+                to: to,
+                subject: subject,
+                html: `
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+                            <h1 style="color: white; margin: 0; font-size: 24px;">${businessName}</h1>
+                        </div>
+                        <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                            <div style="white-space: pre-wrap; color: #333; line-height: 1.6;">${message.replace(/\n/g, '<br>')}</div>
+                        </div>
+                        <p style="color: #999; font-size: 12px; text-align: center; margin-top: 20px;">
+                            This is an automated message from ${businessName} POS System.
+                        </p>
+                    </div>
+                `
+            };
+
+            await transporter.sendMail(mailOptions);
+            console.log('✅ Email sent successfully via SMTP!');
+            console.log('   📧 From:', smtpUser);
+            console.log('   📬 Reply-To:', smtpUser);
+            console.log('   📨 To:', to);
+            console.log('   📝 Subject:', subject);
+
+            res.json({
+                success: true,
+                message: 'Email sent successfully'
+            });
+        } catch (emailError) {
+            console.error('❌ Email sending failed:', emailError);
+            res.status(500).json({
+                success: false,
+                error: 'Failed to send email',
+                message: emailError.message || 'Email sending failed. Please check SMTP configuration.'
+            });
+        }
+
+    } catch (error) {
+        console.error('Error sending email:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to send email',
+            message: error.message
+        });
+    }
+});
+
+// Resend login credentials to employee (kept for backward compatibility, but email sending removed)
 router.post('/:employeeId/resend-credentials', async (req, res) => {
     try {
         const ownerId = getOwnerId(req);
@@ -693,25 +872,11 @@ router.post('/:employeeId/resend-credentials', async (req, res) => {
             console.error('❌ Cognito password update failed:', cognitoError);
         }
 
-        // Send new credentials email
-        try {
-            const owner = await Owner.findByPk(ownerId);
-            const businessName = owner?.businessName || 'Your Restaurant';
-            await sendEmployeeCredentials(
-                employee.email,
-                `${employee.firstName} ${employee.lastName}`,
-                tempPassword,
-                businessName,
-                employee.employeeId // Include employee ID in email
-            );
-            console.log('✅ New credentials email sent to:', employee.email, 'with Employee ID:', employee.employeeId);
-        } catch (emailError) {
-            console.error('❌ Email sending failed:', emailError);
-        }
+        // Email sending removed - owner will send emails manually via the email modal
 
         res.json({
             success: true,
-            message: 'Login credentials resent successfully',
+            message: 'Credentials updated successfully. Use the email icon to send login credentials.',
             loginCredentials: {
                 employeeId: employee.employeeId,
                 email: employee.email,
@@ -735,7 +900,7 @@ router.delete('/:employeeId', async (req, res) => {
     try {
         console.log('🗑️ DELETE /api/employees/:employeeId - Deleting employee');
         const ownerId = getOwnerId(req);
-        
+
         if (!ownerId) {
             console.error('❌ No ownerId in delete request');
             return res.status(401).json({

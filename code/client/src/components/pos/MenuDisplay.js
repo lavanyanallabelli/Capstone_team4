@@ -55,7 +55,7 @@ const MenuDisplay = ({ items, onAddToOrder }) => {
                                     {item.name}
                                 </h3>
                                 <span className="text-lg font-bold text-green-600 ml-2">
-                                    ${item.price?.toFixed(2) || '0.00'}
+                                    ${typeof item.price === 'number' ? item.price.toFixed(2) : parseFloat(item.price || 0).toFixed(2)}
                                 </span>
                             </div>
 
