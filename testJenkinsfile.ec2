@@ -264,7 +264,7 @@ The React frontend and Node backend have been successfully built and deployed to
 
             // ✅ Email notification retained
             mail (
-                to: 'cuteamy104@gmail.com',
+                to: 'cuteamy104@gmail.com, chetanjogi042@gmail.com',
                 subject: "❌ Jenkins Dev Build Failed - Branch: ${params.BRANCH}",
                 body: """
 Build Failed!
@@ -286,4 +286,5 @@ Please check the build logs for more details about the failure.
             )
         }
     }
+
 }
