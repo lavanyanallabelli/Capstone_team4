@@ -1,11 +1,9 @@
 # POS System
 
-
 A modern Point of Sale system built with React frontend and Express.js backend.
 
 ## Project Structure
 ```
-
 ## Getting started now
 
 ### Prerequisites
