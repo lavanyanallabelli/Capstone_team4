@@ -96,9 +96,24 @@ const startServer = async () => {
         // Connect to PostgreSQL
         await connectDB();
         
-        // Sync models (creates tables if they don't exist)
-        await sequelize.sync({ alter: false });
+        // Sync models (creates tables if they don't exist, alters if they do)
+        await sequelize.sync({ alter: true });
         console.log('✅ Database models synchronized');
+        
+        // Add unique index for employeeId after column is created
+        try {
+            await sequelize.query(`
+                CREATE UNIQUE INDEX IF NOT EXISTS "employees_employee_id_unique" 
+                ON "employees" ("employeeId") 
+                WHERE "employeeId" IS NOT NULL;
+            `);
+            console.log('✅ Employee ID unique index created');
+        } catch (indexError) {
+            // Index might already exist, which is fine
+            if (!indexError.message.includes('already exists')) {
+                console.warn('⚠️ Could not create employeeId index:', indexError.message);
+            }
+        }
         
         // Start server
         app.listen(PORT, HOST, () => {

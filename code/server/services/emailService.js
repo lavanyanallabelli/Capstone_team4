@@ -14,7 +14,7 @@ const createTransporter = () => {
 };
 
 // Send employee login credentials
-const sendEmployeeCredentials = async (employeeEmail, employeeName, tempPassword, businessName) => {
+const sendEmployeeCredentials = async (employeeEmail, employeeName, tempPassword, businessName, employeeId) => {
     try {
         const transporter = createTransporter();
 
@@ -39,9 +39,19 @@ const sendEmployeeCredentials = async (employeeEmail, employeeName, tempPassword
                         
                         <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #667eea;">
                             <h3 style="color: #333; margin-top: 0;">Login Credentials</h3>
+                            <p style="margin: 5px 0;"><strong>Employee ID:</strong> <code style="background: #e9ecef; padding: 4px 8px; border-radius: 4px; font-family: monospace; font-size: 16px; font-weight: bold; color: #667eea;">${employeeId || 'N/A'}</code></p>
                             <p style="margin: 5px 0;"><strong>Email:</strong> ${employeeEmail}</p>
                             <p style="margin: 5px 0;"><strong>Temporary Password:</strong> <code style="background: #e9ecef; padding: 2px 6px; border-radius: 4px; font-family: monospace;">${tempPassword}</code></p>
                             <p style="margin: 5px 0;"><strong>Login URL:</strong> <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/employee-login" style="color: #667eea;">${process.env.FRONTEND_URL || 'http://localhost:3000'}/employee-login</a></p>
+                        </div>
+                        <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2196f3;">
+                            <h4 style="color: #1565c0; margin-top: 0;">How to Login:</h4>
+                            <ol style="color: #1565c0; margin: 0; padding-left: 20px;">
+                                <li>Go to the Login URL above</li>
+                                <li>Enter your <strong>Employee ID: ${employeeId || 'N/A'}</strong></li>
+                                <li>Enter your <strong>Temporary Password</strong></li>
+                                <li>Click "Login" to access the POS system</li>
+                            </ol>
                         </div>
                         
                         <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ffc107;">

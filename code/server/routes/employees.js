@@ -25,6 +25,40 @@ const getOwnerId = (req) => {
 
 const router = express.Router();
 
+// Function to generate sequential employee ID (1002001, 1002002, etc.)
+const generateEmployeeId = async (ownerId) => {
+    try {
+        const prefix = '100200';
+        
+        // Find the highest employeeId for this owner that starts with the prefix
+        const { Op } = require('sequelize');
+        const lastEmployee = await Employee.findOne({
+            where: {
+                ownerId: ownerId,
+                employeeId: {
+                    [Op.like]: `${prefix}%`
+                }
+            },
+            order: [['employeeId', 'DESC']]
+        });
+
+        let nextNumber = 1;
+        if (lastEmployee && lastEmployee.employeeId) {
+            // Extract the number part (after prefix)
+            const lastNumber = parseInt(lastEmployee.employeeId.replace(prefix, ''), 10);
+            if (!isNaN(lastNumber)) {
+                nextNumber = lastNumber + 1;
+            }
+        }
+
+        return `${prefix}${nextNumber}`;
+    } catch (error) {
+        console.error('Error generating employee ID:', error);
+        // Fallback: use timestamp if generation fails
+        return `${prefix}${Date.now().toString().slice(-3)}`;
+    }
+};
+
 // Function to create Cognito user
 const createCognitoUser = async (email, tempPassword, businessId) => {
     try {
@@ -228,8 +262,13 @@ router.post('/', async (req, res) => {
         const tempPassword = Math.random().toString(36).slice(-8);
         const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
+        // Generate sequential employee ID (1002001, 1002002, etc.)
+        const employeeId = await generateEmployeeId(ownerId);
+        console.log('📝 Generated employee ID:', employeeId);
+
         const employee = await Employee.create({
             ownerId,
+            employeeId, // Add the generated employee ID
             firstName: value.firstName,
             lastName: value.lastName,
             email: value.email,
@@ -257,9 +296,10 @@ router.post('/', async (req, res) => {
                 value.email,
                 `${value.firstName} ${value.lastName}`,
                 tempPassword,
-                businessName
+                businessName,
+                employeeId // Pass the generated employee ID
             );
-            console.log('✅ Employee credentials email sent successfully');
+            console.log('✅ Employee credentials email sent successfully with Employee ID:', employeeId);
         } catch (emailError) {
             console.error('❌ Email sending failed:', emailError);
         }
@@ -661,9 +701,10 @@ router.post('/:employeeId/resend-credentials', async (req, res) => {
                 employee.email,
                 `${employee.firstName} ${employee.lastName}`,
                 tempPassword,
-                businessName
+                businessName,
+                employee.employeeId // Include employee ID in email
             );
-            console.log('✅ New credentials email sent to:', employee.email);
+            console.log('✅ New credentials email sent to:', employee.email, 'with Employee ID:', employee.employeeId);
         } catch (emailError) {
             console.error('❌ Email sending failed:', emailError);
         }
@@ -672,6 +713,7 @@ router.post('/:employeeId/resend-credentials', async (req, res) => {
             success: true,
             message: 'Login credentials resent successfully',
             loginCredentials: {
+                employeeId: employee.employeeId,
                 email: employee.email,
                 tempPassword: tempPassword,
                 loginUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/employee-login`

@@ -133,14 +133,46 @@ export const AuthProvider = ({ children }) => {
         // Check for existing session
         const checkAuthState = async () => {
             try {
+                // First check for Cognito user
                 const user = await authService.getCurrentUser();
                 if (user) {
                     const userData = await getUserData();
                     setCurrentUser(userData);
+                    setLoading(false);
+                    return;
+                }
+                
+                // If no Cognito user, check for employee JWT token in localStorage
+                const token = localStorage.getItem('token');
+                const storedUser = localStorage.getItem('user');
+                
+                if (token && storedUser) {
+                    try {
+                        const employeeData = JSON.parse(storedUser);
+                        // Create user object compatible with the app
+                        const employeeUser = {
+                            email: employeeData.email,
+                            sub: employeeData.id,
+                            userRole: 'employee',
+                            businessId: employeeData.ownerId,
+                            businessName: employeeData.businessName || 'Restaurant',
+                            ownerId: employeeData.ownerId,
+                            ...employeeData
+                        };
+                        console.log('✅ Employee session found:', employeeUser);
+                        setCurrentUser(employeeUser);
+                    } catch (parseError) {
+                        console.error('Error parsing stored user:', parseError);
+                        // Clear invalid data
+                        localStorage.removeItem('token');
+                        localStorage.removeItem('user');
+                        setCurrentUser(null);
+                    }
                 } else {
                     setCurrentUser(null);
                 }
             } catch (error) {
+                console.error('Auth check error:', error);
                 setCurrentUser(null);
             }
             setLoading(false);

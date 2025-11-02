@@ -96,7 +96,7 @@ const EmployeeManagement = () => {
             try {
                 const response = await apiService.resendEmployeeCredentials(employeeId);
                 if (response.success) {
-                    alert(`Login credentials resent successfully!\n\nEmail: ${response.loginCredentials.email}\nTemporary Password: ${response.loginCredentials.tempPassword}\nLogin URL: ${response.loginCredentials.loginUrl}`);
+                    alert(`Login credentials sent successfully!\n\nEmployee ID: ${response.loginCredentials.employeeId}\nEmail: ${response.loginCredentials.email}\nTemporary Password: ${response.loginCredentials.tempPassword}\nLogin URL: ${response.loginCredentials.loginUrl}`);
                 }
             } catch (error) {
                 console.error('Error resending credentials:', error);
@@ -330,8 +330,8 @@ Created: ${new Date(employee.createdAt).toLocaleString()}
                                                             <div className="text-sm font-medium text-gray-900">
                                                                 {`${employee.firstName} ${employee.lastName}`}
                                                             </div>
-                                                            <div className="text-sm text-gray-500">
-                                                                ID: {employeeId}
+                                                            <div className="text-sm text-gray-500 font-mono">
+                                                                Employee ID: {employee.employeeId || employeeId}
                                                             </div>
                                                         </div>
                                                     </div>

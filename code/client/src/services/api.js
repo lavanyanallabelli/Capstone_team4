@@ -5,20 +5,40 @@ class ApiService {
         this.baseURL = API_BASE_URL;
     }
 
-    // Get auth token from AWS Cognito
+    // Get auth token from AWS Cognito or employee JWT
     async getAuthToken() {
         try {
-            // Import Auth from aws-amplify
+            // PRIORITY 1: Try to get Cognito token first (for owners)
+            // This is important because owners use Cognito, employees use JWT
             const { Auth } = await import('aws-amplify');
-
-            // Get current session
-            const session = await Auth.currentSession();
-            if (session && session.isValid()) {
-                return session.getIdToken().getJwtToken();
+            try {
+                const session = await Auth.currentSession();
+                if (session && session.isValid()) {
+                    // Cognito session exists - this is an owner login
+                    const cognitoToken = session.getIdToken().getJwtToken();
+                    console.log('✅ Using Cognito token (Owner)');
+                    return cognitoToken;
+                }
+            } catch (cognitoError) {
+                // No active Cognito session - this is expected for employees
+                console.log('ℹ️ No Cognito session (employee login expected)');
             }
+            
+            // PRIORITY 2: Only if no Cognito session, check for employee JWT token
+            const employeeToken = localStorage.getItem('token');
+            if (employeeToken) {
+                console.log('✅ Using employee JWT token');
+                return employeeToken;
+            }
+            
             return null;
         } catch (error) {
-            console.error('Error getting Cognito token:', error);
+            // Fallback: check for employee token
+            const employeeToken = localStorage.getItem('token');
+            if (employeeToken) {
+                console.log('✅ Using employee JWT token (fallback)');
+                return employeeToken;
+            }
             return null;
         }
     }

@@ -7,6 +7,11 @@ const Employee = sequelize.define('Employee', {
         defaultValue: DataTypes.UUIDV4,
         primaryKey: true
     },
+    employeeId: {
+        type: DataTypes.STRING(20),
+        allowNull: true
+        // Note: Unique constraint added via index in server.js to handle NULL values
+    },
     ownerId: {
         type: DataTypes.UUID,
         allowNull: false,

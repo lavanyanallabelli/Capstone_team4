@@ -17,7 +17,9 @@ import {
     Trash2,
     AlertCircle,
     Edit,
-    Pencil
+    Pencil,
+    X,
+    Check
 } from 'lucide-react';
 
 const RestaurantSettings = () => {
@@ -33,6 +35,9 @@ const RestaurantSettings = () => {
         businessName: '',
         businessType: 'Restaurant'
     });
+    const [profileLoaded, setProfileLoaded] = useState(false);
+    const [isProfileEditing, setIsProfileEditing] = useState(false);
+    const [isGeneralEditing, setIsGeneralEditing] = useState(false);
     const [settings, setSettings] = useState({
         general: {
             restaurantName: '',
@@ -88,28 +93,29 @@ const RestaurantSettings = () => {
             const response = await apiService.getOwnerProfile();
             if (response.success) {
                 setOwnerProfile(response.data);
-                
-                // Update profile form data
-                setProfileFormData({
+
+                // Only update form data if values actually exist in response, otherwise keep empty
+                setProfileFormData(prev => ({
                     name: response.data.name || '',
                     email: response.data.email || '',
                     phone: response.data.phone || '',
                     businessName: response.data.businessName || '',
-                    businessType: response.data.businessType || 'Restaurant'
-                });
-                
-                // Update general settings with actual owner data
+                    businessType: response.data.businessType || 'Restaurant' // Default to Restaurant only if not provided
+                }));
+
+                // Update general settings with actual owner data only if it exists in response
                 setSettings(prev => ({
                     ...prev,
                     general: {
                         ...prev.general,
-                        restaurantName: response.data.businessName || prev.general.restaurantName,
-                        businessType: response.data.businessType || prev.general.businessType,
-                        phone: response.data.phone || prev.general.phone,
-                        email: response.data.email || prev.general.email,
+                        restaurantName: response.data.businessName || '',
+                        businessType: response.data.businessType || 'Restaurant', // Default only if not provided
+                        phone: response.data.phone || '',
+                        email: response.data.email || '',
                         // address, website, description will be loaded from settings API if they exist
                     }
                 }));
+                setProfileLoaded(true);
             }
         } catch (error) {
             console.error('Error loading owner profile:', error);
@@ -153,7 +159,10 @@ const RestaurantSettings = () => {
             if (response.success) {
                 setOwnerProfile(response.data);
                 alert('Profile updated successfully!');
-                loadOwnerProfile(); // Reload to get latest data
+                await loadOwnerProfile(); // Reload to get latest data
+                setIsProfileEditing(false); // Exit edit mode after successful save
+            } else {
+                alert('Failed to update profile. Please try again.');
             }
         } catch (error) {
             console.error('Error updating profile:', error);
@@ -161,12 +170,33 @@ const RestaurantSettings = () => {
         }
     };
 
+    const handleCancelProfileEdit = () => {
+        // Reload original data to discard changes
+        loadOwnerProfile();
+        setIsProfileEditing(false);
+    };
+
+    const handleStartProfileEdit = () => {
+        setIsProfileEditing(true);
+    };
+
+    const handleStartGeneralEdit = () => {
+        setIsGeneralEditing(true);
+    };
+
+    const handleCancelGeneralEdit = () => {
+        // Reload original settings to discard changes
+        loadSettings();
+        loadOwnerProfile(); // Reload owner profile to restore original values
+        setIsGeneralEditing(false);
+    };
+
     const handleDeleteAccount = async () => {
         const confirmMessage = `Are you sure you want to DELETE your account?\n\nThis will:\n- Deactivate your account\n- Disable all access\n- Your data will be preserved but inaccessible\n\nThis action cannot be undone easily.`;
-        
+
         if (window.confirm(confirmMessage)) {
             const finalConfirm = window.confirm('This is your final warning. Click OK to permanently deactivate your account.');
-            
+
             if (finalConfirm) {
                 try {
                     const response = await apiService.deleteOwnerAccount();
@@ -215,7 +245,7 @@ const RestaurantSettings = () => {
                 if (ownerProfile) {
                     const ownerUpdates = {};
                     let needsOwnerUpdate = false;
-                    
+
                     if (settings.general.restaurantName !== ownerProfile.businessName) {
                         ownerUpdates.businessName = settings.general.restaurantName;
                         needsOwnerUpdate = true;
@@ -232,7 +262,7 @@ const RestaurantSettings = () => {
                         ownerUpdates.email = settings.general.email;
                         needsOwnerUpdate = true;
                     }
-                    
+
                     if (needsOwnerUpdate) {
                         console.log('📝 Updating owner profile from General tab:', ownerUpdates);
                         const ownerResponse = await apiService.updateOwnerProfile(ownerUpdates);
@@ -242,13 +272,15 @@ const RestaurantSettings = () => {
                         }
                     }
                 }
-                
+
                 // Save general settings to backend (address, website, description, etc.)
                 const response = await apiService.updateGeneralSettings(settings.general);
                 if (response.success) {
                     alert('General settings saved successfully!');
                     // Reload settings to get any server-side updates
                     await loadSettings();
+                    await loadOwnerProfile(); // Reload owner profile to sync
+                    setIsGeneralEditing(false); // Exit edit mode after successful save
                 } else {
                     alert('Failed to save general settings. Please try again.');
                 }
@@ -337,8 +369,8 @@ const RestaurantSettings = () => {
                                         key={tab.id}
                                         onClick={() => setActiveTab(tab.id)}
                                         className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === tab.id
-                                                ? 'border-blue-500 text-blue-600'
-                                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                            ? 'border-blue-500 text-blue-600'
+                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                                             }`}
                                     >
                                         <Icon className="w-5 h-5 mr-2" />
@@ -369,7 +401,7 @@ const RestaurantSettings = () => {
                                         <div>
                                             <h4 className="font-medium text-blue-900 mb-1">Restaurant Registration Details</h4>
                                             <p className="text-sm text-blue-700">
-                                                This section shows the information you provided during registration. 
+                                                This section shows the information you provided during registration.
                                                 You can update these details or deactivate your account.
                                             </p>
                                         </div>
@@ -385,9 +417,10 @@ const RestaurantSettings = () => {
                                             type="text"
                                             value={profileFormData.name || ''}
                                             onChange={(e) => setProfileFormData({ ...profileFormData, name: e.target.value })}
+                                            disabled={!isProfileEditing}
                                             maxLength={100}
                                             placeholder="Enter your full name"
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isProfileEditing ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : 'bg-white'}`}
                                         />
                                         <p className="mt-1 text-xs text-gray-500">
                                             {profileFormData.name?.length || 0}/100 characters
@@ -401,8 +434,9 @@ const RestaurantSettings = () => {
                                             type="email"
                                             value={profileFormData.email || ''}
                                             onChange={(e) => setProfileFormData({ ...profileFormData, email: e.target.value })}
+                                            disabled={!isProfileEditing}
                                             placeholder="Enter your email address"
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isProfileEditing ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : 'bg-white'}`}
                                         />
                                     </div>
                                 </div>
@@ -416,8 +450,9 @@ const RestaurantSettings = () => {
                                             type="tel"
                                             value={profileFormData.phone || ''}
                                             onChange={(e) => setProfileFormData({ ...profileFormData, phone: e.target.value })}
+                                            disabled={!isProfileEditing}
                                             placeholder="Enter your phone number"
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isProfileEditing ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : 'bg-white'}`}
                                         />
                                     </div>
                                     <div>
@@ -427,7 +462,8 @@ const RestaurantSettings = () => {
                                         <select
                                             value={profileFormData.businessType}
                                             onChange={(e) => setProfileFormData({ ...profileFormData, businessType: e.target.value })}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            disabled={!isProfileEditing}
+                                            className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isProfileEditing ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : 'bg-white'}`}
                                         >
                                             <option value="Restaurant">Restaurant</option>
                                             <option value="Cafe">Cafe</option>
@@ -446,9 +482,10 @@ const RestaurantSettings = () => {
                                         type="text"
                                         value={profileFormData.businessName || ''}
                                         onChange={(e) => setProfileFormData({ ...profileFormData, businessName: e.target.value })}
+                                        disabled={!isProfileEditing}
                                         maxLength={100}
                                         placeholder="Enter your business/restaurant name"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isProfileEditing ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : 'bg-white'}`}
                                     />
                                     <p className="mt-1 text-xs text-gray-500">
                                         {profileFormData.businessName?.length || 0}/100 characters
@@ -477,13 +514,33 @@ const RestaurantSettings = () => {
                                         <Trash2 className="w-4 h-4 mr-2" />
                                         Delete Account
                                     </button>
-                                    <button
-                                        onClick={handleUpdateProfile}
-                                        className="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-md transition-colors flex items-center justify-center"
-                                        title="Update Profile"
-                                    >
-                                        <Edit className="w-5 h-5" />
-                                    </button>
+
+                                    {!isProfileEditing ? (
+                                        <button
+                                            onClick={handleStartProfileEdit}
+                                            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md font-medium flex items-center transition-colors"
+                                        >
+                                            <Edit className="w-4 h-4 mr-2" />
+                                            Edit Profile
+                                        </button>
+                                    ) : (
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={handleCancelProfileEdit}
+                                                className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-md font-medium flex items-center transition-colors"
+                                            >
+                                                <X className="w-4 h-4 mr-2" />
+                                                Cancel
+                                            </button>
+                                            <button
+                                                onClick={handleUpdateProfile}
+                                                className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-md font-medium flex items-center transition-colors"
+                                            >
+                                                <Check className="w-4 h-4 mr-2" />
+                                                Save
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             </motion.div>
                         )}
@@ -503,7 +560,8 @@ const RestaurantSettings = () => {
                                             type="text"
                                             value={settings.general.restaurantName}
                                             onChange={(e) => handleInputChange('general', 'restaurantName', e.target.value)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            disabled={!isGeneralEditing}
+                                            className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isGeneralEditing ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : 'bg-white'}`}
                                         />
                                     </div>
                                     <div>
@@ -513,7 +571,8 @@ const RestaurantSettings = () => {
                                         <select
                                             value={settings.general.businessType}
                                             onChange={(e) => handleInputChange('general', 'businessType', e.target.value)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            disabled={!isGeneralEditing}
+                                            className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isGeneralEditing ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : 'bg-white'}`}
                                         >
                                             <option value="Restaurant">Restaurant</option>
                                             <option value="Cafe">Cafe</option>
@@ -532,7 +591,8 @@ const RestaurantSettings = () => {
                                         type="text"
                                         value={settings.general.address}
                                         onChange={(e) => handleInputChange('general', 'address', e.target.value)}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        disabled={!isGeneralEditing}
+                                        className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isGeneralEditing ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : 'bg-white'}`}
                                     />
                                 </div>
 
@@ -545,7 +605,8 @@ const RestaurantSettings = () => {
                                             type="tel"
                                             value={settings.general.phone}
                                             onChange={(e) => handleInputChange('general', 'phone', e.target.value)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            disabled={!isGeneralEditing}
+                                            className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isGeneralEditing ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : 'bg-white'}`}
                                         />
                                     </div>
                                     <div>
@@ -556,7 +617,8 @@ const RestaurantSettings = () => {
                                             type="email"
                                             value={settings.general.email}
                                             onChange={(e) => handleInputChange('general', 'email', e.target.value)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            disabled={!isGeneralEditing}
+                                            className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isGeneralEditing ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : 'bg-white'}`}
                                         />
                                     </div>
                                     <div>
@@ -567,7 +629,8 @@ const RestaurantSettings = () => {
                                             type="url"
                                             value={settings.general.website}
                                             onChange={(e) => handleInputChange('general', 'website', e.target.value)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            disabled={!isGeneralEditing}
+                                            className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isGeneralEditing ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : 'bg-white'}`}
                                         />
                                     </div>
                                 </div>
@@ -579,8 +642,9 @@ const RestaurantSettings = () => {
                                     <textarea
                                         value={settings.general.description}
                                         onChange={(e) => handleInputChange('general', 'description', e.target.value)}
+                                        disabled={!isGeneralEditing}
                                         rows="3"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isGeneralEditing ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : 'bg-white'}`}
                                     />
                                 </div>
 
@@ -599,13 +663,32 @@ const RestaurantSettings = () => {
                                 </div>
 
                                 <div className="flex justify-end items-center gap-2">
-                                    <button
-                                        onClick={() => handleSave('general')}
-                                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md font-medium flex items-center transition-colors"
-                                    >
-                                        <Pencil className="w-4 h-4 mr-2" />
-                                        Update General Settings
-                                    </button>
+                                    {!isGeneralEditing ? (
+                                        <button
+                                            onClick={handleStartGeneralEdit}
+                                            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md font-medium flex items-center transition-colors"
+                                        >
+                                            <Edit className="w-4 h-4 mr-2" />
+                                            Edit General Settings
+                                        </button>
+                                    ) : (
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={handleCancelGeneralEdit}
+                                                className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-md font-medium flex items-center transition-colors"
+                                            >
+                                                <X className="w-4 h-4 mr-2" />
+                                                Cancel
+                                            </button>
+                                            <button
+                                                onClick={() => handleSave('general')}
+                                                className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-md font-medium flex items-center transition-colors"
+                                            >
+                                                <Check className="w-4 h-4 mr-2" />
+                                                Save
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             </motion.div>
                         )}

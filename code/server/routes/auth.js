@@ -191,26 +191,62 @@ router.post('/login', async (req, res) => {
     }
 });
 
-// Employee login (using employee ID and temporary password)
+// Employee login (using employee ID only - no password required)
 router.post('/employee-login', async (req, res) => {
     try {
-        const { employeeId, password } = req.body;
+        const { employeeId } = req.body;
 
-        if (!employeeId || !password) {
+        console.log('🔐 Employee login attempt:', {
+            employeeId: employeeId,
+            employeeIdType: typeof employeeId
+        });
+
+        if (!employeeId) {
+            console.error('❌ No Employee ID provided');
             return res.status(400).json({
                 success: false,
                 error: 'Missing credentials',
-                message: 'Employee ID and password are required'
+                message: 'Employee ID is required'
             });
         }
 
-        // Find employee by ID
-        const employee = await Employee.findByPk(employeeId);
+        // Trim and sanitize employee ID
+        const cleanEmployeeId = String(employeeId).trim();
+
+        // Find employee by employeeId (string like "1002001") not UUID
+        const employee = await Employee.findOne({
+            where: { employeeId: cleanEmployeeId }
+        });
+
+        console.log('🔍 Employee lookup result:', {
+            searchedId: cleanEmployeeId,
+            found: !!employee,
+            employeeData: employee ? {
+                id: employee.id,
+                employeeId: employee.employeeId,
+                firstName: employee.firstName,
+                lastName: employee.lastName,
+                isActive: employee.isActive
+            } : null
+        });
+
         if (!employee) {
+            console.error('❌ Employee not found with ID:', cleanEmployeeId);
+            // Also check if any employees exist to help debug
+            const allEmployees = await Employee.findAll({
+                attributes: ['id', 'employeeId', 'firstName', 'lastName'],
+                limit: 5
+            });
+            console.log('📋 Sample employees in database:', allEmployees.map(emp => ({
+                id: emp.id,
+                employeeId: emp.employeeId,
+                name: `${emp.firstName} ${emp.lastName}`
+            })));
+
             return res.status(401).json({
                 success: false,
                 error: 'Invalid credentials',
-                message: 'Employee ID or password is incorrect'
+                message: 'Employee ID is incorrect'
             });
         }
 
@@ -220,18 +256,6 @@ router.post('/employee-login', async (req, res) => {
                 success: false,
                 error: 'Account deactivated',
                 message: 'Your employee account has been deactivated. Please contact your manager.'
-            });
-        }
-
-        // Verify password (check both hashed password and temporary password)
-        const isValidPassword = (employee.password && await bcrypt.compare(password, employee.password)) ||
-            password === employee.tempPassword;
-
-        if (!isValidPassword) {
-            return res.status(401).json({
-                success: false,
-                error: 'Invalid credentials',
-                message: 'Employee ID or password is incorrect'
             });
         }
 
@@ -262,6 +286,17 @@ router.post('/employee-login', async (req, res) => {
         const safeEmployee = employee.toJSON();
         delete safeEmployee.password;
         delete safeEmployee.tempPassword;
+
+        // Add owner info to employee data for frontend
+        safeEmployee.businessName = owner?.businessName || 'Restaurant';
+        safeEmployee.businessType = owner?.businessType || 'Restaurant';
+        safeEmployee.ownerId = employee.ownerId;
+
+        console.log('✅ Employee login successful:', {
+            employeeId: employee.employeeId,
+            email: employee.email,
+            businessName: owner?.businessName
+        });
 
         res.json({
             success: true,

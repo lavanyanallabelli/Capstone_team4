@@ -3,21 +3,20 @@ import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import {
     User,
-    Lock,
-    Eye,
-    EyeOff,
     ArrowRight,
     Clock,
     Users
 } from 'lucide-react';
 
+import apiService from '../services/api';
+import { useNavigate } from 'react-router-dom';
+
 const EmployeeLoginPage = () => {
-    const { login, currentUser, loading, logout } = useAuth();
+    const { currentUser, loading, logout } = useAuth();
+    const navigate = useNavigate();
     const [formData, setFormData] = useState({
-        email: '',
-        password: ''
+        employeeId: ''
     });
-    const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
 
@@ -77,11 +76,34 @@ const EmployeeLoginPage = () => {
         setError('');
 
         try {
-            await login(formData.email, formData.password);
-            // Redirect will happen automatically due to currentUser check
+            // Use employee login API (ID only, no password)
+            const response = await apiService.employeeLogin({
+                employeeId: formData.employeeId
+            });
+            
+            if (response.success && response.data.token) {
+                // Store token and user data
+                localStorage.setItem('token', response.data.token);
+                
+                // Store complete user data including owner info if available
+                const userData = {
+                    ...response.data.user,
+                    businessName: response.data.user.businessName || 'Restaurant',
+                    userRole: 'employee'
+                };
+                localStorage.setItem('user', JSON.stringify(userData));
+                
+                // Update auth context by triggering a state update
+                // We'll reload to ensure auth context picks up the new user
+                setTimeout(() => {
+                    window.location.href = '/pos';
+                }, 100);
+            } else {
+                setError('Invalid Employee ID. Please try again.');
+            }
         } catch (error) {
             console.error('Login error:', error);
-            setError('Invalid email or password. Please try again.');
+            setError(error.response?.data?.message || 'Invalid Employee ID. Please try again.');
         } finally {
             setIsLoading(false);
         }
@@ -116,60 +138,34 @@ const EmployeeLoginPage = () => {
 
                 {/* Login Form */}
                 <form onSubmit={handleSubmit} className="space-y-6">
-                    {/* Email Field */}
+                    {/* Employee ID Field */}
                     <div>
-                        <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                            Email Address
+                        <label htmlFor="employeeId" className="block text-sm font-medium text-gray-700 mb-2">
+                            Employee ID
                         </label>
                         <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                 <User className="h-5 w-5 text-gray-400" />
                             </div>
                             <input
-                                id="email"
-                                name="email"
-                                type="email"
+                                id="employeeId"
+                                name="employeeId"
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
                                 required
-                                value={formData.email}
+                                value={formData.employeeId}
                                 onChange={handleInputChange}
-                                className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                                placeholder="Enter your email"
+                                className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-lg font-mono"
+                                placeholder="Enter your Employee ID (e.g., 1002001)"
+                                maxLength="10"
                             />
                         </div>
+                        <p className="mt-1 text-xs text-gray-500">
+                            Enter the Employee ID you received via email
+                        </p>
                     </div>
 
-                    {/* Password Field */}
-                    <div>
-                        <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                            Password
-                        </label>
-                        <div className="relative">
-                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <Lock className="h-5 w-5 text-gray-400" />
-                            </div>
-                            <input
-                                id="password"
-                                name="password"
-                                type={showPassword ? 'text' : 'password'}
-                                required
-                                value={formData.password}
-                                onChange={handleInputChange}
-                                className="block w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                                placeholder="Enter your password"
-                            />
-                            <button
-                                type="button"
-                                onClick={() => setShowPassword(!showPassword)}
-                                className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                            >
-                                {showPassword ? (
-                                    <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
-                                ) : (
-                                    <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
-                                )}
-                            </button>
-                        </div>
-                    </div>
 
                     {/* Error Message */}
                     {error && (

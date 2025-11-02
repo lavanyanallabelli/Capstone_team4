@@ -54,7 +54,19 @@ function verifyToken(token) {
     });
 }
 
-// Authentication middleware
+// Verify employee JWT token (different from Cognito token)
+function verifyEmployeeToken(token) {
+    return new Promise((resolve, reject) => {
+        try {
+            const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret');
+            resolve(decoded);
+        } catch (error) {
+            reject(error);
+        }
+    });
+}
+
+// Authentication middleware - handles both Cognito and Employee tokens
 const authenticateToken = async (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
@@ -67,25 +79,67 @@ const authenticateToken = async (req, res, next) => {
     }
 
     try {
-        const decoded = await verifyToken(token);
-        req.user = {
-            sub: decoded.sub,
-            email: decoded.email,
-            userRole: decoded['custom:userRole'] || 'owner', // Default to owner for Cognito users
-            businessId: decoded['custom:businessId'],
-            businessName: decoded['custom:businessName'],
-            businessType: decoded['custom:businessType'],
-            phone: decoded['custom:phone']
-        };
+        // First try to verify as Cognito token (for owners)
+        let decoded;
+        let isEmployeeToken = false;
+        
+        try {
+            decoded = await verifyToken(token);
+            // If this succeeds, it's a Cognito token
+            console.log('✅ Cognito token verified (Owner)');
+        } catch (cognitoError) {
+            // If Cognito verification fails, try as employee JWT token
+            try {
+                decoded = await verifyEmployeeToken(token);
+                isEmployeeToken = true;
+                console.log('✅ Employee JWT token verified');
+            } catch (employeeError) {
+                console.error('❌ Token verification failed (both Cognito and Employee):', {
+                    cognitoError: cognitoError.message,
+                    employeeError: employeeError.message
+                });
+                return res.status(403).json({
+                    error: 'Invalid token',
+                    message: 'Token verification failed'
+                });
+            }
+        }
+
+        // Build user object based on token type
+        if (isEmployeeToken) {
+            // Employee token structure
+            req.user = {
+                sub: decoded.sub,
+                email: decoded.email,
+                userRole: decoded['custom:userRole'] || 'employee',
+                businessId: decoded['custom:businessId'],
+                businessName: decoded['custom:businessName'],
+                businessType: decoded['custom:businessType'],
+                phone: decoded['custom:phone'],
+                ownerId: decoded['custom:businessId'] // Employee's ownerId is in businessId
+            };
+        } else {
+            // Cognito token structure (owner)
+            req.user = {
+                sub: decoded.sub,
+                email: decoded.email,
+                userRole: decoded['custom:userRole'] || 'owner', // Default to owner for Cognito users
+                businessId: decoded['custom:businessId'],
+                businessName: decoded['custom:businessName'],
+                businessType: decoded['custom:businessType'],
+                phone: decoded['custom:phone']
+            };
+        }
 
         console.log('✅ User authenticated:', {
             email: req.user.email,
             role: req.user.userRole,
-            businessId: req.user.businessId
+            businessId: req.user.businessId,
+            tokenType: isEmployeeToken ? 'Employee JWT' : 'Cognito'
         });
         next();
     } catch (error) {
-        console.error('Token verification error:', error);
+        console.error('❌ Token verification error:', error);
         return res.status(403).json({
             error: 'Invalid token',
             message: 'Token verification failed'
