@@ -131,7 +131,12 @@ REACT_APP_REDIRECT_SIGN_OUT=${env.REACT_APP_REDIRECT_SIGN_OUT}
                 sh '''
 cat > payload.json <<EOF
 {
-  "text": "✅ Jenkins Dev Build Successful!\n\nProject: POS System\nBranch: $BRANCH\nBuild #: $BUILD_NUMBER\nCommit: $LAST_COMMIT_HASH\nAuthor: $LAST_COMMIT_AUTHOR\nMessage: $LAST_COMMIT_MESSAGE\n\nBuild URL: $BUILD_URL"
+  "blocks": [
+    {
+      "type": "section",
+      "text": { "type": "mrkdwn", "text": "*Project:* POS System\n*Branch:* $BRANCH\n*Build #:* $BUILD_NUMBER\n*Commit:* $LAST_COMMIT_HASH\n*Author:* $LAST_COMMIT_AUTHOR\n*Message:* $LAST_COMMIT_MESSAGE\n\n*Build URL:* $BUILD_URL" }
+    }
+  ]
 }
 EOF
 HTTP_CODE=$(curl -sS -o /tmp/slack_resp.txt -w "%{http_code}" -X POST -H 'Content-type: application/json' --data @payload.json "$SLACK_URL" || true)
@@ -165,7 +170,12 @@ Build URL: ${env.BUILD_URL}
                 sh '''
 cat > payload.json <<EOF
 {
-  "text": "❌ Jenkins Dev Build Failed!\n\nProject: POS System\nBranch: $BRANCH\nBuild #: $BUILD_NUMBER\nCommit: $LAST_COMMIT_HASH\nAuthor: $LAST_COMMIT_AUTHOR\nMessage: $LAST_COMMIT_MESSAGE\n\nLogs: ${BUILD_URL}console"
+  "blocks": [
+    {
+      "type": "section",
+      "text": { "type": "mrkdwn", "text": "*Project:* POS System\n*Branch:* $BRANCH\n*Build #:* $BUILD_NUMBER\n*Commit:* $LAST_COMMIT_HASH\n*Author:* $LAST_COMMIT_AUTHOR\n*Message:* $LAST_COMMIT_MESSAGE\n\n*Logs:* ${BUILD_URL}console" }
+    }
+  ]
 }
 EOF
 HTTP_CODE=$(curl -sS -o /tmp/slack_resp.txt -w "%{http_code}" -X POST -H 'Content-type: application/json' --data @payload.json "$SLACK_URL" || true)
