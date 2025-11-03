@@ -33,7 +33,6 @@ const POSSystem = () => {
         const loadMenuData = async () => {
             try {
                 setLoading(true);
-                const recentOrders = []; // Placeholder for recent orders feature
                 console.log('POSSystem - Loading menu items, recentOrders:', recentOrders);
                 const response = await apiService.getMenuItems();
                 if (response.success) {
@@ -73,10 +72,10 @@ const POSSystem = () => {
             );
         } else {
             // Ensure price is a number when adding to order
-            setCurrentOrder(prev => [...prev, { 
-                ...item, 
-                quantity: 1, 
-                price: parseFloat(item.price || 0) 
+            setCurrentOrder(prev => [...prev, {
+                ...item,
+                quantity: 1,
+                price: parseFloat(item.price || 0)
             }]);
         }
     };
@@ -176,10 +175,10 @@ const POSSystem = () => {
                     payment: response.data.payment
                 });
                 setShowPaymentModal(false);
-                
+
                 // Load recent orders
                 loadRecentOrders();
-                
+
                 // Clear current order after a delay
                 setTimeout(() => {
                     clearOrder();
