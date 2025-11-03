@@ -26,7 +26,6 @@ const POSSystem = () => {
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [currentOrderData, setCurrentOrderData] = useState(null);
     const [orderConfirmation, setOrderConfirmation] = useState(null);
-    const [recentOrders, setRecentOrders] = useState([]);
 
     // Load menu items and categories
     useEffect(() => {
@@ -176,9 +175,6 @@ const POSSystem = () => {
                 });
                 setShowPaymentModal(false);
 
-                // Load recent orders
-                loadRecentOrders();
-
                 // Clear current order after a delay
                 setTimeout(() => {
                     clearOrder();
@@ -193,25 +189,6 @@ const POSSystem = () => {
         }
     };
 
-    // Load recent orders
-    const loadRecentOrders = async () => {
-        try {
-            const response = await apiService.getOrders({ limit: 10 });
-            if (response.success) {
-                setRecentOrders(response.data || []);
-            }
-        } catch (error) {
-            console.error('Error loading recent orders:', error);
-        }
-    };
-
-    // Load recent orders on mount
-    useEffect(() => {
-        loadRecentOrders();
-        // Refresh orders every 30 seconds
-        const interval = setInterval(loadRecentOrders, 30000);
-        return () => clearInterval(interval);
-    }, []);
 
     if (loading) {
         return (
