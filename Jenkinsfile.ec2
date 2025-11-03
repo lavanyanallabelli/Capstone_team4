@@ -128,16 +128,16 @@ REACT_APP_REDIRECT_SIGN_OUT=${env.REACT_APP_REDIRECT_SIGN_OUT}
         success {
             echo "✅ Build succeeded: ${env.BUILD_NUMBER} (${params.BRANCH})"
             withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_URL')]) {
-                sh """
+                sh '''
 cat > payload.json <<EOF
 {
-  "text": "✅ Jenkins Dev Build Successful!\\n\\nProject: POS System\\nBranch: ${params.BRANCH}\\nBuild #: ${env.BUILD_NUMBER}\\nCommit: ${env.LAST_COMMIT_HASH}\\nAuthor: ${env.LAST_COMMIT_AUTHOR}\\nMessage: ${env.LAST_COMMIT_MESSAGE}\\n\\nBuild URL: ${env.BUILD_URL}"
+  "text": "✅ Jenkins Dev Build Successful!\n\nProject: POS System\nBranch: $BRANCH\nBuild #: $BUILD_NUMBER\nCommit: $LAST_COMMIT_HASH\nAuthor: $LAST_COMMIT_AUTHOR\nMessage: $LAST_COMMIT_MESSAGE\n\nBuild URL: $BUILD_URL"
 }
 EOF
 HTTP_CODE=$(curl -sS -o /tmp/slack_resp.txt -w "%{http_code}" -X POST -H 'Content-type: application/json' --data @payload.json "$SLACK_URL" || true)
 echo "Slack HTTP: $HTTP_CODE"
 echo "Slack resp:" && cat /tmp/slack_resp.txt || true
-                """
+                '''
             }
             mail (
                 to: 'chetanjogi042@gmail.com',
@@ -162,16 +162,16 @@ Build URL: ${env.BUILD_URL}
         failure {
             echo "Build failed!"
             withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_URL')]) {
-                sh """
+                sh '''
 cat > payload.json <<EOF
 {
-  "text": "❌ Jenkins Dev Build Failed!\\n\\nProject: POS System\\nBranch: ${params.BRANCH}\\nBuild #: ${env.BUILD_NUMBER}\\nCommit: ${env.LAST_COMMIT_HASH}\\nAuthor: ${env.LAST_COMMIT_AUTHOR}\\nMessage: ${env.LAST_COMMIT_MESSAGE}\\n\\nLogs: ${env.BUILD_URL}console"
+  "text": "❌ Jenkins Dev Build Failed!\n\nProject: POS System\nBranch: $BRANCH\nBuild #: $BUILD_NUMBER\nCommit: $LAST_COMMIT_HASH\nAuthor: $LAST_COMMIT_AUTHOR\nMessage: $LAST_COMMIT_MESSAGE\n\nLogs: ${BUILD_URL}console"
 }
 EOF
 HTTP_CODE=$(curl -sS -o /tmp/slack_resp.txt -w "%{http_code}" -X POST -H 'Content-type: application/json' --data @payload.json "$SLACK_URL" || true)
 echo "Slack HTTP: $HTTP_CODE"
 echo "Slack resp:" && cat /tmp/slack_resp.txt || true
-                """
+                '''
             }
             
             // ✅ Email notification retained
