@@ -99,29 +99,48 @@ const syncCognitoUserToOwner = async (req, res, next) => {
         if (!owner) {
             // Create new Owner record from Cognito user data
             // PostgreSQL will auto-generate a UUID for the id field
-            console.log('📝 Creating new Owner with:', {
-                email,
-                businessName: businessName || email.split('@')[0],
-                businessType,
-                phone: phone || null
-            });
+            // Ensure all required fields have values
+            const defaultName = userName || businessName || email.split('@')[0] || 'Owner';
+            const defaultBusinessName = businessName || email.split('@')[0] || 'My Business';
             
-            owner = await Owner.create({
+            const ownerData = {
                 email: email,
-                name: userName || businessName || email.split('@')[0], // Use actual user name if available, otherwise business name
-                businessName: businessName || email.split('@')[0],
-                businessType: businessType,
+                name: defaultName,
+                businessName: defaultBusinessName,
+                businessType: businessType || 'Restaurant', // Ensure businessType has a default
                 phone: phone || null,
                 password: 'cognito-auth', // Placeholder - Cognito handles auth
                 isActive: true,
                 loginCount: 0
-            });
-
-            console.log('✅ Created Owner record for Cognito user:', {
-                email,
-                ownerId: owner.id,
-                cognitoBusinessId: businessId
-            });
+            };
+            
+            console.log('📝 Creating new Owner with:', ownerData);
+            
+            try {
+                owner = await Owner.create(ownerData);
+                console.log('✅ Created Owner record for Cognito user:', {
+                    email,
+                    ownerId: owner.id,
+                    cognitoBusinessId: businessId
+                });
+            } catch (createError) {
+                console.error('❌ Error creating Owner record:', createError);
+                console.error('Error name:', createError.name);
+                console.error('Error message:', createError.message);
+                
+                // If unique constraint violation (email already exists), try to find again
+                if (createError.name === 'SequelizeUniqueConstraintError' || createError.message.includes('unique')) {
+                    console.log('🔄 Email might already exist, attempting to find Owner again...');
+                    owner = await Owner.findOne({ where: { email: email } });
+                    if (owner) {
+                        console.log('✅ Found existing Owner after unique constraint error');
+                    } else {
+                        throw new Error(`Failed to create Owner: ${createError.message}`);
+                    }
+                } else {
+                    throw createError; // Re-throw other errors
+                }
+            }
         } else {
             // SECURITY: Double-check email matches before updating or using this owner
             if (owner.email !== email) {
@@ -172,10 +191,37 @@ const syncCognitoUserToOwner = async (req, res, next) => {
             }
         }
 
+        // CRITICAL: Verify owner was created/found before continuing
+        if (!owner || !owner.id) {
+            console.error('❌ CRITICAL: Owner record not found or has no ID after sync attempt');
+            return res.status(500).json({
+                success: false,
+                error: 'Account sync failed',
+                message: 'Failed to sync user account to database. Please contact support or try logging out and back in.',
+                details: process.env.NODE_ENV === 'development' ? 'Owner record not found after creation/lookup' : undefined
+            });
+        }
+
         // IMPORTANT: Use the PostgreSQL UUID (owner.id) not the Cognito string
         // Attach ownerId to req.user for use in routes - this is the UUID from PostgreSQL
         req.user.ownerId = owner.id; // PostgreSQL UUID
         req.user.businessId = owner.id; // Override Cognito string with UUID
+
+        // Final verification that ownerId is set correctly
+        if (!req.user.ownerId || typeof req.user.ownerId !== 'string') {
+            console.error('❌ CRITICAL: ownerId not properly set after sync:', {
+                ownerId: req.user.ownerId,
+                ownerIdType: typeof req.user.ownerId,
+                ownerExists: !!owner,
+                ownerIdExists: !!(owner && owner.id)
+            });
+            return res.status(500).json({
+                success: false,
+                error: 'Account sync failed',
+                message: 'Failed to set user account ID. Please try logging out and back in.',
+                details: process.env.NODE_ENV === 'development' ? 'ownerId not properly assigned to req.user' : undefined
+            });
+        }
 
         console.log('✅ Sync complete. Set req.user:', {
             ownerId: req.user.ownerId,
@@ -191,10 +237,21 @@ const syncCognitoUserToOwner = async (req, res, next) => {
         console.error('Error details:', {
             message: error.message,
             stack: error.stack,
-            reqUser: req.user
+            reqUser: req.user ? {
+                email: req.user.email,
+                sub: req.user.sub,
+                hasOwnerId: !!req.user.ownerId
+            } : 'No req.user'
         });
-        // Continue anyway - don't block the request
-        next();
+        
+        // CRITICAL: If sync fails, we MUST return an error
+        // Don't continue without ownerId - routes will fail with "Owner ID is required"
+        return res.status(500).json({
+            success: false,
+            error: 'Authentication sync failed',
+            message: 'Failed to sync user account. Please try logging out and logging in again.',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 

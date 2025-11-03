@@ -5,6 +5,9 @@ import MenuDisplay from './MenuDisplay';
 import OrderCart from './OrderCart';
 import OrderTypes from './OrderTypes';
 import EmployeeQuickAccess from './EmployeeQuickAccess';
+import PaymentModal from './PaymentModal';
+import OrderConfirmation from './OrderConfirmation';
+import RecentOrders from './RecentOrders';
 import {
     Users
 } from 'lucide-react';
@@ -20,6 +23,10 @@ const POSSystem = () => {
     const [customerName, setCustomerName] = useState('');
     const [loading, setLoading] = useState(true);
     const [showEmployeeAccess, setShowEmployeeAccess] = useState(false);
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [currentOrderData, setCurrentOrderData] = useState(null);
+    const [orderConfirmation, setOrderConfirmation] = useState(null);
+    const [recentOrders, setRecentOrders] = useState([]);
 
     // Load menu items and categories
     useEffect(() => {
@@ -109,12 +116,27 @@ const POSSystem = () => {
             return;
         }
 
+        // Validation based on order type
+        if (orderType === 'dine-in' && !tableNumber) {
+            alert('Please enter a table number');
+            return;
+        }
+
+        if ((orderType === 'delivery' || orderType === 'pickup') && !customerName) {
+            alert('Please enter customer name');
+            return;
+        }
+
         try {
+            const taxRate = 0.08;
+            const tax = orderTotal * taxRate;
+            const finalTotal = orderTotal + tax;
+
             const orderData = {
                 items: currentOrder,
                 orderType,
                 tableNumber: orderType === 'dine-in' ? tableNumber : null,
-                customerName: orderType === 'delivery' ? customerName : null,
+                customerName: (orderType === 'delivery' || orderType === 'pickup') ? customerName : null,
                 total: orderTotal,
                 status: 'pending',
                 employeeId: currentUser?.sub,
@@ -124,16 +146,71 @@ const POSSystem = () => {
 
             const response = await apiService.createOrder(orderData);
             if (response.success) {
-                alert('Order submitted successfully!');
-                clearOrder();
+                // Store order data and show payment modal
+                const createdOrder = {
+                    ...response.data,
+                    finalTotal: finalTotal,
+                    tax: tax
+                };
+                setCurrentOrderData(createdOrder);
+                setShowPaymentModal(true);
             } else {
                 alert('Failed to submit order');
             }
         } catch (error) {
             console.error('Error submitting order:', error);
-            alert('Error submitting order');
+            alert('Error submitting order: ' + (error.response?.data?.message || error.message));
         }
     };
+
+    // Process payment
+    const handlePaymentComplete = async (orderId, paymentData) => {
+        try {
+            const response = await apiService.processPayment(orderId, paymentData);
+            if (response.success) {
+                // Show confirmation
+                setOrderConfirmation({
+                    order: response.data.order,
+                    payment: response.data.payment
+                });
+                setShowPaymentModal(false);
+                
+                // Load recent orders
+                loadRecentOrders();
+                
+                // Clear current order after a delay
+                setTimeout(() => {
+                    clearOrder();
+                    setOrderConfirmation(null);
+                }, 5000);
+            } else {
+                alert('Payment processing failed');
+            }
+        } catch (error) {
+            console.error('Error processing payment:', error);
+            throw new Error(error.response?.data?.message || 'Payment processing failed');
+        }
+    };
+
+    // Load recent orders
+    const loadRecentOrders = async () => {
+        try {
+            const response = await apiService.getOrders({ limit: 10 });
+            if (response.success) {
+                setRecentOrders(response.data || []);
+            }
+        } catch (error) {
+            console.error('Error loading recent orders:', error);
+        }
+    };
+
+    // Load recent orders on mount
+    useEffect(() => {
+        loadRecentOrders();
+        // Refresh orders every 30 seconds
+        const interval = setInterval(loadRecentOrders, 30000);
+        return () => clearInterval(interval);
+    }, []);
 
     if (loading) {
         return (
@@ -208,6 +285,11 @@ const POSSystem = () => {
                         items={filteredMenuItems}
                         onAddToOrder={addToOrder}
                     />
+
+                    {/* Recent Orders */}
+                    <div className="border-t p-4 bg-gray-50">
+                        <RecentOrders refreshTrigger={orderConfirmation} />
+                    </div>
                 </div>
 
                 {/* Right Side - Order Cart */}
@@ -229,6 +311,31 @@ const POSSystem = () => {
             {/* Employee Quick Access Modal */}
             {showEmployeeAccess && (
                 <EmployeeQuickAccess onClose={() => setShowEmployeeAccess(false)} />
+            )}
+
+            {/* Payment Modal */}
+            {showPaymentModal && currentOrderData && (
+                <PaymentModal
+                    isOpen={showPaymentModal}
+                    onClose={() => {
+                        setShowPaymentModal(false);
+                        // If payment cancelled, ask to keep or clear order
+                        if (window.confirm('Do you want to clear the current order?')) {
+                            clearOrder();
+                        }
+                    }}
+                    order={currentOrderData}
+                    onPaymentComplete={handlePaymentComplete}
+                />
+            )}
+
+            {/* Order Confirmation */}
+            {orderConfirmation && (
+                <OrderConfirmation
+                    order={orderConfirmation.order}
+                    payment={orderConfirmation.payment}
+                    onClose={() => setOrderConfirmation(null)}
+                />
             )}
         </div>
     );

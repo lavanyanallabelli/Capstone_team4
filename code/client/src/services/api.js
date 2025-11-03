@@ -380,6 +380,10 @@ class ApiService {
         return this.put(`/orders/${orderId}`, orderData);
     }
 
+    async processPayment(orderId, paymentData) {
+        return this.post(`/orders/${orderId}/payment`, paymentData);
+    }
+
     async deleteOrder(orderId) {
         return this.delete(`/orders/${orderId}`);
     }

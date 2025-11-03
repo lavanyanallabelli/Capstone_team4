@@ -111,7 +111,8 @@ router.get('/', authenticateToken, async (req, res) => {
             offset: parseInt(offset),
             order: [['orderDate', 'DESC']],
             include: [
-                { model: Employee, as: 'employee', attributes: ['id', 'firstName', 'lastName', 'email'] }
+                { model: Employee, as: 'employee', attributes: ['id', 'firstName', 'lastName', 'email'] },
+                { model: Payment, as: 'payments', attributes: ['id', 'amount', 'method', 'status', 'transactionId', 'paymentDate', 'createdAt'] }
             ]
         });
 
@@ -389,6 +390,77 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Failed to fetch order statistics',
+            message: error.message
+        });
+    }
+});
+
+// Create payment for an order
+router.post('/:orderId/payment', authenticateToken, async (req, res) => {
+    try {
+        const { orderId } = req.params;
+        const { method, amount } = req.body;
+        const ownerId = getOwnerId(req);
+
+        // Validate payment method
+        const validMethods = ['cash', 'card', 'online', 'digital_wallet'];
+        if (!validMethods.includes(method)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid payment method',
+                message: `Method must be one of: ${validMethods.join(', ')}`
+            });
+        }
+
+        // Find order
+        const order = await Order.findOne({
+            where: {
+                id: orderId,
+                ownerId: ownerId
+            }
+        });
+
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                error: 'Order not found'
+            });
+        }
+
+        // Create payment
+        const payment = await Payment.create({
+            orderId: order.id,
+            amount: parseFloat(amount || order.finalTotal),
+            method: method,
+            status: 'completed',
+            transactionId: `TXN-${Date.now().toString().slice(-8)}`
+        });
+
+        // Update order status to completed
+        order.status = 'completed';
+        await order.save();
+
+        console.log('✅ Payment processed:', {
+            paymentId: payment.id,
+            orderId: order.id,
+            amount: payment.amount,
+            method: payment.method
+        });
+
+        res.status(201).json({
+            success: true,
+            data: {
+                payment,
+                order
+            },
+            message: 'Payment processed successfully'
+        });
+
+    } catch (error) {
+        console.error('Error processing payment:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to process payment',
             message: error.message
         });
     }
