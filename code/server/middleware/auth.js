@@ -1,13 +1,5 @@
 const jwt = require('jsonwebtoken');
 const jwksClient = require('jwks-rsa');
-const AWS = require('aws-sdk');
-
-// Configure AWS
-AWS.config.update({
-    region: process.env.AWS_REGION || 'us-east-1'
-});
-
-const cognitoIdentityServiceProvider = new AWS.CognitoIdentityServiceProvider();
 
 // JWKS client for token verification with proper error handling
 let client;
