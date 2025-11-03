@@ -182,44 +182,18 @@ The React frontend and Node backend have been successfully built and deployed to
         }
 
         failure {
-            echo "❌ Build failed!"
+            echo "Build failed!"
             withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_URL')]) {
                 sh """
-                curl -X POST -H "Content-type: application/json" --data '{
-                    "blocks": [
-                        {
-                            "type": "header",
-                            "text": { "type": "plain_text", "text": "❌ Jenkins Dev Build Failed!" }
-                        },
-                        {
-                            "type": "section",
-                            "fields": [
-                                { "type": "mrkdwn", "text": "*Project:* POS System" },
-                                { "type": "mrkdwn", "text": "*Branch:* ${params.BRANCH}" },
-                                { "type": "mrkdwn", "text": "*Build #:* ${env.BUILD_NUMBER}" },
-                                { "type": "mrkdwn", "text": "*Commit:* ${env.LAST_COMMIT_HASH}" },
-                                { "type": "mrkdwn", "text": "*Author:* ${env.LAST_COMMIT_AUTHOR}" }
-                            ]
-                        },
-                        {
-                            "type": "section",
-                            "text": { "type": "mrkdwn", "text": "*Message:* ${env.LAST_COMMIT_MESSAGE}" }
-                        },
-                        {
-                            "type": "actions",
-                            "elements": [
-                                {
-                                    "type": "button",
-                                    "text": { "type": "plain_text", "text": "View Logs" },
-                                    "url": "${env.BUILD_URL}console"
-                                }
-                            ]
-                        }
-                    ]
-                }' $SLACK_URL
+                cat > payload.json <<EOF
+{
+  "text": "❌ Jenkins Dev Build Failed!\n\nProject: POS System\nBranch: ${params.BRANCH}\nBuild #: ${env.BUILD_NUMBER}\nCommit: ${env.LAST_COMMIT_HASH}\nAuthor: ${env.LAST_COMMIT_AUTHOR}\nMessage: ${env.LAST_COMMIT_MESSAGE}"
+}
+EOF
+                curl -X POST -H 'Content-type: application/json' --data @payload.json "$SLACK_URL"
                 """
             }
-
+            
             // ✅ Email notification retained
             mail (
                 to: 'cuteamy104@gmail.com, chetanjogi042@gmail.com',
