@@ -7,9 +7,9 @@ pipeline {
         REACT_APP_USER_POOL_ID = 'us-east-1_i2eRulYnD'
         REACT_APP_USER_POOL_WEB_CLIENT_ID = '3q99asqjvgb0eakf80eorms0ho'
         REACT_APP_OAUTH_DOMAIN = 'https://us-east-1i2erulynd.auth.us-east-1.amazoncognito'
-        REACT_APP_API_URL = 'http://3.85.243.29:5000/api'
-        REACT_APP_REDIRECT_SIGN_IN = 'http://3.85.243.29/'
-        REACT_APP_REDIRECT_SIGN_OUT = 'http://3.85.243.29/'
+        REACT_APP_API_URL = 'http://3.87.100.22:5000/api'
+        REACT_APP_REDIRECT_SIGN_IN = 'http://3.87.100.22/'
+        REACT_APP_REDIRECT_SIGN_OUT = 'http://3.87.100.22/'
     }
 
     parameters {
@@ -92,7 +92,7 @@ REACT_APP_REDIRECT_SIGN_OUT=${env.REACT_APP_REDIRECT_SIGN_OUT}
                     echo "Deploying frontend build..."
                     ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@3.87.100.22 "mkdir -p /home/ec2-user/pos_system/build"
                     scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/client/build/* $SSH_USER@3.87.100.22:/home/ec2-user/pos_system/build/
-                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@ "3.87.100.22
+                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@3.87.100.22 "
                         pm2 stop pos-system || true
                         pm2 serve /home/ec2-user/pos_system/build 3000 --name pos-system --spa
                         pm2 save
