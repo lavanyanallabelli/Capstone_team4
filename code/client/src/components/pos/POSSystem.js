@@ -33,7 +33,7 @@ const POSSystem = () => {
         const loadMenuData = async () => {
             try {
                 setLoading(true);
-                console.log('POSSystem - Loading menu items, recentOrders:', recentOrders);
+                console.log('POSSystem - Loading menu items');
                 const response = await apiService.getMenuItems();
                 if (response.success) {
                     const items = response.data;
