@@ -87,53 +87,32 @@ REACT_APP_REDIRECT_SIGN_OUT=${env.REACT_APP_REDIRECT_SIGN_OUT}
         stage('Deploy Backend to DEV EC2') {
             steps {
                 withCredentials([
-                    sshUserPrivateKey(credentialsId: 'AWS_DEV_SSH_KEY', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER'),
-                    string(credentialsId: 'db_key_id', variable: 'DB_HOST'),
-                    string(credentialsId: 'db_user', variable: 'DB_USER'),
-                    string(credentialsId: 'db_password', variable: 'DB_PASSWORD')
+                    sshUserPrivateKey(credentialsId: 'AWS_DEV_SSH_KEY', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')
                 ]) {
                     sh """
                     echo "Deploying backend..."
-                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@3.87.100.22 "mkdir -p /home/ec2-user/pos_system/server"
-                    scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/server/* $SSH_USER@3.87.100.22:/home/ec2-user/pos_system/server/
-                    
-                    echo "Creating .env file with database credentials..."
-                    cat > /tmp/server.env << EOF
-# Server Configuration
-PORT=5000
-NODE_ENV=production
-FRONTEND_URL=http://3.87.100.22:3000
+                    echo "Verifying SSH connection..."
+                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@3.87.100.22 "echo 'SSH connection successful'" || { echo "SSH connection failed!"; exit 1; }
 
-# PostgreSQL Database Configuration (Amazon RDS)
-DB_HOST=${DB_HOST}
-DB_PORT=5432
-DB_USER=${DB_USER}
-DB_PASSWORD=${DB_PASSWORD}
-DB_NAME=posdb
+                    echo "Creating server directory..."
+                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@3.87.100.22 "mkdir -p /home/ec2-user/pos_system/server" || { echo "Failed to create directory!"; exit 1; }
 
-# AWS Configuration (for Cognito only)
-AWS_REGION=us-east-1
+                    echo "Copying server files..."
+                    scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/server/* $SSH_USER@3.87.100.22:/home/ec2-user/pos_system/server/ || { echo "Failed to copy files!"; exit 1; }
 
-# AWS Cognito Configuration
-AWS_USER_POOL_ID=us-east-1_i2eRulYnD
-AWS_USER_POOL_WEB_CLIENT_ID=3q99asqjvgb0eakf80eorms0ho
-JWKS_URI=https://cognito-idp.us-east-1.amazonaws.com/us-east-1_i2eRulYnD/.well-known/jwks.json
+                    echo "Using existing .env on EC2 (no .env creation from Jenkins)"
 
-# JWT Configuration
-JWT_SECRET=your_jwt_secret_key_here
-JWT_EXPIRES_IN=24h
-EOF
-                    scp -i "$SSH_KEY" -o StrictHostKeyChecking=no /tmp/server.env $SSH_USER@3.87.100.22:/home/ec2-user/pos_system/server/.env
-                    rm /tmp/server.env
-                    
+                    echo "Installing dependencies and starting backend..."
                     ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@3.87.100.22 "
-                        cd /home/ec2-user/pos_system/server
-                        npm install
+                        cd /home/ec2-user/pos_system/server || { echo 'Failed to cd to server directory'; exit 1; }
+                        npm install || { echo 'npm install failed'; exit 1; }
                         pm2 delete pos-backend || true
-                        pm2 start server.js --name pos-backend
-                        pm2 save
-                        echo 'Backend deployed and restarted with database configuration'
-                    "
+                        pm2 start server.js --name pos-backend || { echo 'pm2 start failed'; exit 1; }
+                        pm2 save || { echo 'pm2 save failed'; exit 1; }
+                        echo 'Backend deployed and restarted using existing .env'
+                    " || { echo "Backend deployment failed!"; exit 1; }
+
+                    echo "✅ Backend deployment completed successfully!"
                     """
                 }
             }
