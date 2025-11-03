@@ -141,15 +141,14 @@ export const AuthProvider = ({ children }) => {
                     setLoading(false);
                     return;
                 }
-                
+
                 // If no Cognito user, check for employee JWT token in localStorage
-                const token = localStorage.getItem('token');
-                const storedUser = localStorage.getItem('user');
-                
+                const token = localStorage.getItem('employeeToken');
+                const storedUser = localStorage.getItem('employeeUser');
+
                 if (token && storedUser) {
                     try {
                         const employeeData = JSON.parse(storedUser);
-                        // Create user object compatible with the app
                         const employeeUser = {
                             email: employeeData.email,
                             sub: employeeData.id,
@@ -162,10 +161,9 @@ export const AuthProvider = ({ children }) => {
                         console.log('✅ Employee session found:', employeeUser);
                         setCurrentUser(employeeUser);
                     } catch (parseError) {
-                        console.error('Error parsing stored user:', parseError);
-                        // Clear invalid data
-                        localStorage.removeItem('token');
-                        localStorage.removeItem('user');
+                        console.error('Error parsing stored employee user:', parseError);
+                        localStorage.removeItem('employeeToken');
+                        localStorage.removeItem('employeeUser');
                         setCurrentUser(null);
                     }
                 } else {
