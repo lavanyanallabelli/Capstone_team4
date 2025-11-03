@@ -25,6 +25,11 @@ pipeline {
         stage('Checkout from GitHub') {
             steps {
                 git branch: "${params.BRANCH}", url: 'https://github.com/lavanyanallabelli/Capstone_team4.git'
+                script {
+                    env.LAST_COMMIT_MESSAGE = sh(script: "git log -1 --pretty=%B | tr -d '\\n'", returnStdout: true).trim()
+                    env.LAST_COMMIT_AUTHOR  = sh(script: "git log -1 --pretty=%an", returnStdout: true).trim()
+                    env.LAST_COMMIT_HASH    = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+                }
             }
         }
 
@@ -120,49 +125,24 @@ REACT_APP_REDIRECT_SIGN_OUT=${env.REACT_APP_REDIRECT_SIGN_OUT}
 
     }
     post {
-    success {
-        echo "✅ Build succeeded: ${env.BUILD_NUMBER} (${params.BRANCH})"
-        withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_URL')]) {
-            sh """
-            curl -X POST -H "Content-type: application/json" --data '{
-                "blocks": [
-                    {
-                        "type": "header",
-                        "text": { "type": "plain_text", "text": "✅ Jenkins Dev Build Successful!" }
-                    },
-                    {
-                        "type": "section",
-                        "fields": [
-                            { "type": "mrkdwn", "text": "*Project:* POS System" },
-                            { "type": "mrkdwn", "text": "*Branch:* ${params.BRANCH}" },
-                            { "type": "mrkdwn", "text": "*Build #:* ${env.BUILD_NUMBER}" },
-                            { "type": "mrkdwn", "text": "*Commit:* ${env.LAST_COMMIT_HASH}" },
-                            { "type": "mrkdwn", "text": "*Author:* ${env.LAST_COMMIT_AUTHOR}" }
-                        ]
-                    },
-                    {
-                        "type": "section",
-                        "text": { "type": "mrkdwn", "text": "*Message:* ${env.LAST_COMMIT_MESSAGE}" 
-                    },
-                    {
-                        "type": "actions",
-                        "elements": [
-                            {
-                                "type": "button",
-                                "text": { "type": "plain_text", "text": "View Build" },
-                                "url": "${env.BUILD_URL}"
-                            }
-                        ]
-                    }
-                ]
-            }' $SLACK_URL
-            """
-        }
-        // ✅ Email notification retained
-        mail (
-            to: 'chetanjogi042@gmail.com',
-            subject: "✅ Jenkins Dev Build Successful - Branch: ${params.BRANCH}",
-            body: """
+        success {
+            echo "✅ Build succeeded: ${env.BUILD_NUMBER} (${params.BRANCH})"
+            withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_URL')]) {
+                sh """
+cat > payload.json <<EOF
+{
+  "text": "✅ Jenkins Dev Build Successful!\\n\\nProject: POS System\\nBranch: ${params.BRANCH}\\nBuild #: ${env.BUILD_NUMBER}\\nCommit: ${env.LAST_COMMIT_HASH}\\nAuthor: ${env.LAST_COMMIT_AUTHOR}\\nMessage: ${env.LAST_COMMIT_MESSAGE}\\n\\nBuild URL: ${env.BUILD_URL}"
+}
+EOF
+HTTP_CODE=$(curl -sS -o /tmp/slack_resp.txt -w "%{http_code}" -X POST -H 'Content-type: application/json' --data @payload.json "$SLACK_URL" || true)
+echo "Slack HTTP: $HTTP_CODE"
+echo "Slack resp:" && cat /tmp/slack_resp.txt || true
+                """
+            }
+            mail (
+                to: 'chetanjogi042@gmail.com',
+                subject: "✅ Jenkins Dev Build Successful - Branch: ${params.BRANCH}",
+                body: """
 Build Successful!
 
 Project: POS System
@@ -175,8 +155,6 @@ Message: ${env.LAST_COMMIT_MESSAGE}
 Status: SUCCESS
 Deployment: Dev EC2 Instance
 Build URL: ${env.BUILD_URL}
-
-The React frontend and Node backend have been successfully built and deployed to the Dev EC2 instance.
                 """
             )
         }
@@ -185,12 +163,14 @@ The React frontend and Node backend have been successfully built and deployed to
             echo "Build failed!"
             withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_URL')]) {
                 sh """
-                cat > payload.json <<EOF
+cat > payload.json <<EOF
 {
-  "text": "❌ Jenkins Dev Build Failed!\n\nProject: POS System\nBranch: ${params.BRANCH}\nBuild #: ${env.BUILD_NUMBER}\nCommit: ${env.LAST_COMMIT_HASH}\nAuthor: ${env.LAST_COMMIT_AUTHOR}\nMessage: ${env.LAST_COMMIT_MESSAGE}"
+  "text": "❌ Jenkins Dev Build Failed!\\n\\nProject: POS System\\nBranch: ${params.BRANCH}\\nBuild #: ${env.BUILD_NUMBER}\\nCommit: ${env.LAST_COMMIT_HASH}\\nAuthor: ${env.LAST_COMMIT_AUTHOR}\\nMessage: ${env.LAST_COMMIT_MESSAGE}\\n\\nLogs: ${env.BUILD_URL}console"
 }
 EOF
-                curl -X POST -H 'Content-type: application/json' --data @payload.json "$SLACK_URL"
+HTTP_CODE=$(curl -sS -o /tmp/slack_resp.txt -w "%{http_code}" -X POST -H 'Content-type: application/json' --data @payload.json "$SLACK_URL" || true)
+echo "Slack HTTP: $HTTP_CODE"
+echo "Slack resp:" && cat /tmp/slack_resp.txt || true
                 """
             }
             
