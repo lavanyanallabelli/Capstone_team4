@@ -7,9 +7,9 @@ pipeline {
         REACT_APP_USER_POOL_ID = 'us-east-1_i2eRulYnD'
         REACT_APP_USER_POOL_WEB_CLIENT_ID = '3q99asqjvgb0eakf80eorms0ho'
         REACT_APP_OAUTH_DOMAIN = 'https://us-east-1i2erulynd.auth.us-east-1.amazoncognito'
-        REACT_APP_API_URL = 'http://3.85.243.29:5000/api'
-        REACT_APP_REDIRECT_SIGN_IN = 'http://3.85.243.29/'
-        REACT_APP_REDIRECT_SIGN_OUT = 'http://3.85.243.29/'
+        REACT_APP_API_URL = 'http://3.87.100.22:5000/api'
+        REACT_APP_REDIRECT_SIGN_IN = 'http://3.87.100.22/'
+        REACT_APP_REDIRECT_SIGN_OUT = 'http://3.87.100.22/'
     }
 
     parameters {
@@ -71,9 +71,9 @@ REACT_APP_REDIRECT_SIGN_OUT=${env.REACT_APP_REDIRECT_SIGN_OUT}
                 withCredentials([sshUserPrivateKey(credentialsId: 'AWS_DEV_SSH_KEY', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
                     sh '''
                     echo "Deploying frontend build..."
-                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@3.85.243.29 "mkdir -p /home/ec2-user/pos_system/build"
-                    scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/client/build/* $SSH_USER@3.85.243.29:/home/ec2-user/pos_system/build/
-                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@3.85.243.29 "
+                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@3.87.100.22 "mkdir -p /home/ec2-user/pos_system/build"
+                    scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/client/build/* $SSH_USER@3.87.100.22:/home/ec2-user/pos_system/build/
+                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@3.87.100.22 "
                         pm2 stop pos-system || true
                         pm2 serve /home/ec2-user/pos_system/build 3000 --name pos-system --spa
                         pm2 save
@@ -94,15 +94,15 @@ REACT_APP_REDIRECT_SIGN_OUT=${env.REACT_APP_REDIRECT_SIGN_OUT}
                 ]) {
                     sh """
                     echo "Deploying backend..."
-                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@3.85.243.29 "mkdir -p /home/ec2-user/pos_system/server"
-                    scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/server/* $SSH_USER@3.85.243.29:/home/ec2-user/pos_system/server/
+                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@3.87.100.22 "mkdir -p /home/ec2-user/pos_system/server"
+                    scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/server/* $SSH_USER@3.87.100.22:/home/ec2-user/pos_system/server/
                     
                     echo "Creating .env file with database credentials..."
                     cat > /tmp/server.env << EOF
 # Server Configuration
 PORT=5000
 NODE_ENV=production
-FRONTEND_URL=http://3.85.243.29:3000
+FRONTEND_URL=http://3.87.100.22:3000
 
 # PostgreSQL Database Configuration (Amazon RDS)
 DB_HOST=${DB_HOST}
@@ -123,10 +123,10 @@ JWKS_URI=https://cognito-idp.us-east-1.amazonaws.com/us-east-1_i2eRulYnD/.well-k
 JWT_SECRET=your_jwt_secret_key_here
 JWT_EXPIRES_IN=24h
 EOF
-                    scp -i "$SSH_KEY" -o StrictHostKeyChecking=no /tmp/server.env $SSH_USER@3.85.243.29:/home/ec2-user/pos_system/server/.env
+                    scp -i "$SSH_KEY" -o StrictHostKeyChecking=no /tmp/server.env $SSH_USER@3.87.100.22:/home/ec2-user/pos_system/server/.env
                     rm /tmp/server.env
                     
-                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@3.85.243.29 "
+                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@3.87.100.22 "
                         cd /home/ec2-user/pos_system/server
                         npm install
                         pm2 delete pos-backend || true
