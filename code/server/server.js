@@ -28,10 +28,21 @@ const app = express();
 const PORT = process.env.PORT || 8000;
 const HOST = '0.0.0.0'; // allow external traffic
 
+// Startup debug logs (non-sensitive)
+console.log('=== Startup Configuration ===');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('PORT:', PORT);
+console.log('FRONTEND_URL:', process.env.FRONTEND_URL);
+console.log('DB_HOST:', (process.env.DB_HOST || '').replace(/^(..).*(..$)/, '$1***$2')); // mask
+console.log('DB_NAME:', process.env.DB_NAME);
+console.log('AWS_REGION:', process.env.AWS_REGION);
+console.log('JWKS_URI set:', Boolean(process.env.JWKS_URI));
+console.log('============================');
+
 // Middleware
 app.use(helmet());
 app.use(cors({
-    origin: ['http://localhost:3000', 'http://3.85.243.29:3000'],
+    origin: ['http://localhost:3000', 'http://3.87.100.22:3000'],
     credentials: true
 }));
 app.use(morgan('combined'));
@@ -95,11 +106,11 @@ const startServer = async () => {
     try {
         // Connect to PostgreSQL
         await connectDB();
-        
+
         // Sync models (creates tables if they don't exist, alters if they do)
         await sequelize.sync({ alter: true });
         console.log('✅ Database models synchronized');
-        
+
         // Add unique index for employeeId after column is created
         try {
             await sequelize.query(`
@@ -114,7 +125,7 @@ const startServer = async () => {
                 console.warn('⚠️ Could not create employeeId index:', indexError.message);
             }
         }
-        
+
         // Start server
         app.listen(PORT, HOST, () => {
             console.log(`🚀 Server running on http://${HOST}:${PORT}`);
@@ -126,6 +137,14 @@ const startServer = async () => {
         process.exit(1);
     }
 };
+
+// Global error handlers for more debug info
+process.on('unhandledRejection', (reason) => {
+    console.error('UNHANDLED_REJECTION:', reason);
+});
+process.on('uncaughtException', (err) => {
+    console.error('UNCAUGHT_EXCEPTION:', err);
+});
 
 startServer();
 

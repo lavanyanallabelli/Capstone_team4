@@ -2,6 +2,7 @@ const { Sequelize } = require('sequelize');
 require('dotenv').config();
 
 // Create Sequelize instance
+const sslEnabled = process.env.DB_HOST && process.env.DB_HOST.includes('rds.amazonaws.com');
 const sequelize = new Sequelize(
     process.env.DB_NAME || 'posdb',
     process.env.DB_USER || 'postgres',
@@ -12,7 +13,7 @@ const sequelize = new Sequelize(
         dialect: 'postgres',
         logging: process.env.NODE_ENV === 'development' ? console.log : false,
         dialectOptions: {
-            ssl: process.env.DB_HOST && process.env.DB_HOST.includes('rds.amazonaws.com') ? {
+            ssl: sslEnabled ? {
                 require: true,
                 rejectUnauthorized: false
             } : false
@@ -29,6 +30,12 @@ const sequelize = new Sequelize(
 // Test database connection
 const connectDB = async () => {
     try {
+        // Log DB target (masking sensitive)
+        console.log('DB connect → host:', (process.env.DB_HOST || 'localhost').replace(/^(..).*(..$)/, '$1***$2'));
+        console.log('DB connect → db:', process.env.DB_NAME || 'posdb');
+        console.log('DB connect → user:', (process.env.DB_USER || 'postgres').replace(/^(..).*(..$)/, '$1***$2'));
+        console.log('DB connect → ssl:', sslEnabled);
+
         // First, connect to default 'postgres' database to check/create our database
         const defaultSequelize = new Sequelize(
             'postgres', // Connect to default postgres database
@@ -40,7 +47,7 @@ const connectDB = async () => {
                 dialect: 'postgres',
                 logging: false,
                 dialectOptions: {
-                    ssl: process.env.DB_HOST && process.env.DB_HOST.includes('rds.amazonaws.com') ? {
+                    ssl: sslEnabled ? {
                         require: true,
                         rejectUnauthorized: false
                     } : false
