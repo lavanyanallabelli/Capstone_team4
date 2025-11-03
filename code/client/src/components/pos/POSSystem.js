@@ -26,6 +26,8 @@ const POSSystem = () => {
         const loadMenuData = async () => {
             try {
                 setLoading(true);
+                const recentOrders = []; // Placeholder for recent orders feature
+                console.log('POSSystem - Loading menu items, recentOrders:', recentOrders);
                 const response = await apiService.getMenuItems();
                 if (response.success) {
                     const items = response.data;

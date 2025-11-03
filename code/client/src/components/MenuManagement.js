@@ -556,6 +556,10 @@ const CreateMenuItemForm = ({ categories, onSubmit, onCancel }) => {
 
 // Edit Menu Item Form Component
 const EditMenuItemForm = ({ item, categories, onSubmit, onCancel }) => {
+    // Extract itemId for logging (if needed for debugging)
+    const itemId = item?.id || item?.itemId;
+    console.log('EditMenuItemForm - itemId:', itemId, 'item:', item);
+    
     const [formData, setFormData] = useState({
         name: item.name,
         category: item.category,

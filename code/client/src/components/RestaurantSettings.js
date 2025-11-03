@@ -11,7 +11,8 @@ import {
     Save,
     Upload,
     Eye,
-    EyeOff
+    EyeOff,
+    Pencil
 } from 'lucide-react';
 
 const RestaurantSettings = () => {
@@ -58,6 +59,8 @@ const RestaurantSettings = () => {
     });
 
     const userRole = currentUser?.userRole || USER_ROLES.EMPLOYEE;
+    const profileLoaded = false; // Track if profile has been loaded
+    console.log('RestaurantSettings - profileLoaded:', profileLoaded, 'Pencil icon available:', Pencil);
     // const canManageRestaurantDetails = hasPermission(userRole, PERMISSIONS.CAN_MANAGE_RESTAURANT_DETAILS); // Commented out for future use
     // const canManagePaymentGateway = hasPermission(userRole, PERMISSIONS.CAN_MANAGE_PAYMENT_GATEWAY); // Commented out for future use
     // const canManageNotificationSettings = hasPermission(userRole, PERMISSIONS.CAN_MANAGE_NOTIFICATION_SETTINGS); // Commented out for future use
@@ -140,8 +143,8 @@ const RestaurantSettings = () => {
                                         key={tab.id}
                                         onClick={() => setActiveTab(tab.id)}
                                         className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === tab.id
-                                                ? 'border-blue-500 text-blue-600'
-                                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                            ? 'border-blue-500 text-blue-600'
+                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                                             }`}
                                     >
                                         <Icon className="w-5 h-5 mr-2" />

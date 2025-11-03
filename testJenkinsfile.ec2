@@ -1,0 +1,290 @@
+pipeline {
+    agent any
+
+    environment {
+        // Frontend (React) environment variables — public only
+        REACT_APP_AWS_REGION = 'us-east-1'
+        REACT_APP_USER_POOL_ID = 'us-east-1_i2eRulYnD'
+        REACT_APP_USER_POOL_WEB_CLIENT_ID = '3q99asqjvgb0eakf80eorms0ho'
+        REACT_APP_OAUTH_DOMAIN = 'https://us-east-1i2erulynd.auth.us-east-1.amazoncognito'
+        REACT_APP_API_URL = 'http://3.85.243.29:5000/api'
+        REACT_APP_REDIRECT_SIGN_IN = 'http://3.85.243.29/'
+        REACT_APP_REDIRECT_SIGN_OUT = 'http://3.85.243.29/'
+    }
+
+    parameters {
+        choice(
+            name: 'BRANCH',
+            choices: ['prod', 'QA', 'main'],
+            description: 'Select the branch to build'
+        )
+    }
+
+    stages {
+
+        stage('Checkout from GitHub') {
+            steps {
+                git branch: "${params.BRANCH}", url: 'https://github.com/lavanyanallabelli/Capstone_team4.git'
+
+                // ✅ Capture commit details
+                script {
+                    env.LAST_COMMIT_MESSAGE = sh(
+                        script: "git log -1 --pretty=%B | tr -d '\\n'",
+                        returnStdout: true
+                    ).trim()
+                    env.LAST_COMMIT_AUTHOR = sh(
+                        script: "git log -1 --pretty=%an",
+                        returnStdout: true
+                    ).trim()
+                    env.LAST_COMMIT_HASH = sh(
+                        script: "git rev-parse --short HEAD",
+                        returnStdout: true
+                    ).trim()
+
+                    echo "Commit: ${env.LAST_COMMIT_HASH} by ${env.LAST_COMMIT_AUTHOR}"
+                    echo "Message: ${env.LAST_COMMIT_MESSAGE}"
+                }
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                dir('code') {
+                    sh '''
+                    echo "Installing dependencies (using cache if available)..."
+                    npm run install:all
+                    cd client && npm install path-exists --save
+                    cd ../server && npm install path-exists --save
+                    cd ..
+                    '''
+                }
+            }
+        }
+
+        stage('Set Frontend Environment') {
+            steps {
+                dir('code/client') {
+                    writeFile file: '.env', text: """
+REACT_APP_AWS_REGION=${env.REACT_APP_AWS_REGION}
+REACT_APP_USER_POOL_ID=${env.REACT_APP_USER_POOL_ID}
+REACT_APP_USER_POOL_WEB_CLIENT_ID=${env.REACT_APP_USER_POOL_WEB_CLIENT_ID}
+REACT_APP_OAUTH_DOMAIN=${env.REACT_APP_OAUTH_DOMAIN}
+REACT_APP_API_URL=${env.REACT_APP_API_URL}
+REACT_APP_REDIRECT_SIGN_IN=${env.REACT_APP_REDIRECT_SIGN_IN}
+REACT_APP_REDIRECT_SIGN_OUT=${env.REACT_APP_REDIRECT_SIGN_OUT}
+"""
+                }
+            }
+        }
+
+        stage('Build React Application') {
+            steps {
+                dir('code') {
+                    sh 'npm run build:client'
+                }
+            }
+        }
+
+        stage('Deploy Frontend to DEV EC2') {
+            steps {
+                withCredentials([sshUserPrivateKey(credentialsId: 'AWS_DEV_SSH_KEY', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
+                    sh '''
+                    echo "Deploying frontend build..."
+                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@3.87.100.22 "mkdir -p /home/ec2-user/pos_system/build"
+                    scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/client/build/* $SSH_USER@3.87.100.22:/home/ec2-user/pos_system/build/
+                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@ "3.87.100.22
+                        pm2 stop pos-system || true
+                        pm2 serve /home/ec2-user/pos_system/build 3000 --name pos-system --spa
+                        pm2 save
+                        pm2 startup -u ec2-user --hp /home/ec2-user || echo 'PM2 startup may require manual setup'
+                    "
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy Backend to DEV EC2') {
+            steps {
+                withCredentials([
+                    sshUserPrivateKey(credentialsId: 'AWS_DEV_SSH_KEY', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER'),
+                    string(credentialsId: 'db_key_id', variable: 'DB_HOST'),
+                    string(credentialsId: 'db_user', variable: 'DB_USER'),
+                    string(credentialsId: 'db_password', variable: 'DB_PASSWORD')
+                ]) {
+                    sh """
+                    echo "Deploying backend..."
+                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@3.87.100.22 "mkdir -p /home/ec2-user/pos_system/server"
+                    scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/server/* $SSH_USER@3.87.100.22:/home/ec2-user/pos_system/server/
+                    
+                    echo "Creating .env file with database credentials..."
+                    cat > /tmp/server.env << EOF
+# Server Configuration
+PORT=5000
+NODE_ENV=production
+FRONTEND_URL=http://3.87.100.22:3000
+
+# PostgreSQL Database Configuration (Amazon RDS)
+DB_HOST=${DB_HOST}
+DB_PORT=5432
+DB_USER=${DB_USER}
+DB_PASSWORD=${DB_PASSWORD}
+DB_NAME=posdb
+
+# AWS Configuration (for Cognito only)
+AWS_REGION=us-east-1
+
+# AWS Cognito Configuration
+AWS_USER_POOL_ID=us-east-1_i2eRulYnD
+AWS_USER_POOL_WEB_CLIENT_ID=3q99asqjvgb0eakf80eorms0ho
+JWKS_URI=https://cognito-idp.us-east-1.amazonaws.com/us-east-1_i2eRulYnD/.well-known/jwks.json
+
+# JWT Configuration
+JWT_SECRET=your_jwt_secret_key_here
+JWT_EXPIRES_IN=24h
+EOF
+                    scp -i "$SSH_KEY" -o StrictHostKeyChecking=no /tmp/server.env $SSH_USER@3.87.100.22:/home/ec2-user/pos_system/server/.env
+                    rm /tmp/server.env
+                    
+                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@3.87.100.22 "
+                        cd /home/ec2-user/pos_system/server
+                        npm install
+                        pm2 delete pos-backend || true
+                        pm2 start server.js --name pos-backend
+                        pm2 save
+                        echo 'Backend deployed and restarted with database configuration'
+                    "
+                    """
+                }
+            }
+        }
+
+    }
+
+    post {
+        success {
+            echo "✅ Build succeeded: ${env.BUILD_NUMBER} (${params.BRANCH})"
+            withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_URL')]) {
+                sh """
+                curl -X POST -H "Content-type: application/json" --data '{
+                    "blocks": [
+                        {
+                            "type": "header",
+                            "text": { "type": "plain_text", "text": "✅ Jenkins Dev Build Successful!" }
+                        },
+                        {
+                            "type": "section",
+                            "fields": [
+                                { "type": "mrkdwn", "text": "*Project:* POS System" },
+                                { "type": "mrkdwn", "text": "*Branch:* ${params.BRANCH}" },
+                                { "type": "mrkdwn", "text": "*Build #:* ${env.BUILD_NUMBER}" },
+                                { "type": "mrkdwn", "text": "*Commit:* ${env.LAST_COMMIT_HASH}" },
+                                { "type": "mrkdwn", "text": "*Author:* ${env.LAST_COMMIT_AUTHOR}" }
+                            ]
+                        },
+                        {
+                            "type": "section",
+                            "text": { "type": "mrkdwn", "text": "*Message:* ${env.LAST_COMMIT_MESSAGE}" }
+                        },
+                        {
+                            "type": "actions",
+                            "elements": [
+                                {
+                                    "type": "button",
+                                    "text": { "type": "plain_text", "text": "View Build" },
+                                    "url": "${env.BUILD_URL}"
+                                }
+                            ]
+                        }
+                    ]
+                }' $SLACK_URL
+                """
+            }
+
+            // ✅ Email notification retained
+            mail (
+                to: 'chetanjogi042@gmail.com',
+                subject: "✅ Jenkins Dev Build Successful - Branch: ${params.BRANCH}",
+                body: """
+Build Successful!
+
+Project: POS System
+Branch: ${params.BRANCH}
+Build: ${env.BUILD_NUMBER}
+Commit: ${env.LAST_COMMIT_HASH}
+Author: ${env.LAST_COMMIT_AUTHOR}
+Message: ${env.LAST_COMMIT_MESSAGE}
+
+Status: SUCCESS
+Deployment: Dev EC2 Instance
+Build URL: ${env.BUILD_URL}
+
+The React frontend and Node backend have been successfully built and deployed to the Dev EC2 instance.
+                """
+            )
+        }
+
+        failure {
+            echo "❌ Build failed!"
+            withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_URL')]) {
+                sh """
+                curl -X POST -H "Content-type: application/json" --data '{
+                    "blocks": [
+                        {
+                            "type": "header",
+                            "text": { "type": "plain_text", "text": "❌ Jenkins Dev Build Failed!" }
+                        },
+                        {
+                            "type": "section",
+                            "fields": [
+                                { "type": "mrkdwn", "text": "*Project:* POS System" },
+                                { "type": "mrkdwn", "text": "*Branch:* ${params.BRANCH}" },
+                                { "type": "mrkdwn", "text": "*Build #:* ${env.BUILD_NUMBER}" },
+                                { "type": "mrkdwn", "text": "*Commit:* ${env.LAST_COMMIT_HASH}" },
+                                { "type": "mrkdwn", "text": "*Author:* ${env.LAST_COMMIT_AUTHOR}" }
+                            ]
+                        },
+                        {
+                            "type": "section",
+                            "text": { "type": "mrkdwn", "text": "*Message:* ${env.LAST_COMMIT_MESSAGE}" }
+                        },
+                        {
+                            "type": "actions",
+                            "elements": [
+                                {
+                                    "type": "button",
+                                    "text": { "type": "plain_text", "text": "View Logs" },
+                                    "url": "${env.BUILD_URL}console"
+                                }
+                            ]
+                        }
+                    ]
+                }' $SLACK_URL
+                """
+            }
+
+            // ✅ Email notification retained
+            mail (
+                to: 'cuteamy104@gmail.com, chetanjogi042@gmail.com',
+                subject: "❌ Jenkins Dev Build Failed - Branch: ${params.BRANCH}",
+                body: """
+Build Failed!
+
+Project: POS System
+Branch: ${params.BRANCH}
+Build: ${env.BUILD_NUMBER}
+Commit: ${env.LAST_COMMIT_HASH}
+Author: ${env.LAST_COMMIT_AUTHOR}
+Message: ${env.LAST_COMMIT_MESSAGE}
+
+Status: FAILED
+Environment: Dev EC2 Instance
+Build URL: ${env.BUILD_URL}
+Console Output: ${env.BUILD_URL}console
+
+Please check the build logs for more details about the failure.
+                """
+            )
+        }
+    }
+
+}

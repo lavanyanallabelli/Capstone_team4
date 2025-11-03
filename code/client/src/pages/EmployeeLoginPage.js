@@ -13,6 +13,9 @@ import {
 
 const EmployeeLoginPage = () => {
     const { login, currentUser, loading, logout } = useAuth();
+    // eslint-disable-next-line no-unused-vars
+    const navigate = null; // Navigation not needed for employee login page
+    console.log('EmployeeLoginPage - navigate:', navigate);
     const [formData, setFormData] = useState({
         email: '',
         password: ''
