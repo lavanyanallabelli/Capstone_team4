@@ -9,91 +9,92 @@ AWS.config.update({
 
 const cognitoIdentityServiceProvider = new AWS.CognitoIdentityServiceProvider();
 
-// Build JWKS URI
-const jwksUri = process.env.JWKS_URI || `https://cognito-idp.${process.env.AWS_REGION || 'us-east-1'}.amazonaws.com/${process.env.AWS_USER_POOL_ID}/.well-known/jwks.json`;
+// JWKS client for token verification with proper error handling
+let client;
 
-console.log('🔧 JWKS Configuration:', {
-    jwksUri: jwksUri,
-    userPoolId: process.env.AWS_USER_POOL_ID,
-    region: process.env.AWS_REGION || 'us-east-1'
-});
+try {
+    const jwksUri = process.env.JWKS_URI || `https://cognito-idp.${process.env.AWS_REGION || 'us-east-1'}.amazonaws.com/${process.env.AWS_USER_POOL_ID}/.well-known/jwks.json`;
+    console.log('🔧 Initializing JWKS client with URI:', jwksUri);
 
-// JWKS client for token verification
-const client = jwksClient({
-    jwksUri: jwksUri,
-    requestHeaders: {
-        'User-Agent': 'POS-System-Backend/1.0'
-    },
-    timeout: 30000, // 30s timeout
-    cache: true,
-    cacheMaxEntries: 5,
-    cacheMaxAge: 600000, // 10 minutes
-    rateLimit: true,
-    jwksRequestsPerMinute: 10,
-    // Handle errors in request
-    getKeysInterceptor: (options) => {
-        console.log('🔑 Fetching JWKS keys from:', options.uri);
-        return options;
+    client = jwksClient({
+        jwksUri: jwksUri,
+        requestHeaders: {}, // Additional headers
+        timeout: 30000, // 30s timeout
+        cache: true,
+        cacheMaxEntries: 5,
+        cacheMaxAge: 600000, // 10 minutes
+        rateLimit: true,
+        jwksRequestsPerMinute: 10 // Limit requests to avoid rate limiting
+    });
+
+    if (!client) {
+        throw new Error('Failed to create JWKS client');
     }
-});
+    console.log('✅ JWKS client initialized successfully');
+} catch (clientError) {
+    console.error('❌ Failed to initialize JWKS client:', clientError);
+    client = null;
+}
 
 // Get signing key for JWT verification
 function getKey(header, callback) {
+    if (!client) {
+        console.error('❌ JWKS client not initialized');
+        return callback(new Error('JWKS client not configured. Please check JWKS_URI in environment variables.'));
+    }
+
     // Extract kid from header
     const kid = header.kid;
-    
+
     if (!kid) {
-        console.error('No KID found in token header');
+        console.error('❌ No KID found in token header');
         return callback(new Error('Token header missing Key ID (kid)'));
     }
 
     console.log('🔑 Looking up signing key for kid:', kid);
-    console.log('🔍 JWKS URI:', client.jwksUri);
-    
-    client.getSigningKey(kid, (err, key) => {
-        if (err) {
-            console.error('❌ Error getting signing key:', err.message);
-            console.error('Error details:', {
-                message: err.message,
-                code: err.code,
-                statusCode: err.statusCode,
-                response: err.response
-            });
-            
-            // If the error is about multiple keys and no KID, try to handle it
-            if (err.message && err.message.includes('No KID specified')) {
-                console.error('⚠️ JWKS endpoint has multiple keys but token has no KID. This might indicate a token format issue.');
+    console.log('🔍 JWKS URI:', client.jwksUri || process.env.JWKS_URI);
+
+    try {
+        client.getSigningKey(kid, (err, key) => {
+            if (err) {
+                console.error('❌ Error getting signing key:', err.message);
+                console.error('Error details:', {
+                    message: err.message,
+                    code: err.code,
+                    statusCode: err.statusCode,
+                    response: err.response
+                });
+
+                // Provide helpful error messages
+                if (err.message && err.message.includes('uri')) {
+                    console.error('⚠️ JWKS URI configuration issue. Check JWKS_URI environment variable.');
+                    return callback(new Error('JWKS configuration error. Please check JWKS_URI in server configuration.'));
+                }
+                if (err.message && err.message.includes('Too many requests')) {
+                    console.error('⚠️ Rate limited by JWKS endpoint. Caching should prevent this.');
+                    return callback(new Error('JWKS endpoint rate limited. Please wait a moment and try again.'));
+                }
+                return callback(err);
             }
-            
-            // If it's a "Bad Request" error, log more details
-            if (err.message && (err.message.includes('Bad Request') || err.statusCode === 400)) {
-                console.error('🚨 JWKS Bad Request Error - Possible causes:');
-                console.error('   1. JWKS URI might be incorrect');
-                console.error('   2. Network/firewall blocking AWS Cognito');
-                console.error('   3. User Pool ID might be wrong');
-                console.error('   4. Region mismatch');
-                console.error('   Current JWKS URI:', client.jwksUri);
-                console.error('   AWS_USER_POOL_ID:', process.env.AWS_USER_POOL_ID);
-                console.error('   AWS_REGION:', process.env.AWS_REGION);
+
+            if (!key) {
+                console.error('❌ No signing key found for kid:', kid);
+                return callback(new Error('No signing key found for token'));
             }
-            
-            return callback(err);
-        }
 
-        if (!key) {
-            console.error('No signing key found for kid:', kid);
-            return callback(new Error('No signing key found'));
-        }
+            const signingKey = key.publicKey || key.rsaPublicKey;
+            if (!signingKey) {
+                console.error('❌ Invalid key format:', Object.keys(key || {}));
+                return callback(new Error('Invalid signing key format'));
+            }
 
-        const signingKey = key.publicKey || key.rsaPublicKey;
-        if (!signingKey) {
-            console.error('Invalid key format:', key);
-            return callback(new Error('Invalid key format'));
-        }
-
-        console.log('✅ Signing key found for kid:', kid);
-        callback(null, signingKey);
-    });
+            console.log('✅ Signing key found for kid:', kid);
+            callback(null, signingKey);
+        });
+    } catch (callError) {
+        console.error('❌ Exception in getSigningKey call:', callError);
+        callback(callError);
+    }
 }
 
 // Verify JWT token from Cognito
@@ -134,9 +135,13 @@ function verifyToken(token) {
 function verifyEmployeeToken(token) {
     return new Promise((resolve, reject) => {
         try {
-            const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret');
+            // Employee tokens use HS256 algorithm, not RS256
+            const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret', {
+                algorithms: ['HS256'] // Specify algorithm explicitly
+            });
             resolve(decoded);
         } catch (error) {
+            console.error('❌ Employee token verification failed:', error.message);
             reject(error);
         }
     });
@@ -158,60 +163,38 @@ const authenticateToken = async (req, res, next) => {
         // First try to verify as Cognito token (for owners)
         let decoded;
         let isEmployeeToken = false;
-        
+
         try {
             decoded = await verifyToken(token);
             // If this succeeds, it's a Cognito token
             console.log('✅ Cognito token verified (Owner)');
         } catch (cognitoError) {
-            console.error('❌ Cognito token verification failed:', {
-                error: cognitoError.message,
-                errorName: cognitoError.name,
-                jwksUri: client.jwksUri
-            });
-            
-            // If JWKS lookup failed, provide more helpful error message
-            if (cognitoError.message && (cognitoError.message.includes('Bad Request') || cognitoError.message.includes('error in secret or public key callback'))) {
-                console.error('⚠️ JWKS endpoint access issue. This might be:');
-                console.error('   - Network/firewall blocking AWS');
-                console.error('   - Incorrect JWKS_URI configuration');
-                console.error('   - User Pool ID mismatch');
-                
-                // Try as employee token, but also suggest checking JWKS config
-                try {
-                    decoded = await verifyEmployeeToken(token);
-                    isEmployeeToken = true;
-                    console.log('✅ Employee JWT token verified (fallback from Cognito failure)');
-                } catch (employeeError) {
-                    console.error('❌ Token verification failed (both Cognito and Employee):', {
-                        cognitoError: cognitoError.message,
-                        employeeError: employeeError.message
-                    });
-                    return res.status(403).json({
-                        error: 'Token verification failed',
-                        message: 'Unable to verify token. Please check JWKS configuration or try logging in again.',
-                        details: process.env.NODE_ENV === 'development' ? {
-                            cognitoError: cognitoError.message,
-                            jwksUri: client.jwksUri
-                        } : undefined
-                    });
+            console.log('⚠️ Cognito verification failed, trying employee token...');
+            console.log('Cognito error:', cognitoError.message);
+
+            // If Cognito verification fails, try as employee JWT token
+            try {
+                decoded = await verifyEmployeeToken(token);
+                isEmployeeToken = true;
+                console.log('✅ Employee JWT token verified');
+            } catch (employeeError) {
+                console.error('❌ Token verification failed (both Cognito and Employee):', {
+                    cognitoError: cognitoError.message,
+                    employeeError: employeeError.message
+                });
+
+                // Provide more helpful error message
+                let errorMessage = 'Token verification failed';
+                if (cognitoError.message && cognitoError.message.includes('JWKS')) {
+                    errorMessage = 'Unable to verify token. Please check JWKS configuration or try logging in again.';
+                } else if (cognitoError.message && cognitoError.message.includes('rate')) {
+                    errorMessage = 'Too many requests. Please wait a moment and try again.';
                 }
-            } else {
-                // If Cognito verification fails for other reasons, try as employee JWT token
-                try {
-                    decoded = await verifyEmployeeToken(token);
-                    isEmployeeToken = true;
-                    console.log('✅ Employee JWT token verified');
-                } catch (employeeError) {
-                    console.error('❌ Token verification failed (both Cognito and Employee):', {
-                        cognitoError: cognitoError.message,
-                        employeeError: employeeError.message
-                    });
-                    return res.status(403).json({
-                        error: 'Invalid token',
-                        message: 'Token verification failed'
-                    });
-                }
+
+                return res.status(403).json({
+                    error: 'Invalid token',
+                    message: errorMessage
+                });
             }
         }
 

@@ -25,37 +25,122 @@ const getOwnerId = (req) => {
 
 const router = express.Router();
 
-// Function to generate sequential employee ID (1002001, 1002002, etc.)
-const generateEmployeeId = async (ownerId) => {
-    try {
-        const prefix = '100200';
+// Function to get or create owner prefix (6-digit random number)
+const getOwnerPrefix = async (ownerId) => {
+    const { Owner } = require('../models');
+    const owner = await Owner.findByPk(ownerId);
 
-        // Find the highest employeeId for this owner that starts with the prefix
+    if (!owner) {
+        throw new Error('Owner not found');
+    }
+
+    // Check if owner has a prefix stored (we'll add a custom field, but for now generate based on owner ID)
+    // Generate a consistent 6-digit prefix based on owner ID hash
+    // This ensures each owner gets their own unique prefix
+    const ownerIdHash = ownerId.split('-').join('');
+    const prefix = parseInt(ownerIdHash.slice(0, 6), 16).toString().padStart(6, '0').slice(0, 6);
+
+    // Ensure it's exactly 6 digits and starts with 1-9 (not 0)
+    let numericPrefix = parseInt(prefix);
+    if (numericPrefix === 0 || numericPrefix.toString().length < 6) {
+        // If hash results in too small number, use a different method
+        numericPrefix = parseInt(ownerIdHash.slice(0, 12), 16) % 900000 + 100000; // Range: 100000-999999
+    }
+
+    return numericPrefix.toString().padStart(6, '0');
+};
+
+// Function to generate sequential employee ID for each owner (e.g., 1234561, 1234562)
+const generateEmployeeId = async (ownerId) => {
+    const prefix = '100200'; // Will be replaced with owner-specific prefix
+    try {
         const { Op } = require('sequelize');
-        const lastEmployee = await Employee.findOne({
+
+        // Get owner-specific prefix (6-digit number)
+        const ownerPrefix = await getOwnerPrefix(ownerId);
+        console.log(`🔑 Owner prefix: ${ownerPrefix} for owner ${ownerId}`);
+
+        // Find all employees for this owner (regardless of prefix, in case prefix changes)
+        const employees = await Employee.findAll({
             where: {
                 ownerId: ownerId,
                 employeeId: {
-                    [Op.like]: `${prefix}%`
+                    [Op.ne]: null
                 }
             },
-            order: [['employeeId', 'DESC']]
+            attributes: ['employeeId']
         });
 
-        let nextNumber = 1;
-        if (lastEmployee && lastEmployee.employeeId) {
-            // Extract the number part (after prefix)
-            const lastNumber = parseInt(lastEmployee.employeeId.replace(prefix, ''), 10);
-            if (!isNaN(lastNumber)) {
-                nextNumber = lastNumber + 1;
-            }
+        console.log(`🔍 Found ${employees.length} employees for owner ${ownerId}`);
+
+        let maxNumber = 0;
+        if (employees.length > 0) {
+            // Extract numbers from all employeeIds that match this owner's prefix
+            employees.forEach(emp => {
+                if (emp.employeeId && emp.employeeId.startsWith(ownerPrefix)) {
+                    const number = parseInt(emp.employeeId.substring(6), 10); // Extract number after 6-digit prefix
+                    if (!isNaN(number) && number > maxNumber) {
+                        maxNumber = number;
+                    }
+                }
+            });
+            console.log(`📊 Max employee number found for owner: ${maxNumber}`);
         }
 
-        return `${prefix}${nextNumber}`;
+        const nextNumber = maxNumber + 1;
+        const newEmployeeId = `${ownerPrefix}${nextNumber}`;
+
+        console.log(`✅ Generated new employee ID: ${newEmployeeId}`);
+
+        // Double-check this ID doesn't already exist (race condition protection)
+        const exists = await Employee.findOne({
+            where: {
+                employeeId: newEmployeeId
+            }
+        });
+
+        if (exists) {
+            console.warn(`⚠️ Employee ID ${newEmployeeId} already exists! Trying next number...`);
+            // Try next number
+            const nextAttempt = `${ownerPrefix}${nextNumber + 1}`;
+            const existsNext = await Employee.findOne({
+                where: {
+                    employeeId: nextAttempt
+                }
+            });
+            if (existsNext) {
+                // Try a few more numbers
+                for (let i = nextNumber + 2; i < nextNumber + 10; i++) {
+                    const testId = `${ownerPrefix}${i}`;
+                    const testExists = await Employee.findOne({
+                        where: { employeeId: testId }
+                    });
+                    if (!testExists) {
+                        return testId;
+                    }
+                }
+                // If all fail, throw error
+                throw new Error(`Multiple employee IDs conflict. Unable to generate unique ID.`);
+            }
+            return nextAttempt;
+        }
+
+        return newEmployeeId;
     } catch (error) {
-        console.error('Error generating employee ID:', error);
-        // Fallback: use timestamp if generation fails
-        return `${prefix}${Date.now().toString().slice(-3)}`;
+        console.error('❌ Error generating employee ID:', error);
+        // Fallback: use owner prefix + timestamp
+        try {
+            const ownerPrefix = await getOwnerPrefix(ownerId);
+            const fallbackId = `${ownerPrefix}${Date.now().toString().slice(-4)}`;
+            console.log(`⚠️ Using fallback employee ID: ${fallbackId}`);
+            return fallbackId;
+        } catch (fallbackError) {
+            // Last resort: use owner ID hash + timestamp
+            const emergencyPrefix = ownerId.slice(0, 6).replace(/-/g, '');
+            const fallbackId = `${emergencyPrefix}${Date.now().toString().slice(-4)}`;
+            console.log(`⚠️ Using emergency fallback employee ID: ${fallbackId}`);
+            return fallbackId;
+        }
     }
 };
 
@@ -100,15 +185,33 @@ const createCognitoUser = async (email, tempPassword, businessId) => {
 
 // Validation schemas
 const employeeSchema = Joi.object({
-    firstName: Joi.string().min(1).max(50).required(),
-    lastName: Joi.string().min(1).max(50).required(),
-    email: Joi.string().email().required(),
-    phone: Joi.string().pattern(/^\+?[\d\s\-\(\)]+$/).optional(),
-    position: Joi.string().max(50).optional(),
-    hireDate: Joi.date().optional(),
-    salary: Joi.number().positive().optional(),
+    firstName: Joi.string().trim().min(1).max(50).required()
+        .messages({
+            'string.empty': 'First name is required',
+            'string.min': 'First name must be at least 1 character',
+            'any.required': 'First name is required'
+        }),
+    lastName: Joi.string().trim().min(1).max(50).required()
+        .messages({
+            'string.empty': 'Last name is required',
+            'string.min': 'Last name must be at least 1 character',
+            'any.required': 'Last name is required'
+        }),
+    email: Joi.string().email().trim().lowercase().required()
+        .messages({
+            'string.email': 'Email must be a valid email address',
+            'string.empty': 'Email is required',
+            'any.required': 'Email is required'
+        }),
+    phone: Joi.string().trim().pattern(/^\+?[\d\s\-\(\)]+$/).allow('', null).optional()
+        .messages({
+            'string.pattern.base': 'Phone number format is invalid'
+        }),
+    position: Joi.string().trim().max(50).allow('', null).optional(),
+    hireDate: Joi.date().optional().allow(null),
+    salary: Joi.number().positive().optional().allow(null),
     isActive: Joi.boolean().default(true),
-    permissions: Joi.array().items(Joi.string()).optional()
+    permissions: Joi.array().items(Joi.string()).optional().default([])
 });
 
 const updateEmployeeSchema = Joi.object({
@@ -239,11 +342,18 @@ router.post('/', async (req, res) => {
         }
 
         // Validate input
-        const { error, value } = employeeSchema.validate(req.body);
+        console.log('📝 POST /api/employees - Request body:', req.body);
+        const { error, value } = employeeSchema.validate(req.body, {
+            abortEarly: false, // Return all validation errors
+            stripUnknown: true // Remove unknown fields
+        });
         if (error) {
+            console.error('❌ Validation error details:', error.details);
+            console.error('❌ Validation error messages:', error.details.map(d => d.message).join(', '));
             return res.status(400).json({
                 success: false,
                 error: 'Validation error',
+                message: error.details.map(d => d.message).join(', '),
                 details: error.details
             });
         }
@@ -263,20 +373,33 @@ router.post('/', async (req, res) => {
         const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
         // Generate sequential employee ID (1002001, 1002002, etc.)
-        const employeeId = await generateEmployeeId(ownerId);
+        let employeeId = await generateEmployeeId(ownerId);
         console.log('📝 Generated employee ID:', employeeId);
 
+        // Check again if this ID exists (race condition protection)
+        const idExists = await Employee.findOne({
+            where: { employeeId: employeeId }
+        });
+        if (idExists) {
+            console.error(`❌ Race condition detected: Employee ID ${employeeId} exists! Regenerating...`);
+            // Regenerate with a new number
+            employeeId = await generateEmployeeId(ownerId);
+            console.log('📝 Regenerated employee ID:', employeeId);
+        }
+
+        // Normalize empty strings to null for optional fields
         const employee = await Employee.create({
             ownerId,
             employeeId, // Add the generated employee ID
-            firstName: value.firstName,
-            lastName: value.lastName,
-            email: value.email,
-            phone: value.phone,
-            position: value.position,
+            firstName: value.firstName.trim(),
+            lastName: value.lastName.trim(),
+            email: value.email.trim().toLowerCase(),
+            phone: value.phone && value.phone.trim() ? value.phone.trim() : null,
+            position: value.position && value.position.trim() ? value.position.trim() : null,
             password: hashedPassword,
             tempPassword,
             isActive: value.isActive !== undefined ? value.isActive : true,
+            permissions: value.permissions || [],
             loginCount: 0
         });
 
