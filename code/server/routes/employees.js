@@ -2,14 +2,8 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const Joi = require('joi');
 const bcrypt = require('bcryptjs');
-const AWS = require('aws-sdk');
 const { Employee, Owner } = require('../models');
 const { sendEmployeeCredentials } = require('../services/emailService');
-
-// Initialize Cognito (keeping for employee authentication)
-const cognito = new AWS.CognitoIdentityServiceProvider({
-    region: process.env.AWS_REGION || 'us-east-1'
-});
 
 // Helper to get ownerId from request
 const getOwnerId = (req) => {
