@@ -1,4 +1,6 @@
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || (typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? 'http://localhost:5000/api'
+    : 'http://3.87.100.22:5000/api');
 
 class ApiService {
     constructor() {
@@ -12,8 +14,8 @@ class ApiService {
             // This is important because owners use Cognito, employees use JWT
             const { Auth } = await import('aws-amplify');
             try {
-            const session = await Auth.currentSession();
-            if (session && session.isValid()) {
+                const session = await Auth.currentSession();
+                if (session && session.isValid()) {
                     // Cognito session exists - this is an owner login
                     const cognitoToken = session.getIdToken().getJwtToken();
                     console.log('✅ Using Cognito token (Owner)');
@@ -25,7 +27,7 @@ class ApiService {
             }
             
             // PRIORITY 2: Only if no Cognito session, check for employee JWT token
-            const employeeToken = localStorage.getItem('token');
+            const employeeToken = localStorage.getItem('employeeToken');
             if (employeeToken) {
                 console.log('✅ Using employee JWT token');
                 return employeeToken;
@@ -34,7 +36,7 @@ class ApiService {
             return null;
         } catch (error) {
             // Fallback: check for employee token
-            const employeeToken = localStorage.getItem('token');
+            const employeeToken = localStorage.getItem('employeeToken');
             if (employeeToken) {
                 console.log('✅ Using employee JWT token (fallback)');
                 return employeeToken;
