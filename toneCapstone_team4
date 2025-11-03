@@ -1,0 +1,13 @@
+* [33mae6caaf[m[33m ([m[1;32mmain[m[33m)[m remove warnings
+[31m|[m * [33m057c2ee[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mprod[m[33m, [m[1;31morigin/prod[m[33m)[m fix create employee issue
+[31m|[m * [33mbd38070[m fix global employee id
+[31m|[m *   [33me0be36f[m fix error
+[31m|[m [33m|[m[34m\[m  
+[31m|[m [33m|[m * [33mf474214[m added chetan email while build failed for more  info
+[31m|[m * [34m|[m [33m67fbf9f[m fix dashboard error
+[31m|[m [34m|[m[34m/[m  
+[31m|[m *   [33m5bb95be[m add testjenkinsfile
+[31m|[m [35m|[m[36m\[m  
+[31m|[m [35m|[m * [33m1f48a54[m Fix formatting and testing the jenkins file for slack notifications
+[31m|[m [35m|[m * [33ma42ec9c[m Clean up formatting in README.md
+[31m|[m [35m|[m * [33m55b53ab[m updated jenkins file for post build notifications
