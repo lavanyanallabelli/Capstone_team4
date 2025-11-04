@@ -7,6 +7,7 @@ import EmployeeManagement from './components/EmployeeManagement';
 import MenuManagement from './components/MenuManagement';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import RestaurantSettings from './components/RestaurantSettings';
+import ScheduleManagement from './components/ScheduleManagement';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import PricingPage from './pages/PricingPage';
@@ -49,6 +50,14 @@ function App() {
                             element={
                                 <ProtectedRoute>
                                     <EmployeeManagement />
+                                </ProtectedRoute>
+                            }
+                        />
+                        <Route
+                            path="/schedules"
+                            element={
+                                <ProtectedRoute>
+                                    <ScheduleManagement />
                                 </ProtectedRoute>
                             }
                         />

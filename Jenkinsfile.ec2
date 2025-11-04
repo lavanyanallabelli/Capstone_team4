@@ -97,7 +97,7 @@ REACT_APP_REDIRECT_SIGN_OUT=${env.REACT_APP_REDIRECT_SIGN_OUT}
                     ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@3.85.243.29 "mkdir -p /home/ec2-user/pos_system/server"
                     scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/server/* $SSH_USER@3.85.243.29:/home/ec2-user/pos_system/server/
                     
-                    echo "Creating .env file with database credentials..."
+                    echo "Creating .env file with database and SMTP credentials..."
                     cat > /tmp/server.env << EOF
 # Server Configuration
 PORT=5000
@@ -122,6 +122,16 @@ JWKS_URI=https://cognito-idp.us-east-1.amazonaws.com/us-east-1_i2eRulYnD/.well-k
 # JWT Configuration
 JWT_SECRET=your_jwt_secret_key_here
 JWT_EXPIRES_IN=24h
+
+# SMTP (Email) Configuration - REQUIRED for schedule emails
+# For Gmail, use an App Password: https://support.google.com/accounts/answer/185833
+# Set these as Jenkins credentials or replace below
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+# Replace with Jenkins credentials or hardcode for testing only
+SMTP_USER=${SMTP_USER}
+SMTP_PASS=${SMTP_PASS}
 EOF
                     scp -i "$SSH_KEY" -o StrictHostKeyChecking=no /tmp/server.env $SSH_USER@3.85.243.29:/home/ec2-user/pos_system/server/.env
                     rm /tmp/server.env

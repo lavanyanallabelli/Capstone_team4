@@ -58,9 +58,40 @@ const createTransporter = () => {
 
 // Send employee login credentials
 const sendEmployeeCredentials = async (employeeEmail, employeeName, tempPassword, businessName, employeeId) => {
-    // Validate SMTP configuration
-    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-        const error = new Error('SMTP configuration missing. Please set SMTP_USER and SMTP_PASS in your .env file');
+    // If SMTP not configured, attempt AWS SES fallback
+    const hasSmtp = !!(process.env.SMTP_USER && process.env.SMTP_PASS);
+    if (!hasSmtp && (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY)) {
+        try {
+            const { sendEmail } = require('./sesEmailService');
+            const fromEmail = process.env.SES_FROM || process.env.SMTP_USER || 'no-reply@example.com';
+            const subject = `Welcome to ${businessName} - Your POS System Login Credentials`;
+            const html = `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+                        <h1 style="color: white; margin: 0; font-size: 24px;">Welcome to ${businessName}!</h1>
+                        <p style="color: #e0e0e0; margin: 10px 0 0 0;">Your POS System Access</p>
+                    </div>
+                    <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                        <h2 style="color: #333; margin-top: 0;">Hello ${employeeName}!</h2>
+                        <p style="color: #666; line-height: 1.6;">Your account has been created. Below are your credentials:</p>
+                        <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #667eea;">
+                            <p><strong>Employee ID:</strong> ${employeeId || 'N/A'}</p>
+                            <p><strong>Email:</strong> ${employeeEmail}</p>
+                            <p><strong>Temporary Password:</strong> ${tempPassword}</p>
+                            <p><strong>Login URL:</strong> ${(process.env.FRONTEND_URL || 'http://localhost:3000') + '/employee-login'}</p>
+                        </div>
+                    </div>
+                </div>`;
+            await sendEmail(employeeEmail, fromEmail, subject, html);
+            return true;
+        } catch (sesErr) {
+            console.error('❌ SES fallback failed for credentials email:', sesErr.message);
+            // Continue to try SMTP below if possible
+        }
+    }
+
+    if (!hasSmtp) {
+        const error = new Error('SMTP configuration missing and SES fallback unavailable. Set SMTP_USER/SMTP_PASS or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY.');
         console.error('❌ Email configuration error:', error.message);
         throw error;
     }
@@ -155,6 +186,200 @@ const sendEmployeeCredentials = async (employeeEmail, employeeName, tempPassword
     }
 };
 
+// Send employee schedule email
+const sendScheduleEmail = async (employeeEmail, employeeName, scheduleData, weekStartDate, businessName, isUpdate = false, notes = null) => {
+    const hasSmtp = !!(process.env.SMTP_USER && process.env.SMTP_PASS);
+    // If SMTP not configured, attempt AWS SES fallback
+    if (!hasSmtp && (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY)) {
+        try {
+            const { sendEmail } = require('./sesEmailService');
+            // Build the same HTML as below by briefly constructing table
+            const days = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
+            const dayNames = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+            const weekStart = new Date(weekStartDate);
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekEnd.getDate() + 6);
+            const fmt = (d) => d.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
+            let rows = '';
+            days.forEach((day, i) => {
+                const entry = scheduleData[day];
+                const dd = new Date(weekStart);
+                dd.setDate(dd.getDate() + i);
+                const dynName = dd.toLocaleDateString('en-US', { weekday: 'long' });
+                if (entry && entry.isWorking && entry.start && entry.end) {
+                    rows += `<tr><td>${dynName}</td><td>${fmt(dd)}</td><td><strong>${entry.start} - ${entry.end}</strong></td></tr>`;
+                } else {
+                    rows += `<tr><td>${dynName}</td><td>${fmt(dd)}</td><td><em>Day Off</em></td></tr>`;
+                }
+            });
+            const subject = isUpdate ? `${businessName} - Your Updated Work Schedule` : `${businessName} - Your Work Schedule`;
+            const html = `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+                        <h1 style="color: white; margin: 0; font-size: 24px;">${businessName}</h1>
+                        <p style="color: #e0e0e0; margin: 10px 0 0 0;">${isUpdate ? 'Updated Work Schedule' : 'Your Work Schedule'}</p>
+                    </div>
+                    <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                        <h2 style="color: #333; margin-top: 0;">Hello ${employeeName}!</h2>
+                        <p style="color: #666; line-height: 1.6;">Your work schedule for <strong>${fmt(weekStart)} - ${fmt(weekEnd)}</strong>:</p>
+                        <table style="width:100%; border-collapse: collapse;">
+                            <thead><tr><th align="left">Day</th><th align="left">Date</th><th align="left">Shift</th></tr></thead>
+                            <tbody>${rows}</tbody>
+                        </table>
+                        ${notes ? `<p style="margin-top:10px;"><strong>Notes:</strong> ${notes}</p>` : ''}
+                    </div>
+                </div>`;
+            const fromEmail = process.env.SES_FROM || process.env.SMTP_USER || 'no-reply@example.com';
+            await sendEmail(employeeEmail, fromEmail, subject, html);
+            return true;
+        } catch (sesErr) {
+            console.error('❌ SES fallback failed for schedule email:', sesErr.message);
+            // Continue to try SMTP below if possible
+        }
+    }
+
+    if (!hasSmtp) {
+        const error = new Error('SMTP configuration missing and SES fallback unavailable. Set SMTP_USER/SMTP_PASS or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY.');
+        console.error('❌ Email configuration error:', error.message);
+        throw error;
+    }
+
+    try {
+        const transporter = createTransporter();
+
+        // Verify connection before sending
+        await transporter.verify();
+        console.log('✅ SMTP server connection verified');
+
+        // Format week dates
+        const weekStart = new Date(weekStartDate);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+
+        const formatDate = (date) => {
+            return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+        };
+
+        // Format schedule table based on selected start date
+        const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+        let scheduleTable = '';
+
+        days.forEach((day, index) => {
+            const daySchedule = scheduleData[day];
+            const dayDate = new Date(weekStart);
+            dayDate.setDate(dayDate.getDate() + index);
+            const dynamicDayName = dayDate.toLocaleDateString('en-US', { weekday: 'long' });
+
+            if (daySchedule && daySchedule.isWorking && daySchedule.start && daySchedule.end) {
+                scheduleTable += `
+                    <tr style="background: #e8f5e9; border-bottom: 1px solid #c8e6c9;">
+                        <td style="padding: 12px; font-weight: bold; color: #2e7d32;">${dynamicDayName}</td>
+                        <td style="padding: 12px; color: #1b5e20;">${formatDate(dayDate)}</td>
+                        <td style="padding: 12px; color: #1b5e20;">
+                            <strong>${daySchedule.start} - ${daySchedule.end}</strong>
+                        </td>
+                    </tr>
+                `;
+            } else {
+                scheduleTable += `
+                    <tr style="background: #fafafa; border-bottom: 1px solid #e0e0e0;">
+                        <td style="padding: 12px; color: #757575;">${dynamicDayName}</td>
+                        <td style="padding: 12px; color: #9e9e9e;">${formatDate(dayDate)}</td>
+                        <td style="padding: 12px; color: #9e9e9e; font-style: italic;">Day Off</td>
+                    </tr>
+                `;
+            }
+        });
+
+        const subject = isUpdate
+            ? `${businessName} - Your Updated Work Schedule`
+            : `${businessName} - Your Work Schedule`;
+
+        const mailOptions = {
+            from: process.env.SMTP_USER,
+            to: employeeEmail,
+            subject: subject,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+                        <h1 style="color: white; margin: 0; font-size: 24px;">${businessName}</h1>
+                        <p style="color: #e0e0e0; margin: 10px 0 0 0;">${isUpdate ? 'Updated Work Schedule' : 'Your Work Schedule'}</p>
+                    </div>
+                    
+                    <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                        <h2 style="color: #333; margin-top: 0;">Hello ${employeeName}!</h2>
+                        
+                        <p style="color: #666; line-height: 1.6;">
+                            ${isUpdate
+                                ? `Your work schedule for the week of <strong>${formatDate(weekStart)} - ${formatDate(weekEnd)}</strong> has been updated. Please review your new schedule below.`
+                                : `Your work schedule for the week of <strong>${formatDate(weekStart)} - ${formatDate(weekEnd)}</strong> has been set. Please review your schedule below.`
+                            }
+                        </p>
+                        
+                        <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #667eea;">
+                            <h3 style="color: #333; margin-top: 0; margin-bottom: 15px;">Your Weekly Schedule</h3>
+                            <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                                <thead>
+                                    <tr style="background: #667eea; color: white;">
+                                        <th style="padding: 12px; text-align: left;">Day</th>
+                                        <th style="padding: 12px; text-align: left;">Date</th>
+                                        <th style="padding: 12px; text-align: left;">Shift</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${scheduleTable}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        ${notes ? `
+                            <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2196f3;">
+                                <h4 style="color: #1565c0; margin-top: 0;">Additional Notes:</h4>
+                                <p style="color: #1565c0; margin: 0; white-space: pre-wrap;">${notes}</p>
+                            </div>
+                        ` : ''}
+                        
+                        <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ffc107;">
+                            <h4 style="color: #856404; margin-top: 0;">Important Reminders:</h4>
+                            <ul style="color: #856404; margin: 0; padding-left: 20px;">
+                                <li>Please arrive on time for your scheduled shifts</li>
+                                <li>Contact your manager if you need to make any changes</li>
+                                <li>If you have any questions, please reach out to management</li>
+                            </ul>
+                        </div>
+                        
+                        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+                        
+                        <p style="color: #999; font-size: 12px; text-align: center; margin: 0;">
+                            This is an automated message from ${businessName} POS System.<br>
+                            Please do not reply to this email. Contact your manager directly for any questions.
+                        </p>
+                    </div>
+                </div>
+            `
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        console.log('✅ Schedule email sent successfully!');
+        console.log('   📧 To:', employeeEmail);
+        console.log('   📨 Message ID:', info.messageId);
+        return true;
+    } catch (error) {
+        console.error('❌ Error sending schedule email:');
+        console.error('   📧 To:', employeeEmail);
+        console.error('   🔴 Error:', error.message);
+        if (error.code) {
+            console.error('   🔴 Error Code:', error.code);
+        }
+        if (error.response) {
+            console.error('   🔴 SMTP Response:', error.response);
+        }
+        // Re-throw the error so calling code can handle it
+        throw error;
+    }
+};
+
 module.exports = {
-    sendEmployeeCredentials
+    sendEmployeeCredentials,
+    sendScheduleEmail
 };
