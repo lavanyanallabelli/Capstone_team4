@@ -16,6 +16,7 @@ const analyticsRoutes = require('./routes/analytics-simple');
 const settingsRoutes = require('./routes/settings');
 const orderRoutes = require('./routes/orders');
 const ownerRoutes = require('./routes/owner');
+const scheduleRoutes = require('./routes/schedules');
 
 // Import middleware
 const { authenticateToken } = require('./middleware/auth');
@@ -67,6 +68,7 @@ app.use('/api/analytics', authenticateToken, syncCognitoUserToOwner, analyticsRo
 app.use('/api/settings', authenticateToken, syncCognitoUserToOwner, settingsRoutes);
 app.use('/api/orders', authenticateToken, syncCognitoUserToOwner, orderRoutes);
 app.use('/api/owner', authenticateToken, syncCognitoUserToOwner, ownerRoutes);
+app.use('/api/schedules', authenticateToken, syncCognitoUserToOwner, scheduleRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

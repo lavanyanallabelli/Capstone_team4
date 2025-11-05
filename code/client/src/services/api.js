@@ -406,6 +406,33 @@ class ApiService {
     async deleteEmployee(employeeId) {
         return this.delete(`/employees/${employeeId}`);
     }
+
+    // Schedule methods
+    async getSchedules(params = {}) {
+        const queryString = new URLSearchParams(params).toString();
+        const endpoint = queryString ? `/schedules?${queryString}` : '/schedules';
+        return this.get(endpoint);
+    }
+
+    async getSchedule(scheduleId) {
+        return this.get(`/schedules/${scheduleId}`);
+    }
+
+    async createSchedule(scheduleData) {
+        return this.post('/schedules', scheduleData);
+    }
+
+    async updateSchedule(scheduleId, scheduleData) {
+        return this.put(`/schedules/${scheduleId}`, scheduleData);
+    }
+
+    async deleteSchedule(scheduleId) {
+        return this.delete(`/schedules/${scheduleId}`);
+    }
+
+    async sendScheduleEmail(scheduleId) {
+        return this.post(`/schedules/${scheduleId}/send-email`);
+    }
 }
 
 // Create and export a singleton instance
