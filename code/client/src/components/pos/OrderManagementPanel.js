@@ -5,7 +5,6 @@ import {
     Split,
     Tag,
     DollarSign,
-    Percent,
     X,
     Check,
     Trash2,
@@ -22,7 +21,6 @@ const OrderManagementPanel = ({
     onCancelOrder,
     onRefreshOrder
 }) => {
-    const [showModify, setShowModify] = useState(false);
     const [showDiscount, setShowDiscount] = useState(false);
     const [showTip, setShowTip] = useState(false);
     const [discountType, setDiscountType] = useState('percentage'); // 'percentage' or 'fixed'
@@ -55,7 +53,6 @@ const OrderManagementPanel = ({
             label: 'Modify Order',
             icon: Edit,
             action: () => {
-                setShowModify(true);
                 onModifyOrder();
             },
             color: 'bg-blue-500 hover:bg-blue-600'

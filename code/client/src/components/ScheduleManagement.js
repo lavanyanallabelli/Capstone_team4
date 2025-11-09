@@ -4,15 +4,10 @@ import { useAuth } from "../contexts/AuthContext";
 import { USER_ROLES } from "../aws/userRoles";
 import {
   Clock,
-  Calendar,
   Mail,
   Save,
-  X,
   ArrowLeft,
   Trash2,
-  Edit2,
-  Check,
-  Plus,
 } from "lucide-react";
 import apiService from "../services/api";
 import { useNavigate } from "react-router-dom";
@@ -103,6 +98,7 @@ const ScheduleManagement = () => {
     if (selectedEmployee && selectedWeek) {
       loadScheduleForWeek();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedWeek]);
 
   const loadData = async () => {
@@ -289,9 +285,8 @@ const ScheduleManagement = () => {
           setSchedules(schedulesResponse.data || []);
         }
 
-        const baseMsg = `Schedule ${
-          editingScheduleId ? "updated" : "created"
-        } successfully!`;
+        const baseMsg = `Schedule ${editingScheduleId ? "updated" : "created"
+          } successfully!`;
         if (sendEmail) {
           if (response.emailSent) {
             alert(baseMsg + " Email sent to employee.");
@@ -523,11 +518,10 @@ const ScheduleManagement = () => {
                   {days.map((day, index) => (
                     <div
                       key={day}
-                      className={`p-4 rounded-lg border-2 ${
-                        scheduleData[day]?.isWorking
+                      className={`p-4 rounded-lg border-2 ${scheduleData[day]?.isWorking
                           ? "bg-green-50 border-green-200"
                           : "bg-gray-50 border-gray-200"
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center justify-between mb-3">
                         <label className="flex items-center space-x-3 cursor-pointer">
@@ -626,8 +620,8 @@ const ScheduleManagement = () => {
                       {saving
                         ? "Saving..."
                         : editingScheduleId
-                        ? "Update Schedule"
-                        : "Save Schedule"}
+                          ? "Update Schedule"
+                          : "Save Schedule"}
                     </span>
                   </button>
                 </div>
@@ -673,11 +667,10 @@ const ScheduleManagement = () => {
                         <button
                           onClick={() => handleSendEmail(schedule.id)}
                           disabled={saving}
-                          className={`flex-1 flex items-center justify-center space-x-1 px-3 py-2 rounded-lg transition-colors text-sm ${
-                            saving
+                          className={`flex-1 flex items-center justify-center space-x-1 px-3 py-2 rounded-lg transition-colors text-sm ${saving
                               ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                               : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
-                          }`}
+                            }`}
                         >
                           {saving ? (
                             <>
