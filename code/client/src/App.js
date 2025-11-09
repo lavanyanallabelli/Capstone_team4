@@ -5,6 +5,7 @@ import Homepage from './components/Homepage';
 import Dashboard from './components/Dashboard';
 import EmployeeManagement from './components/EmployeeManagement';
 import MenuManagement from './components/MenuManagement';
+import MenuItemAvailabilitySchedule from './components/MenuItemAvailabilitySchedule';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import RestaurantSettings from './components/RestaurantSettings';
 import ScheduleManagement from './components/ScheduleManagement';
@@ -15,6 +16,7 @@ import AboutPage from './pages/AboutPage';
 import ContactPage from './pages/ContactPage';
 import POSPage from './pages/POSPage';
 import EmployeeLoginPage from './pages/EmployeeLoginPage';
+import TrialExpiredPage from './pages/TrialExpiredPage';
 import EmailVerification from './components/auth/EmailVerification';
 import ResetPasswordConfirm from './components/auth/ResetPasswordConfirm';
 import ResetPasswordPage from './pages/ResetPasswordPage';
@@ -29,6 +31,7 @@ function App() {
                     <Routes>
                         <Route path="/" element={<Homepage />} />
                         <Route path="/pricing" element={<PricingPage />} />
+                        <Route path="/trial-expired" element={<TrialExpiredPage />} />
                         <Route path="/about" element={<AboutPage />} />
                         <Route path="/contact" element={<ContactPage />} />
                         <Route path="/login" element={<LoginPage />} />
@@ -87,6 +90,14 @@ function App() {
                             element={
                                 <ProtectedRoute>
                                     <MenuManagement />
+                                </ProtectedRoute>
+                            }
+                        />
+                        <Route
+                            path="/menu/availability"
+                            element={
+                                <ProtectedRoute>
+                                    <MenuItemAvailabilitySchedule />
                                 </ProtectedRoute>
                             }
                         />

@@ -376,6 +376,99 @@ router.patch('/:itemId/availability', async (req, res) => {
     }
 });
 
+// Get or update menu item availability schedule
+router.get('/:itemId/availability-schedule', async (req, res) => {
+    try {
+        const ownerId = getOwnerId(req);
+        const { itemId } = req.params;
+
+        if (!ownerId) {
+            return res.status(401).json({
+                success: false,
+                error: 'Unauthorized',
+                message: 'Owner ID is required'
+            });
+        }
+
+        const menuItem = await MenuItem.findOne({
+            where: {
+                id: itemId,
+                ownerId: ownerId
+            }
+        });
+
+        if (!menuItem) {
+            return res.status(404).json({
+                success: false,
+                error: 'Menu item not found'
+            });
+        }
+
+        res.json({
+            success: true,
+            data: {
+                itemId: menuItem.id,
+                name: menuItem.name,
+                availabilitySchedule: menuItem.availabilitySchedule || null
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching availability schedule:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch availability schedule',
+            message: error.message
+        });
+    }
+});
+
+// Update menu item availability schedule
+router.patch('/:itemId/availability-schedule', async (req, res) => {
+    try {
+        const ownerId = getOwnerId(req);
+        const { itemId } = req.params;
+        const { availabilitySchedule } = req.body;
+
+        if (!ownerId) {
+            return res.status(401).json({
+                success: false,
+                error: 'Unauthorized',
+                message: 'Owner ID is required'
+            });
+        }
+
+        const menuItem = await MenuItem.findOne({
+            where: {
+                id: itemId,
+                ownerId: ownerId
+            }
+        });
+
+        if (!menuItem) {
+            return res.status(404).json({
+                success: false,
+                error: 'Menu item not found'
+            });
+        }
+
+        menuItem.availabilitySchedule = availabilitySchedule;
+        await menuItem.save();
+
+        res.json({
+            success: true,
+            data: menuItem,
+            message: 'Availability schedule updated successfully'
+        });
+    } catch (error) {
+        console.error('Error updating availability schedule:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to update availability schedule',
+            message: error.message
+        });
+    }
+});
+
 // Get menu categories
 router.get('/categories/list', async (req, res) => {
     try {

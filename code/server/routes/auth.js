@@ -19,7 +19,13 @@ const registerSchema = Joi.object({
     email: Joi.string().email().required(),
     password: Joi.string().min(6).required(),
     businessName: Joi.string().min(1).max(100).required(),
-    businessType: Joi.string().valid('Restaurant', 'Cafe', 'Fast Food', 'Fine Dining', 'Bar').required(),
+    businessType: Joi.string().valid(
+        // Frontend form values (lowercase with spaces or short forms)
+        'italian restaurant', 'chinese restaurant', 'indian restaurant', 'mexican restaurant', 'cafe',
+        'italian', 'chinese', 'indian', 'mexican',
+        // Backend enum values
+        'Italian Restaurant', 'Chinese Restaurant', 'Indian Restaurant', 'Mexican Restaurant', 'Cafe'
+    ).required(),
     phone: Joi.string().pattern(/^\+?[\d\s\-\(\)]+$/).required()
 });
 
@@ -41,7 +47,29 @@ router.post('/register', async (req, res) => {
             });
         }
 
-        const { firstName, lastName, email, password, businessName, businessType, phone } = value;
+        const { firstName, lastName, email, password, businessName, businessType: rawBusinessType, phone } = value;
+
+        // Map frontend business type values to backend enum values
+        // Both CTA and SignupForm send: "italian restaurant", "chinese restaurant", "indian restaurant", "mexican restaurant", "cafe"
+        const businessTypeMap = {
+            // Full form values (lowercase with spaces)
+            'italian restaurant': 'Italian Restaurant',
+            'chinese restaurant': 'Chinese Restaurant',
+            'indian restaurant': 'Indian Restaurant',
+            'mexican restaurant': 'Mexican Restaurant',
+            'cafe': 'Cafe',
+            // Short forms (for flexibility)
+            'italian': 'Italian Restaurant',
+            'chinese': 'Chinese Restaurant',
+            'indian': 'Indian Restaurant',
+            'mexican': 'Mexican Restaurant'
+        };
+
+        // Normalize business type - only allow the 5 valid enum values
+        const normalizedType = businessTypeMap[rawBusinessType?.toLowerCase()];
+        const validTypes = ['Italian Restaurant', 'Chinese Restaurant', 'Indian Restaurant', 'Mexican Restaurant', 'Cafe'];
+        const businessType = normalizedType ||
+            (validTypes.includes(rawBusinessType) ? rawBusinessType : 'Italian Restaurant');
 
         // Check if user already exists
         const existingUser = await Owner.findOne({ where: { email } });
@@ -56,7 +84,11 @@ router.post('/register', async (req, res) => {
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Create user
+        // Calculate trial end date (30 days from now)
+        const trialEndDate = new Date();
+        trialEndDate.setDate(trialEndDate.getDate() + 30);
+
+        // Create user with 30-day free trial
         const user = await Owner.create({
             name: `${firstName} ${lastName}`,
             email,
@@ -65,7 +97,10 @@ router.post('/register', async (req, res) => {
             businessName,
             businessType,
             isActive: true,
-            loginCount: 0
+            loginCount: 0,
+            subscriptionPlan: 'Free Trial',
+            subscriptionStatus: 'trial',
+            trialEndDate: trialEndDate
         });
 
         // Generate JWT token
@@ -267,15 +302,58 @@ router.post('/employee-login', async (req, res) => {
         // Get owner/business info
         const owner = await Owner.findByPk(employee.ownerId);
 
-        // Generate JWT token
+        // Include permissions in response
+        const permissions = employee.permissions || [];
+
+        // Determine user role: check database first, then permissions
+        let userRole = employee.role || 'employee';
+
+        // If role is not set in database, determine from permissions
+        if (!employee.role) {
+            const hasManagerPermissions = permissions.includes('canCreateEmployee') &&
+                permissions.includes('canManageSchedules') &&
+                permissions.includes('canManageMenuItems') &&
+                permissions.includes('canViewSalesAnalytics');
+
+            if (hasManagerPermissions) {
+                userRole = 'manager';
+                console.log('👔 Manager role detected based on permissions');
+            }
+
+            // Save role to database
+            employee.role = userRole;
+            await employee.save();
+            console.log('💾 Saved employee role to database:', userRole);
+        } else {
+            // Role exists in database, but verify it matches permissions
+            const hasManagerPermissions = permissions.includes('canCreateEmployee') &&
+                permissions.includes('canManageSchedules') &&
+                permissions.includes('canManageMenuItems') &&
+                permissions.includes('canViewSalesAnalytics');
+
+            // If database says manager but permissions don't match, update it
+            if (employee.role === 'manager' && !hasManagerPermissions) {
+                userRole = 'employee';
+                employee.role = 'employee';
+                await employee.save();
+                console.log('⚠️ Updated employee role from manager to employee (permissions mismatch)');
+            } else if (employee.role === 'employee' && hasManagerPermissions) {
+                userRole = 'manager';
+                employee.role = 'manager';
+                await employee.save();
+                console.log('👔 Updated employee role from employee to manager (permissions match)');
+            }
+        }
+
+        // Generate JWT token with correct role
         const token = jwt.sign(
             {
                 sub: employee.id,
                 email: employee.email,
-                'custom:userRole': 'employee',
+                'custom:userRole': userRole, // Use determined role, not hardcoded 'employee'
                 'custom:businessId': employee.ownerId,
                 'custom:businessName': owner?.businessName || 'Restaurant',
-                'custom:businessType': owner?.businessType || 'Restaurant',
+                'custom:businessType': owner?.businessType || 'Italian Restaurant',
                 'custom:phone': employee.phone
             },
             process.env.JWT_SECRET || 'fallback-secret',
@@ -289,13 +367,19 @@ router.post('/employee-login', async (req, res) => {
 
         // Add owner info to employee data for frontend
         safeEmployee.businessName = owner?.businessName || 'Restaurant';
-        safeEmployee.businessType = owner?.businessType || 'Restaurant';
+        safeEmployee.businessType = owner?.businessType || 'Italian Restaurant';
         safeEmployee.ownerId = employee.ownerId;
+
+        // Set user role in response
+        safeEmployee.userRole = userRole;
+        safeEmployee.permissions = permissions;
 
         console.log('✅ Employee login successful:', {
             employeeId: employee.employeeId,
             email: employee.email,
-            businessName: owner?.businessName
+            businessName: owner?.businessName,
+            userRole: userRole,
+            permissions: permissions.length
         });
 
         res.json({

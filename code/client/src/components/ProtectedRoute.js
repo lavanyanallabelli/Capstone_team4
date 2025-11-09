@@ -1,13 +1,50 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { motion } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
+import apiService from '../services/api';
+import { USER_ROLES } from '../aws/userRoles';
 
 const ProtectedRoute = ({ children }) => {
     const { currentUser, loading } = useAuth();
+    const [subscriptionCheck, setSubscriptionCheck] = useState({ loading: true, expired: false });
 
-    if (loading) {
+    useEffect(() => {
+        const checkSubscription = async () => {
+            // Only check for owners (not employees)
+            if (!currentUser || currentUser.userRole !== USER_ROLES.OWNER) {
+                setSubscriptionCheck({ loading: false, expired: false });
+                return;
+            }
+
+            try {
+                const response = await apiService.getSubscriptionStatus();
+                if (response.success && response.data) {
+                    const isExpired = response.data.isTrialExpired && !response.data.isActive;
+                    setSubscriptionCheck({ loading: false, expired: isExpired });
+                } else {
+                    setSubscriptionCheck({ loading: false, expired: false });
+                }
+            } catch (error) {
+                console.error('Error checking subscription:', error);
+                // On error, check if it's a subscription expired error
+                if (error.response?.status === 403 && error.response?.data?.redirectTo) {
+                    setSubscriptionCheck({ loading: false, expired: true });
+                } else {
+                    setSubscriptionCheck({ loading: false, expired: false });
+                }
+            }
+        };
+
+        if (!loading && currentUser) {
+            checkSubscription();
+        } else if (!loading && !currentUser) {
+            setSubscriptionCheck({ loading: false, expired: false });
+        }
+    }, [currentUser, loading]);
+
+    if (loading || subscriptionCheck.loading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50">
                 <motion.div
@@ -28,7 +65,16 @@ const ProtectedRoute = ({ children }) => {
         );
     }
 
-    return currentUser ? children : <Navigate to="/" replace />;
+    if (!currentUser) {
+        return <Navigate to="/" replace />;
+    }
+
+    // Redirect to trial expired page if subscription expired
+    if (subscriptionCheck.expired) {
+        return <Navigate to="/trial-expired" replace />;
+    }
+
+    return children;
 };
 
 export default ProtectedRoute;

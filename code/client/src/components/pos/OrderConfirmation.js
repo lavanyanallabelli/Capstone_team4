@@ -1,11 +1,15 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle, X, Receipt, CreditCard } from 'lucide-react';
+import { CheckCircle, X, Receipt, CreditCard, Printer } from 'lucide-react';
 
-const OrderConfirmation = ({ order, payment, onClose }) => {
+const OrderConfirmation = ({ order, payment, onClose, onPrint }) => {
     const paymentMethods = {
         cash: 'Cash',
         card: 'Card',
+        upi: 'UPI / QR',
+        paytm: 'Paytm',
+        phonepe: 'PhonePe',
+        other_wallet: 'Other Wallet',
         online: 'Online',
         digital_wallet: 'Digital Wallet'
     };
@@ -86,13 +90,24 @@ const OrderConfirmation = ({ order, payment, onClose }) => {
                         </div>
                     </div>
 
-                    {/* Close Button */}
-                    <button
-                        onClick={onClose}
-                        className="w-full mt-6 bg-blue-500 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-600 transition-colors"
-                    >
-                        Continue
-                    </button>
+                    {/* Action Buttons */}
+                    <div className="flex space-x-3 mt-6">
+                        {onPrint && (
+                            <button
+                                onClick={onPrint}
+                                className="flex-1 bg-gray-500 text-white py-3 px-4 rounded-lg font-medium hover:bg-gray-600 transition-colors flex items-center justify-center"
+                            >
+                                <Printer className="w-4 h-4 mr-2" />
+                                Print Bill
+                            </button>
+                        )}
+                        <button
+                            onClick={onClose}
+                            className="flex-1 bg-blue-500 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-600 transition-colors"
+                        >
+                            Continue
+                        </button>
+                    </div>
                 </div>
             </motion.div>
         </div>

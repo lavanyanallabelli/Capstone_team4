@@ -48,6 +48,12 @@ const MenuItem = sequelize.define('MenuItem', {
         type: DataTypes.BOOLEAN,
         defaultValue: true
     },
+    availabilitySchedule: {
+        type: DataTypes.JSONB,
+        allowNull: true,
+        defaultValue: null,
+        comment: 'Time-based availability schedule: { "weekdays": { "breakfast": { "start": "07:00", "end": "11:00" }, ... }, "weekends": { ... } }'
+    },
     image: {
         type: DataTypes.STRING(500),
         allowNull: true

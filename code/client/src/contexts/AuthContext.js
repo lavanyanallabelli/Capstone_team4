@@ -148,14 +148,43 @@ export const AuthProvider = ({ children }) => {
 
                 if (token && storedUser) {
                     try {
+                        // Check if token is expired
+                        const payload = JSON.parse(atob(token.split('.')[1]));
+                        const expiry = payload.exp * 1000; // Convert to milliseconds
+                        const now = Date.now();
+
+                        if (now >= expiry) {
+                            console.warn('⚠️ Stored employee token expired, clearing');
+                            localStorage.removeItem('employeeToken');
+                            localStorage.removeItem('employeeUser');
+                            setCurrentUser(null);
+                            return;
+                        }
+
                         const employeeData = JSON.parse(storedUser);
+
+                        // Determine user role based on permissions
+                        // If employee has manager permissions (canCreateEmployee, canManageSchedules, etc.), set role to 'manager'
+                        let userRole = 'employee';
+                        const permissions = employeeData.permissions || [];
+                        const hasManagerPermissions = permissions.includes('canCreateEmployee') &&
+                            permissions.includes('canManageSchedules') &&
+                            permissions.includes('canManageMenuItems') &&
+                            permissions.includes('canViewSalesAnalytics');
+
+                        if (hasManagerPermissions) {
+                            userRole = 'manager';
+                            console.log('👔 Manager role detected based on permissions');
+                        }
+
                         const employeeUser = {
                             email: employeeData.email,
                             sub: employeeData.id,
-                            userRole: 'employee',
+                            userRole: userRole,
                             businessId: employeeData.ownerId,
                             businessName: employeeData.businessName || 'Restaurant',
                             ownerId: employeeData.ownerId,
+                            permissions: permissions,
                             ...employeeData
                         };
                         console.log('✅ Employee session found:', employeeUser);

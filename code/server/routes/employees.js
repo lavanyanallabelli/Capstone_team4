@@ -352,19 +352,24 @@ router.post('/', async (req, res) => {
             });
         }
 
-        // Check if employee with email already exists
+        // Check if employee with email already exists (case-insensitive)
+        const normalizedEmail = value.email.trim().toLowerCase();
         const existingEmployee = await Employee.findOne({
-            where: { email: value.email }
+            where: {
+                email: normalizedEmail
+            }
         });
         if (existingEmployee) {
+            console.error('❌ Duplicate email detected:', normalizedEmail);
             return res.status(409).json({
                 success: false,
-                error: 'Employee with this email already exists'
+                error: 'Employee with this email already exists',
+                message: `An employee with the email "${normalizedEmail}" already exists. Please use a different email address.`
             });
         }
 
-        const tempPassword = Math.random().toString(36).slice(-8);
-        const hashedPassword = await bcrypt.hash(tempPassword, 10);
+        // No password required - employees login with employee ID only
+        const hashedPassword = null;
 
         // Generate sequential employee ID (1002001, 1002002, etc.)
         let employeeId = await generateEmployeeId(ownerId);
@@ -381,7 +386,41 @@ router.post('/', async (req, res) => {
             console.log('📝 Regenerated employee ID:', employeeId);
         }
 
+        // Define manager permissions based on position
+        let employeePermissions = value.permissions || [];
+        if (value.position && value.position.trim().toLowerCase() === 'manager') {
+            // Assign manager permissions: Add staff, Schedule management, Manage menu, View analytics
+            employeePermissions = [
+                'canCreateEmployee',      // Add staff
+                'canEditEmployee',
+                'canDeactivateEmployee',
+                'canViewEmployeeActivity',
+                'canManageMenuItems',     // Manage menu
+                'canManageMenuCategories',
+                'canToggleItemAvailability',
+                'canManageSchedules',     // Schedule management
+                'canViewSalesAnalytics',  // View analytics
+                'canViewEmployeePerformance',
+                'canViewRevenueBreakdown',
+                'canViewAllOrders',
+                'canUpdateOrders',
+                'canCancelOrders',
+                'canProcessPayments',
+                'canViewAllTransactions',
+                'canHandleRefunds',
+                'canApplyDiscounts',
+                'canViewMenuItems',
+                'canNotifyItemUnavailable',
+                'canUpdatePersonalDetails'
+                // Note: CAN_MANAGE_RESTAURANT_DETAILS is intentionally excluded
+            ];
+            console.log('👔 Manager permissions assigned:', employeePermissions);
+        }
+
         // Normalize empty strings to null for optional fields
+        // Set hireDate to current date if not provided
+        const hireDate = value.hireDate ? new Date(value.hireDate) : new Date();
+
         const employee = await Employee.create({
             ownerId,
             employeeId, // Add the generated employee ID
@@ -390,20 +429,13 @@ router.post('/', async (req, res) => {
             email: value.email.trim().toLowerCase(),
             phone: value.phone && value.phone.trim() ? value.phone.trim() : null,
             position: value.position && value.position.trim() ? value.position.trim() : null,
+            hireDate: hireDate,
             password: hashedPassword,
-            tempPassword,
+            tempPassword: null,
             isActive: value.isActive !== undefined ? value.isActive : true,
-            permissions: value.permissions || [],
+            permissions: employeePermissions,
             loginCount: 0
         });
-
-        // Create Cognito user (optional)
-        try {
-            await createCognitoUser(value.email, tempPassword, ownerId);
-            console.log('✅ Cognito user created successfully');
-        } catch (cognitoError) {
-            console.error('❌ Cognito user creation failed:', cognitoError);
-        }
 
         // Email sending removed - owner will send emails manually via the email modal
 
@@ -418,7 +450,6 @@ router.post('/', async (req, res) => {
             loginCredentials: {
                 employeeId: employeeId,
                 email: value.email,
-                tempPassword: tempPassword,
                 loginUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/employee-login`
             }
         });

@@ -21,7 +21,7 @@ const updateOwnerSchema = Joi.object({
     email: Joi.string().email().optional(),
     phone: Joi.string().pattern(/^\+?[\d\s\-\(\)]+$/).optional(),
     businessName: Joi.string().min(1).max(100).optional(),
-    businessType: Joi.string().valid('Restaurant', 'Cafe', 'Fast Food', 'Fine Dining', 'Bar').optional()
+    businessType: Joi.string().valid('Italian Restaurant', 'Chinese Restaurant', 'Indian Restaurant', 'Mexican Restaurant', 'Cafe').optional()
 });
 
 // Get owner/restaurant details
@@ -34,9 +34,9 @@ router.get('/profile', async (req, res) => {
             ownerId: req.user?.ownerId,
             businessId: req.user?.businessId
         });
-        
+
         const ownerId = getOwnerId(req);
-        
+
         if (!ownerId) {
             console.error('❌ No ownerId in request');
             return res.status(401).json({
@@ -74,15 +74,35 @@ router.get('/profile', async (req, res) => {
             });
         }
 
+        // If trialEndDate is not set, calculate it from createdAt (30 days from registration)
+        let ownerData = owner.toJSON();
+        if (!ownerData.trialEndDate && ownerData.createdAt) {
+            const createdAt = new Date(ownerData.createdAt);
+            const trialEndDate = new Date(createdAt);
+            trialEndDate.setDate(trialEndDate.getDate() + 30);
+            ownerData.trialEndDate = trialEndDate.toISOString();
+
+            // Update the owner record in database
+            await owner.update({ trialEndDate: trialEndDate });
+            console.log('📅 Set trialEndDate for existing user:', {
+                email: owner.email,
+                createdAt: createdAt.toISOString(),
+                trialEndDate: trialEndDate.toISOString()
+            });
+        }
+
         console.log('✅ Owner profile fetched successfully:', {
             ownerId: owner.id,
             email: owner.email,
-            businessName: owner.businessName
+            businessName: owner.businessName,
+            trialEndDate: ownerData.trialEndDate,
+            subscriptionPlan: ownerData.subscriptionPlan,
+            subscriptionStatus: ownerData.subscriptionStatus
         });
-        
+
         res.json({
             success: true,
-            data: owner
+            data: ownerData
         });
     } catch (error) {
         console.error('❌ Error fetching owner profile:', error);
@@ -99,7 +119,7 @@ router.put('/profile', async (req, res) => {
     try {
         console.log('📝 PUT /api/owner/profile - Updating owner profile');
         const ownerId = getOwnerId(req);
-        
+
         if (!ownerId) {
             console.error('❌ No ownerId in update request');
             return res.status(401).json({
@@ -187,7 +207,7 @@ router.delete('/profile', async (req, res) => {
     try {
         console.log('🗑️ DELETE /api/owner/profile - Deleting owner account');
         const ownerId = getOwnerId(req);
-        
+
         if (!ownerId) {
             console.error('❌ No ownerId in delete request');
             return res.status(401).json({

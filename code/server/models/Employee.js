@@ -44,6 +44,10 @@ const Employee = sequelize.define('Employee', {
         type: DataTypes.STRING(50),
         allowNull: true
     },
+    hireDate: {
+        type: DataTypes.DATE,
+        allowNull: true
+    },
     password: {
         type: DataTypes.STRING(255),
         allowNull: true
@@ -60,6 +64,11 @@ const Employee = sequelize.define('Employee', {
         type: DataTypes.ARRAY(DataTypes.STRING),
         allowNull: true,
         defaultValue: []
+    },
+    role: {
+        type: DataTypes.ENUM('employee', 'manager'),
+        allowNull: true,
+        defaultValue: 'employee'
     },
     lastLogin: {
         type: DataTypes.DATE,

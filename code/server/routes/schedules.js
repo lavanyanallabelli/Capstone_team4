@@ -413,26 +413,63 @@ router.post("/:scheduleId/send-email", async (req, res) => {
       });
     }
 
+    // Check if employee exists and has email
+    if (!schedule.employee) {
+      return res.status(404).json({
+        success: false,
+        error: "Employee not found",
+        message: "The employee associated with this schedule was not found",
+      });
+    }
+
+    if (!schedule.employee.email) {
+      return res.status(400).json({
+        success: false,
+        error: "Employee email missing",
+        message: "The employee does not have an email address configured",
+      });
+    }
+
     const owner = await Owner.findByPk(ownerId);
     const businessName = owner?.businessName || "Your Restaurant";
 
-    await sendScheduleEmail(
-      schedule.employee.email,
-      `${schedule.employee.firstName} ${schedule.employee.lastName}`,
-      schedule.schedule,
-      schedule.weekStartDate,
-      businessName,
-      true, // Assume update if manually sending
-      schedule.notes || null
-    );
-
-    await schedule.update({ lastSentAt: new Date() });
-    await schedule.reload();
-
-    res.json({
-      success: true,
-      message: "Schedule email sent successfully",
+    console.log('📧 Sending schedule email:', {
+      to: schedule.employee.email,
+      employeeName: `${schedule.employee.firstName} ${schedule.employee.lastName}`,
+      weekStartDate: schedule.weekStartDate,
+      businessName: businessName
     });
+
+    try {
+      await sendScheduleEmail(
+        schedule.employee.email,
+        `${schedule.employee.firstName} ${schedule.employee.lastName}`,
+        schedule.schedule,
+        schedule.weekStartDate,
+        businessName,
+        true, // Assume update if manually sending
+        schedule.notes || null
+      );
+
+      await schedule.update({ lastSentAt: new Date() });
+      await schedule.reload();
+
+      console.log('✅ Schedule email sent successfully to:', schedule.employee.email);
+
+      res.json({
+        success: true,
+        message: "Schedule email sent successfully",
+      });
+    } catch (emailError) {
+      console.error('❌ Email sending failed:', emailError.message);
+      // Update lastSentAt even if email fails (for tracking)
+      // But don't mark as success
+      res.status(500).json({
+        success: false,
+        error: "Failed to send schedule email",
+        message: emailError.message || "Email service configuration error. Please check SMTP settings.",
+      });
+    }
   } catch (error) {
     console.error("Error sending schedule email:", error);
     res.status(500).json({

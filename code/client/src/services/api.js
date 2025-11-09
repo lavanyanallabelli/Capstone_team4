@@ -7,6 +7,20 @@ class ApiService {
         this.baseURL = API_BASE_URL;
     }
 
+    // Helper function to decode JWT and check expiry
+    isTokenExpired(token) {
+        try {
+            if (!token) return true;
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            const expiry = payload.exp * 1000; // Convert to milliseconds
+            const now = Date.now();
+            return now >= expiry;
+        } catch (error) {
+            console.error('Error checking token expiry:', error);
+            return true; // If we can't decode, assume expired
+        }
+    }
+
     // Get auth token from AWS Cognito or employee JWT
     async getAuthToken() {
         try {
@@ -25,19 +39,32 @@ class ApiService {
                 // No active Cognito session - this is expected for employees
                 console.log('ℹ️ No Cognito session (employee login expected)');
             }
-            
+
             // PRIORITY 2: Only if no Cognito session, check for employee JWT token
             const employeeToken = localStorage.getItem('employeeToken');
             if (employeeToken) {
+                // Check if token is expired
+                if (this.isTokenExpired(employeeToken)) {
+                    console.warn('⚠️ Employee token expired, clearing from storage');
+                    localStorage.removeItem('employeeToken');
+                    localStorage.removeItem('employeeUser');
+                    return null;
+                }
                 console.log('✅ Using employee JWT token');
                 return employeeToken;
             }
-            
+
             return null;
         } catch (error) {
             // Fallback: check for employee token
             const employeeToken = localStorage.getItem('employeeToken');
             if (employeeToken) {
+                // Check expiry in fallback too
+                if (this.isTokenExpired(employeeToken)) {
+                    localStorage.removeItem('employeeToken');
+                    localStorage.removeItem('employeeUser');
+                    return null;
+                }
                 console.log('✅ Using employee JWT token (fallback)');
                 return employeeToken;
             }
@@ -66,9 +93,9 @@ class ApiService {
         // Send Cognito token if available
         if (includeAuth) {
             try {
-            const token = await this.getAuthToken();
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`;
+                const token = await this.getAuthToken();
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`;
                 }
             } catch (error) {
                 // If token fetch fails, continue without auth (for testing)
@@ -99,7 +126,28 @@ class ApiService {
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.message || `HTTP error! status: ${response.status}`);
+                // Handle 403 (Forbidden) - likely expired token
+                if (response.status === 403) {
+                    const errorMessage = data.message || data.error || '';
+                    if (errorMessage.includes('Token verification failed') ||
+                        errorMessage.includes('expired') ||
+                        errorMessage.includes('Invalid token')) {
+                        console.warn('⚠️ Token expired or invalid, clearing from storage');
+                        // Clear expired employee token
+                        localStorage.removeItem('employeeToken');
+                        localStorage.removeItem('employeeUser');
+                        // Redirect to login if not already there
+                        if (window.location.pathname !== '/employee-login' &&
+                            window.location.pathname !== '/') {
+                            window.location.href = '/';
+                        }
+                    }
+                }
+
+                // Create error with response data attached
+                const error = new Error(data.message || data.error || `HTTP error! status: ${response.status}`);
+                error.response = { data, status: response.status };
+                throw error;
             }
 
             return data;
@@ -218,6 +266,14 @@ class ApiService {
         return this.patch(`/menu/${itemId}/availability`, { availability });
     }
 
+    async getMenuItemAvailabilitySchedule(itemId) {
+        return this.get(`/menu/${itemId}/availability-schedule`);
+    }
+
+    async updateMenuItemAvailabilitySchedule(itemId, availabilitySchedule) {
+        return this.patch(`/menu/${itemId}/availability-schedule`, { availabilitySchedule });
+    }
+
     async getMenuCategories() {
         return this.get('/menu/categories/list');
     }
@@ -320,6 +376,15 @@ class ApiService {
         return this.put('/owner/profile', profileData);
     }
 
+    // Subscription methods
+    async getSubscriptionStatus() {
+        return this.get('/subscription/status');
+    }
+
+    async purchaseSubscription(subscriptionData) {
+        return this.post('/subscription/purchase', subscriptionData);
+    }
+
     async deleteOwnerAccount() {
         return this.delete('/owner/profile');
     }
@@ -388,6 +453,10 @@ class ApiService {
 
     async deleteOrder(orderId) {
         return this.delete(`/orders/${orderId}`);
+    }
+
+    async refundPayment(orderId, paymentId, refundData) {
+        return this.patch(`/orders/${orderId}/payment/${paymentId}/refund`, refundData);
     }
 
     async getOrderStats(period = 'today') {

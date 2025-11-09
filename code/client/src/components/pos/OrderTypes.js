@@ -3,7 +3,6 @@ import { motion } from 'framer-motion';
 import {
     Utensils,
     ShoppingBag,
-    Truck,
     Coffee,
     Home
 } from 'lucide-react';
@@ -14,7 +13,9 @@ const OrderTypes = ({
     tableNumber,
     setTableNumber,
     customerName,
-    setCustomerName
+    setCustomerName,
+    customerPhone,
+    setCustomerPhone
 }) => {
     const orderTypes = [
         {
@@ -30,13 +31,6 @@ const OrderTypes = ({
             icon: ShoppingBag,
             color: 'bg-green-500',
             description: 'Takeout order'
-        },
-        {
-            id: 'delivery',
-            name: 'Delivery',
-            icon: Truck,
-            color: 'bg-purple-500',
-            description: 'Home delivery'
         },
         {
             id: 'drive-thru',
@@ -59,7 +53,7 @@ const OrderTypes = ({
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Order Type</h3>
 
             {/* Order Type Buttons */}
-            <div className="grid grid-cols-5 gap-2 mb-4">
+            <div className="grid grid-cols-4 gap-2 mb-4">
                 {orderTypes.map((type) => {
                     const Icon = type.icon;
                     return (
@@ -69,8 +63,8 @@ const OrderTypes = ({
                             whileTap={{ scale: 0.98 }}
                             onClick={() => setOrderType(type.id)}
                             className={`p-3 rounded-lg border-2 transition-all ${orderType === type.id
-                                    ? `${type.color} text-white border-transparent`
-                                    : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
+                                ? `${type.color} text-white border-transparent`
+                                : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
                                 }`}
                         >
                             <Icon className="w-6 h-6 mx-auto mb-1" />
@@ -97,34 +91,35 @@ const OrderTypes = ({
                     </div>
                 )}
 
-                {orderType === 'delivery' && (
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Customer Name
-                        </label>
-                        <input
-                            type="text"
-                            value={customerName}
-                            onChange={(e) => setCustomerName(e.target.value)}
-                            placeholder="Enter customer name"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                    </div>
-                )}
-
-                {orderType === 'pickup' && (
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Customer Name
-                        </label>
-                        <input
-                            type="text"
-                            value={customerName}
-                            onChange={(e) => setCustomerName(e.target.value)}
-                            placeholder="Enter customer name"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                    </div>
+                {(orderType === 'pickup' || orderType === 'to-go') && (
+                    <>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Customer Name
+                            </label>
+                            <input
+                                type="text"
+                                value={customerName}
+                                onChange={(e) => setCustomerName(e.target.value)}
+                                placeholder="Enter customer name"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                        </div>
+                        {customerPhone !== undefined && setCustomerPhone && (
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Customer Phone (Optional)
+                                </label>
+                                <input
+                                    type="tel"
+                                    value={customerPhone || ''}
+                                    onChange={(e) => setCustomerPhone(e.target.value)}
+                                    placeholder="Enter phone number"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                />
+                            </div>
+                        )}
+                    </>
                 )}
 
                 {/* Order Type Description */}

@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
-import POSSystem from '../components/pos/POSSystem';
+import EnhancedPOSSystem from '../components/pos/EnhancedPOSSystem';
 
 const POSPage = () => {
     const { currentUser, loading } = useAuth();
@@ -21,7 +21,7 @@ const POSPage = () => {
         return <Navigate to="/login" replace />;
     }
 
-    return <POSSystem />;
+    return <EnhancedPOSSystem />;
 };
 
 export default POSPage;

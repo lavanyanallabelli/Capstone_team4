@@ -17,6 +17,7 @@ const settingsRoutes = require('./routes/settings');
 const orderRoutes = require('./routes/orders');
 const ownerRoutes = require('./routes/owner');
 const scheduleRoutes = require('./routes/schedules');
+const subscriptionRoutes = require('./routes/subscription');
 
 // Import middleware
 const { authenticateToken } = require('./middleware/auth');
@@ -69,6 +70,7 @@ app.use('/api/settings', authenticateToken, syncCognitoUserToOwner, settingsRout
 app.use('/api/orders', authenticateToken, syncCognitoUserToOwner, orderRoutes);
 app.use('/api/owner', authenticateToken, syncCognitoUserToOwner, ownerRoutes);
 app.use('/api/schedules', authenticateToken, syncCognitoUserToOwner, scheduleRoutes);
+app.use('/api/subscription', subscriptionRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

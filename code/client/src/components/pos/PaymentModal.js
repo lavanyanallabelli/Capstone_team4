@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { X, CreditCard, DollarSign, CheckCircle, AlertCircle } from 'lucide-react';
 
@@ -8,6 +8,19 @@ const PaymentModal = ({ isOpen, onClose, order, onPaymentComplete }) => {
     const [processing, setProcessing] = useState(false);
     const [error, setError] = useState('');
 
+    // Update amount when payment method changes
+    useEffect(() => {
+        if (order?.finalTotal !== undefined) {
+            if (paymentMethod === 'card') {
+                // For card, use the exact order total
+                setAmount(order.finalTotal || 0);
+            } else {
+                // For cash, start with order total but allow modification
+                setAmount(order.finalTotal || 0);
+            }
+        }
+    }, [paymentMethod, order?.finalTotal]);
+
     if (!isOpen || !order) return null;
 
     const handleSubmit = async (e) => {
@@ -16,10 +29,16 @@ const PaymentModal = ({ isOpen, onClose, order, onPaymentComplete }) => {
         setError('');
 
         try {
+            // For card payments, use the exact order total
+            // For cash, use the amount received
+            const paymentAmount = paymentMethod === 'card'
+                ? parseFloat(order.finalTotal || 0)
+                : parseFloat(amount);
+
             // Process payment
             await onPaymentComplete(order.id, {
                 method: paymentMethod,
-                amount: parseFloat(amount)
+                amount: paymentAmount
             });
         } catch (err) {
             setError(err.message || 'Payment processing failed');
@@ -30,9 +49,7 @@ const PaymentModal = ({ isOpen, onClose, order, onPaymentComplete }) => {
 
     const paymentMethods = [
         { value: 'cash', label: 'Cash', icon: DollarSign },
-        { value: 'card', label: 'Card', icon: CreditCard },
-        { value: 'online', label: 'Online', icon: CreditCard },
-        { value: 'digital_wallet', label: 'Digital Wallet', icon: CreditCard }
+        { value: 'card', label: 'Card', icon: CreditCard }
     ];
 
     return (
@@ -91,18 +108,15 @@ const PaymentModal = ({ isOpen, onClose, order, onPaymentComplete }) => {
                                         key={method.value}
                                         type="button"
                                         onClick={() => setPaymentMethod(method.value)}
-                                        className={`p-4 border-2 rounded-lg flex flex-col items-center justify-center transition-colors ${
-                                            paymentMethod === method.value
-                                                ? 'border-blue-500 bg-blue-50'
-                                                : 'border-gray-200 hover:border-gray-300'
-                                        }`}
+                                        className={`p-3 border-2 rounded-lg flex flex-col items-center justify-center transition-colors ${paymentMethod === method.value
+                                            ? 'border-blue-500 bg-blue-50'
+                                            : 'border-gray-200 hover:border-gray-300'
+                                            }`}
                                     >
-                                        <Icon className={`w-6 h-6 mb-2 ${
-                                            paymentMethod === method.value ? 'text-blue-500' : 'text-gray-400'
-                                        }`} />
-                                        <span className={`text-sm font-medium ${
-                                            paymentMethod === method.value ? 'text-blue-700' : 'text-gray-700'
-                                        }`}>
+                                        <Icon className={`w-5 h-5 mb-1 ${paymentMethod === method.value ? 'text-blue-500' : 'text-gray-400'
+                                            }`} />
+                                        <span className={`text-xs font-medium text-center ${paymentMethod === method.value ? 'text-blue-700' : 'text-gray-700'
+                                            }`}>
                                             {method.label}
                                         </span>
                                     </button>

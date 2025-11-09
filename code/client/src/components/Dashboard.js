@@ -16,6 +16,8 @@ import {
   User,
   Calendar,
   Clock,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -45,8 +47,17 @@ const Dashboard = () => {
     myOrders: 0,
     myPerformance: 0,
   });
+  const [subscriptionData, setSubscriptionData] = useState({
+    subscriptionPlan: 'Free Trial',
+    subscriptionStatus: 'trial',
+    trialEndDate: null,
+    subscriptionStartDate: null,
+    subscriptionEndDate: null
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isEmployeeManagementOpen, setIsEmployeeManagementOpen] = useState(false);
+  const [isMenuManagementOpen, setIsMenuManagementOpen] = useState(false);
 
   // Fetch real dashboard data
   useEffect(() => {
@@ -63,12 +74,52 @@ const Dashboard = () => {
 
         if (isOwner) {
           // Fetch data for owners
-          const [menuResponse, employeesResponse, analyticsResponse] =
+          const [menuResponse, employeesResponse, analyticsResponse, ownerProfileResponse] =
             await Promise.all([
               apiService.getMenuItems(),
               apiService.getEmployees(),
               apiService.getAnalyticsOverview("7d"),
+              apiService.getOwnerProfile(),
             ]);
+
+          // Update subscription data from owner profile
+          if (ownerProfileResponse.success && ownerProfileResponse.data) {
+            const ownerData = ownerProfileResponse.data;
+
+            // Calculate trialEndDate from createdAt if not set (for existing users)
+            let trialEndDate = null;
+            if (ownerData.trialEndDate) {
+              trialEndDate = new Date(ownerData.trialEndDate);
+            } else if (ownerData.createdAt) {
+              // Set trial end date to 30 days from account creation
+              const createdAt = new Date(ownerData.createdAt);
+              trialEndDate = new Date(createdAt);
+              trialEndDate.setDate(trialEndDate.getDate() + 30);
+              console.log('📅 Calculated trialEndDate from createdAt:', {
+                createdAt: createdAt.toISOString(),
+                trialEndDate: trialEndDate.toISOString()
+              });
+            }
+
+            setSubscriptionData({
+              subscriptionPlan: ownerData.subscriptionPlan || 'Free Trial',
+              subscriptionStatus: ownerData.subscriptionStatus || 'trial',
+              trialEndDate: trialEndDate,
+              subscriptionStartDate: ownerData.subscriptionStartDate ? new Date(ownerData.subscriptionStartDate) : null,
+              subscriptionEndDate: ownerData.subscriptionEndDate ? new Date(ownerData.subscriptionEndDate) : null,
+              autoPayment: ownerData.autoPayment || false
+            });
+
+            console.log('📊 Subscription data updated:', {
+              trialEndDate: trialEndDate?.toISOString(),
+              subscriptionPlan: ownerData.subscriptionPlan,
+              subscriptionStatus: ownerData.subscriptionStatus,
+              subscriptionStartDate: ownerData.subscriptionStartDate,
+              subscriptionEndDate: ownerData.subscriptionEndDate
+            });
+          } else {
+            console.warn('⚠️ Failed to fetch owner profile:', ownerProfileResponse);
+          }
 
           console.log("Dashboard API Responses:", {
             menu: menuResponse,
@@ -83,13 +134,13 @@ const Dashboard = () => {
               : 0,
             totalSales: analyticsResponse.success
               ? analyticsResponse.data.data?.sales?.totalRevenue ||
-                analyticsResponse.data.sales?.totalRevenue ||
-                0
+              analyticsResponse.data.sales?.totalRevenue ||
+              0
               : 0,
             ordersToday: analyticsResponse.success
               ? analyticsResponse.data.data?.sales?.totalOrders ||
-                analyticsResponse.data.sales?.totalOrders ||
-                0
+              analyticsResponse.data.sales?.totalOrders ||
+              0
               : 0,
             myOrders: 0, // Not applicable for owners
             myPerformance: 0, // Not applicable for owners
@@ -146,57 +197,57 @@ const Dashboard = () => {
   // Role-based stats with real data
   const stats = isOwner
     ? [
-        {
-          label: "Total Sales",
-          value: `$${dashboardData.totalSales.toFixed(2)}`,
-          icon: DollarSign,
-          color: "from-green-500 to-green-600",
-        },
-        {
-          label: "Orders Today",
-          value: dashboardData.ordersToday.toString(),
-          icon: ShoppingCart,
-          color: "from-blue-500 to-blue-600",
-        },
-        {
-          label: "Menu Items",
-          value: dashboardData.menuItemsCount.toString(),
-          icon: Menu,
-          color: "from-purple-500 to-purple-600",
-        },
-        {
-          label: "Employees",
-          value: dashboardData.employeesCount.toString(),
-          icon: Users,
-          color: "from-orange-500 to-orange-600",
-        },
-      ]
+      {
+        label: "Total Sales",
+        value: `$${dashboardData.totalSales.toFixed(2)}`,
+        icon: DollarSign,
+        color: "from-green-500 to-green-600",
+      },
+      {
+        label: "Orders Today",
+        value: dashboardData.ordersToday.toString(),
+        icon: ShoppingCart,
+        color: "from-blue-500 to-blue-600",
+      },
+      {
+        label: "Menu Items",
+        value: dashboardData.menuItemsCount.toString(),
+        icon: Menu,
+        color: "from-purple-500 to-purple-600",
+      },
+      {
+        label: "Employees",
+        value: dashboardData.employeesCount.toString(),
+        icon: Users,
+        color: "from-orange-500 to-orange-600",
+      },
+    ]
     : [
-        {
-          label: "My Orders",
-          value: dashboardData.myOrders.toString(),
-          icon: ShoppingCart,
-          color: "from-blue-500 to-blue-600",
-        },
-        {
-          label: "Orders Today",
-          value: dashboardData.ordersToday.toString(),
-          icon: FileText,
-          color: "from-green-500 to-green-600",
-        },
-        {
-          label: "Menu Items",
-          value: dashboardData.menuItemsCount.toString(),
-          icon: Menu,
-          color: "from-purple-500 to-purple-600",
-        },
-        {
-          label: "My Performance",
-          value: `${dashboardData.myPerformance}%`,
-          icon: BarChart3,
-          color: "from-orange-500 to-orange-600",
-        },
-      ];
+      {
+        label: "My Orders",
+        value: dashboardData.myOrders.toString(),
+        icon: ShoppingCart,
+        color: "from-blue-500 to-blue-600",
+      },
+      {
+        label: "Orders Today",
+        value: dashboardData.ordersToday.toString(),
+        icon: FileText,
+        color: "from-green-500 to-green-600",
+      },
+      {
+        label: "Menu Items",
+        value: dashboardData.menuItemsCount.toString(),
+        icon: Menu,
+        color: "from-purple-500 to-purple-600",
+      },
+      {
+        label: "My Performance",
+        value: `${dashboardData.myPerformance}%`,
+        icon: BarChart3,
+        color: "from-orange-500 to-orange-600",
+      },
+    ];
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -222,12 +273,17 @@ const Dashboard = () => {
   };
 
   // Calculate trial days remaining
-  const trialEndDate = new Date(currentUser?.trialEndDate);
+  const trialEndDate = subscriptionData.trialEndDate;
   const today = new Date();
-  const daysRemaining = Math.max(
-    0,
-    Math.ceil((trialEndDate - today) / (1000 * 60 * 60 * 24))
-  );
+  today.setHours(0, 0, 0, 0); // Reset time to start of day
+
+  let daysRemaining = 0;
+  if (trialEndDate && trialEndDate instanceof Date && !isNaN(trialEndDate)) {
+    const endDate = new Date(trialEndDate);
+    endDate.setHours(0, 0, 0, 0);
+    const diffTime = endDate - today;
+    daysRemaining = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+  }
 
   if (loading) {
     return (
@@ -300,11 +356,10 @@ const Dashboard = () => {
                 <p className="text-sm text-gray-600">
                   Welcome back, {currentUser?.businessName || "User"}!
                   <span
-                    className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${
-                      isOwner
-                        ? "bg-purple-100 text-purple-800"
-                        : "bg-blue-100 text-blue-800"
-                    }`}
+                    className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${isOwner
+                      ? "bg-purple-100 text-purple-800"
+                      : "bg-blue-100 text-blue-800"
+                      }`}
                   >
                     {isOwner ? "👑 Owner" : "👨‍🍳 Employee"}
                   </span>
@@ -313,13 +368,22 @@ const Dashboard = () => {
             </div>
 
             <div className="flex items-center space-x-4">
-              {/* Trial Status */}
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-2">
-                <p className="text-sm font-medium text-yellow-800">
-                  <Calendar className="w-4 h-4 inline mr-1" />
-                  {daysRemaining} days left in trial
-                </p>
-              </div>
+              {/* Subscription Status */}
+              {subscriptionData.subscriptionStatus === 'active' ? (
+                <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-2">
+                  <p className="text-sm font-medium text-green-800">
+                    <CreditCard className="w-4 h-4 inline mr-1" />
+                    {subscriptionData.subscriptionPlan} Plan Active
+                  </p>
+                </div>
+              ) : subscriptionData.subscriptionStatus === 'trial' ? (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-2">
+                  <p className="text-sm font-medium text-yellow-800">
+                    <Calendar className="w-4 h-4 inline mr-1" />
+                    {daysRemaining} days left in trial
+                  </p>
+                </div>
+              ) : null}
 
               {/* User Menu */}
               <div className="flex items-center space-x-3">
@@ -452,104 +516,182 @@ const Dashboard = () => {
                       userRole,
                       PERMISSIONS.CAN_CREATE_EMPLOYEE
                     ) && (
-                      <>
-                        <button
-                          onClick={() => navigate("/employees")}
-                          className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                        >
-                          <div className="flex items-center space-x-3">
-                            <Users className="w-6 h-6 text-primary-600" />
-                            <div>
-                              <h4 className="font-semibold text-gray-900">
-                                Add Employee
-                              </h4>
-                              <p className="text-sm text-gray-600">
-                                Create new employee accounts
-                              </p>
-                            </div>
+                        <>
+                          {/* Employee Management Section */}
+                          <div className="mb-4">
+                            <button
+                              onClick={() => setIsEmployeeManagementOpen(!isEmployeeManagementOpen)}
+                              className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-3">
+                                  <Users className="w-6 h-6 text-primary-600" />
+                                  <div>
+                                    <h4 className="font-semibold text-gray-900">
+                                      Employee Management
+                                    </h4>
+                                    <p className="text-sm text-gray-600">
+                                      Manage employees and schedules
+                                    </p>
+                                  </div>
+                                </div>
+                                {isEmployeeManagementOpen ? (
+                                  <ChevronDown className="w-5 h-5 text-gray-500" />
+                                ) : (
+                                  <ChevronRight className="w-5 h-5 text-gray-500" />
+                                )}
+                              </div>
+                            </button>
+                            {isEmployeeManagementOpen && (
+                              <div className="space-y-3 pl-2 mt-3">
+                                <button
+                                  onClick={() => navigate("/employees")}
+                                  className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                                >
+                                  <div className="flex items-center space-x-3">
+                                    <Users className="w-6 h-6 text-primary-600" />
+                                    <div>
+                                      <h4 className="font-semibold text-gray-900">
+                                        Add Employee
+                                      </h4>
+                                      <p className="text-sm text-gray-600">
+                                        Create new employee accounts
+                                      </p>
+                                    </div>
+                                  </div>
+                                </button>
+                                <button
+                                  onClick={() => navigate("/schedules")}
+                                  className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                                >
+                                  <div className="flex items-center space-x-3">
+                                    <Clock className="w-6 h-6 text-primary-600" />
+                                    <div>
+                                      <h4 className="font-semibold text-gray-900">
+                                        Schedule Management
+                                      </h4>
+                                      <p className="text-sm text-gray-600">
+                                        Set and manage employee weekly schedules
+                                      </p>
+                                    </div>
+                                  </div>
+                                </button>
+                              </div>
+                            )}
                           </div>
-                        </button>
-                        <button
-                          onClick={() => navigate("/schedules")}
-                          className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                        >
-                          <div className="flex items-center space-x-3">
-                            <Clock className="w-6 h-6 text-primary-600" />
-                            <div>
-                              <h4 className="font-semibold text-gray-900">
-                                Schedule Management
-                              </h4>
-                              <p className="text-sm text-gray-600">
-                                Set and manage employee weekly schedules
-                              </p>
-                            </div>
-                          </div>
-                        </button>
-                      </>
-                    )}
+                        </>
+                      )}
                     {hasPermission(
                       userRole,
                       PERMISSIONS.CAN_MANAGE_MENU_ITEMS
                     ) && (
-                      <button
-                        onClick={() => navigate("/menu/manage")}
-                        className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                      >
-                        <div className="flex items-center space-x-3">
-                          <Menu className="w-6 h-6 text-primary-600" />
-                          <div>
-                            <h4 className="font-semibold text-gray-900">
-                              Manage Menu
-                            </h4>
-                            <p className="text-sm text-gray-600">
-                              Add or edit menu items and categories
-                            </p>
+                        <>
+                          {/* Menu Management Section */}
+                          <div className="mb-4">
+                            <button
+                              onClick={() => setIsMenuManagementOpen(!isMenuManagementOpen)}
+                              className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-3">
+                                  <Menu className="w-6 h-6 text-primary-600" />
+                                  <div>
+                                    <h4 className="font-semibold text-gray-900">
+                                      Menu Management
+                                    </h4>
+                                    <p className="text-sm text-gray-600">
+                                      Manage menu items and availability
+                                    </p>
+                                  </div>
+                                </div>
+                                {isMenuManagementOpen ? (
+                                  <ChevronDown className="w-5 h-5 text-gray-500" />
+                                ) : (
+                                  <ChevronRight className="w-5 h-5 text-gray-500" />
+                                )}
+                              </div>
+                            </button>
+                            {isMenuManagementOpen && (
+                              <div className="space-y-3 pl-2 mt-3">
+                                <button
+                                  onClick={() => navigate("/menu/manage")}
+                                  className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                                >
+                                  <div className="flex items-center space-x-3">
+                                    <Menu className="w-6 h-6 text-primary-600" />
+                                    <div>
+                                      <h4 className="font-semibold text-gray-900">
+                                        Manage Menu
+                                      </h4>
+                                      <p className="text-sm text-gray-600">
+                                        Add or edit menu items and categories
+                                      </p>
+                                    </div>
+                                  </div>
+                                </button>
+                                <button
+                                  onClick={() => navigate("/menu/availability")}
+                                  className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                                >
+                                  <div className="flex items-center space-x-3">
+                                    <Calendar className="w-6 h-6 text-primary-600" />
+                                    <div>
+                                      <h4 className="font-semibold text-gray-900">
+                                        Schedule Availability
+                                      </h4>
+                                      <p className="text-sm text-gray-600">
+                                        Set and manage menu item availability schedules
+                                      </p>
+                                    </div>
+                                  </div>
+                                </button>
+                              </div>
+                            )}
                           </div>
-                        </div>
-                      </button>
-                    )}
+                        </>
+                      )}
                     {hasPermission(
                       userRole,
                       PERMISSIONS.CAN_VIEW_SALES_ANALYTICS
                     ) && (
-                      <button
-                        onClick={() => navigate("/analytics")}
-                        className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                      >
-                        <div className="flex items-center space-x-3">
-                          <BarChart3 className="w-6 h-6 text-primary-600" />
-                          <div>
-                            <h4 className="font-semibold text-gray-900">
-                              View Analytics
-                            </h4>
-                            <p className="text-sm text-gray-600">
-                              Analyze sales and performance data
-                            </p>
+                        <button
+                          onClick={() => navigate("/analytics")}
+                          className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                        >
+                          <div className="flex items-center space-x-3">
+                            <BarChart3 className="w-6 h-6 text-primary-600" />
+                            <div>
+                              <h4 className="font-semibold text-gray-900">
+                                View Analytics
+                              </h4>
+                              <p className="text-sm text-gray-600">
+                                Analyze sales and performance data
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      </button>
-                    )}
+                        </button>
+                      )}
                     {hasPermission(
                       userRole,
                       PERMISSIONS.CAN_MANAGE_RESTAURANT_DETAILS
                     ) && (
-                      <button
-                        onClick={() => navigate("/settings")}
-                        className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                      >
-                        <div className="flex items-center space-x-3">
-                          <Settings className="w-6 h-6 text-primary-600" />
-                          <div>
-                            <h4 className="font-semibold text-gray-900">
-                              Restaurant Settings
-                            </h4>
-                            <p className="text-sm text-gray-600">
-                              Configure restaurant details and preferences
-                            </p>
+                        <button
+                          onClick={() => navigate("/settings")}
+                          className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                        >
+                          <div className="flex items-center space-x-3">
+                            <Settings className="w-6 h-6 text-primary-600" />
+                            <div>
+                              <h4 className="font-semibold text-gray-900">
+                                Restaurant Settings
+                              </h4>
+                              <p className="text-sm text-gray-600">
+                                Configure restaurant details and preferences
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      </button>
-                    )}
+                        </button>
+                      )}
                   </>
                 ) : (
                   <>
@@ -557,86 +699,86 @@ const Dashboard = () => {
                       userRole,
                       PERMISSIONS.CAN_TAKE_DINE_IN_ORDERS
                     ) && (
-                      <button
-                        onClick={() => navigate("/pos")}
-                        className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                      >
-                        <div className="flex items-center space-x-3">
-                          <ShoppingCart className="w-6 h-6 text-primary-600" />
-                          <div>
-                            <h4 className="font-semibold text-gray-900">
-                              POS System
-                            </h4>
-                            <p className="text-sm text-gray-600">
-                              Access the point of sale system
-                            </p>
+                        <button
+                          onClick={() => navigate("/pos")}
+                          className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                        >
+                          <div className="flex items-center space-x-3">
+                            <ShoppingCart className="w-6 h-6 text-primary-600" />
+                            <div>
+                              <h4 className="font-semibold text-gray-900">
+                                POS System
+                              </h4>
+                              <p className="text-sm text-gray-600">
+                                Access the point of sale system
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      </button>
-                    )}
+                        </button>
+                      )}
                     {hasPermission(
                       userRole,
                       PERMISSIONS.CAN_HANDLE_ONLINE_ORDERS
                     ) && (
-                      <button
-                        onClick={() => navigate("/orders/online")}
-                        className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                      >
-                        <div className="flex items-center space-x-3">
-                          <FileText className="w-6 h-6 text-primary-600" />
-                          <div>
-                            <h4 className="font-semibold text-gray-900">
-                              Online Orders
-                            </h4>
-                            <p className="text-sm text-gray-600">
-                              View and process online orders
-                            </p>
+                        <button
+                          onClick={() => navigate("/orders/online")}
+                          className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                        >
+                          <div className="flex items-center space-x-3">
+                            <FileText className="w-6 h-6 text-primary-600" />
+                            <div>
+                              <h4 className="font-semibold text-gray-900">
+                                Online Orders
+                              </h4>
+                              <p className="text-sm text-gray-600">
+                                View and process online orders
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      </button>
-                    )}
+                        </button>
+                      )}
                     {hasPermission(
                       userRole,
                       PERMISSIONS.CAN_PROCESS_PAYMENTS
                     ) && (
-                      <button
-                        onClick={() => navigate("/payments")}
-                        className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                      >
-                        <div className="flex items-center space-x-3">
-                          <CreditCard className="w-6 h-6 text-primary-600" />
-                          <div>
-                            <h4 className="font-semibold text-gray-900">
-                              Process Payment
-                            </h4>
-                            <p className="text-sm text-gray-600">
-                              Handle customer payments
-                            </p>
+                        <button
+                          onClick={() => navigate("/payments")}
+                          className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                        >
+                          <div className="flex items-center space-x-3">
+                            <CreditCard className="w-6 h-6 text-primary-600" />
+                            <div>
+                              <h4 className="font-semibold text-gray-900">
+                                Process Payment
+                              </h4>
+                              <p className="text-sm text-gray-600">
+                                Handle customer payments
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      </button>
-                    )}
+                        </button>
+                      )}
                     {hasPermission(
                       userRole,
                       PERMISSIONS.CAN_VIEW_MENU_ITEMS
                     ) && (
-                      <button
-                        onClick={() => navigate("/menu")}
-                        className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                      >
-                        <div className="flex items-center space-x-3">
-                          <Menu className="w-6 h-6 text-primary-600" />
-                          <div>
-                            <h4 className="font-semibold text-gray-900">
-                              View Menu
-                            </h4>
-                            <p className="text-sm text-gray-600">
-                              Browse available menu items
-                            </p>
+                        <button
+                          onClick={() => navigate("/menu")}
+                          className="w-full text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                        >
+                          <div className="flex items-center space-x-3">
+                            <Menu className="w-6 h-6 text-primary-600" />
+                            <div>
+                              <h4 className="font-semibold text-gray-900">
+                                View Menu
+                              </h4>
+                              <p className="text-sm text-gray-600">
+                                Browse available menu items
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      </button>
-                    )}
+                        </button>
+                      )}
                   </>
                 )}
               </div>
@@ -661,11 +803,10 @@ const Dashboard = () => {
                 <div className="flex justify-between items-center py-2 border-b border-gray-100">
                   <span className="text-gray-600">Role</span>
                   <span
-                    className={`px-3 py-1 rounded-full text-sm font-medium ${
-                      isOwner
-                        ? "bg-purple-100 text-purple-800"
-                        : "bg-blue-100 text-blue-800"
-                    }`}
+                    className={`px-3 py-1 rounded-full text-sm font-medium ${isOwner
+                      ? "bg-purple-100 text-purple-800"
+                      : "bg-blue-100 text-blue-800"
+                      }`}
                   >
                     {isOwner ? "👑 Owner" : "👨‍🍳 Employee"}
                   </span>
@@ -678,16 +819,61 @@ const Dashboard = () => {
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-gray-100">
                   <span className="text-gray-600">Plan</span>
-                  <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-medium">
-                    Free Trial
+                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${subscriptionData.subscriptionStatus === 'active'
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-yellow-100 text-yellow-800'
+                    }`}>
+                    {subscriptionData.subscriptionPlan || 'Free Trial'}
                   </span>
                 </div>
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-gray-600">Trial Expires</span>
-                  <span className="font-medium">
-                    {trialEndDate.toLocaleDateString()}
-                  </span>
-                </div>
+                {subscriptionData.subscriptionStatus === 'active' ? (
+                  <>
+                    <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                      <span className="text-gray-600">Current Period</span>
+                      <span className="font-medium">
+                        {subscriptionData.subscriptionStartDate && subscriptionData.subscriptionStartDate instanceof Date && !isNaN(subscriptionData.subscriptionStartDate)
+                          ? subscriptionData.subscriptionStartDate.toLocaleDateString('en-US', {
+                            month: 'long',
+                            year: 'numeric'
+                          })
+                          : 'N/A'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                      <span className="text-gray-600">Next Billing Date</span>
+                      <span className="font-medium">
+                        {subscriptionData.subscriptionEndDate && subscriptionData.subscriptionEndDate instanceof Date && !isNaN(subscriptionData.subscriptionEndDate)
+                          ? subscriptionData.subscriptionEndDate.toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          })
+                          : 'N/A'}
+                      </span>
+                    </div>
+                    {subscriptionData.autoPayment && (
+                      <div className="flex justify-between items-center py-2">
+                        <span className="text-gray-600">Auto-Payment</span>
+                        <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+                          Enabled
+                        </span>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-gray-600">Trial Expires</span>
+                    <span className="font-medium">
+                      {trialEndDate && trialEndDate instanceof Date && !isNaN(trialEndDate)
+                        ? trialEndDate.toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })
+                        : 'N/A'}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </motion.div>

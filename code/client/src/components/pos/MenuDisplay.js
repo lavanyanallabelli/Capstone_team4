@@ -71,8 +71,8 @@ const MenuDisplay = ({ items, onAddToOrder }) => {
                                     {item.category}
                                 </span>
                                 <span className={`text-xs px-2 py-1 rounded ${item.isAvailable
-                                        ? 'bg-green-100 text-green-700'
-                                        : 'bg-red-100 text-red-700'
+                                    ? 'bg-green-100 text-green-700'
+                                    : 'bg-red-100 text-red-700'
                                     }`}>
                                     {item.isAvailable ? 'Available' : 'Unavailable'}
                                 </span>
@@ -83,14 +83,13 @@ const MenuDisplay = ({ items, onAddToOrder }) => {
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
                                 onClick={() => onAddToOrder(item)}
-                                disabled={!item.isAvailable}
                                 className={`w-full py-2 px-4 rounded-lg text-sm font-medium transition-colors flex items-center justify-center ${item.isAvailable
-                                        ? 'bg-blue-500 text-white hover:bg-blue-600'
-                                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                    ? 'bg-blue-500 text-white hover:bg-blue-600'
+                                    : 'bg-orange-500 text-white hover:bg-orange-600'
                                     }`}
                             >
                                 <Plus className="w-4 h-4 mr-2" />
-                                {item.isAvailable ? 'Add to Order' : 'Unavailable'}
+                                {item.isAvailable ? 'Add to Order' : 'Add (Unavailable)'}
                             </motion.button>
                         </div>
                     </motion.div>

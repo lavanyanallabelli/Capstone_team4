@@ -27,7 +27,7 @@ const syncCognitoUserToOwner = async (req, res, next) => {
 
         const cognitoSub = req.user.sub;
         const email = req.user.email;
-        
+
         if (!email) {
             console.error('❌ No email in Cognito token - cannot sync to Owner');
             return res.status(400).json({
@@ -36,42 +36,53 @@ const syncCognitoUserToOwner = async (req, res, next) => {
                 message: 'Email is required for authentication'
             });
         }
-        
+
         const businessId = req.user.businessId; // This is a Cognito string like "biz_xxx", not a UUID
         const businessName = req.user.businessName;
         let businessType = req.user.businessType;
         const phone = req.user.phone;
-        
+
         // Try to get actual user name from Cognito attributes
         // Cognito might have name, given_name, or family_name attributes
         const userFirstName = req.user.given_name || req.user['custom:firstName'];
         const userLastName = req.user.family_name || req.user['custom:lastName'];
         const userName = req.user.name || (userFirstName && userLastName ? `${userFirstName} ${userLastName}` : null);
 
-        // Normalize businessType to match PostgreSQL enum values (capitalized)
-        // Cognito might send lowercase, but enum expects: 'Restaurant', 'Cafe', 'Fast Food', 'Fine Dining', 'Bar'
+        // Normalize businessType to match PostgreSQL enum values
+        // Maps frontend values to backend enum values (only 5 valid types)
+        // Both CTA and SignupForm send: "italian restaurant", "chinese restaurant", "indian restaurant", "mexican restaurant", "cafe"
         const businessTypeMap = {
-            'restaurant': 'Restaurant',
+            // Full form values (lowercase with spaces)
+            'italian restaurant': 'Italian Restaurant',
+            'chinese restaurant': 'Chinese Restaurant',
+            'indian restaurant': 'Indian Restaurant',
+            'mexican restaurant': 'Mexican Restaurant',
             'cafe': 'Cafe',
-            'fast food': 'Fast Food',
-            'fastfood': 'Fast Food',
-            'fine dining': 'Fine Dining',
-            'finedining': 'Fine Dining',
-            'bar': 'Bar'
+            // Short forms (for flexibility)
+            'italian': 'Italian Restaurant',
+            'chinese': 'Chinese Restaurant',
+            'indian': 'Indian Restaurant',
+            'mexican': 'Mexican Restaurant'
         };
-        
+
         if (businessType) {
             const normalized = businessTypeMap[businessType.toLowerCase()];
             if (normalized) {
                 businessType = normalized;
                 console.log('✅ Normalized businessType:', req.user.businessType, '→', businessType);
             } else {
-                // If not in map, capitalize first letter as fallback
-                businessType = businessType.charAt(0).toUpperCase() + businessType.slice(1).toLowerCase();
-                console.log('⚠️ Unknown businessType, capitalized:', businessType);
+                // Check if it's already a valid enum value
+                const validTypes = ['Italian Restaurant', 'Chinese Restaurant', 'Indian Restaurant', 'Mexican Restaurant', 'Cafe'];
+                if (validTypes.includes(businessType)) {
+                    console.log('✅ businessType is already valid:', businessType);
+                } else {
+                    // Default to Italian Restaurant if unknown
+                    businessType = 'Italian Restaurant';
+                    console.log('⚠️ Unknown businessType, defaulting to Italian Restaurant');
+                }
             }
         } else {
-            businessType = 'Restaurant'; // Default
+            businessType = 'Italian Restaurant'; // Default to Italian Restaurant
         }
 
         console.log('🔍 Looking up Owner by email:', email);
@@ -81,14 +92,14 @@ const syncCognitoUserToOwner = async (req, res, next) => {
             businessId,
             businessName
         });
-        
+
         // SECURITY: Find Owner by email - must match exactly with authenticated user's email
         let owner = await Owner.findOne({
             where: {
                 email: email // Exact match required
             }
         });
-        
+
         console.log('🔍 Owner lookup result:', owner ? {
             found: true,
             ownerId: owner.id,
@@ -102,20 +113,27 @@ const syncCognitoUserToOwner = async (req, res, next) => {
             // Ensure all required fields have values
             const defaultName = userName || businessName || email.split('@')[0] || 'Owner';
             const defaultBusinessName = businessName || email.split('@')[0] || 'My Business';
-            
+
+            // Calculate trial end date (30 days from now)
+            const trialEndDate = new Date();
+            trialEndDate.setDate(trialEndDate.getDate() + 30);
+
             const ownerData = {
                 email: email,
                 name: defaultName,
                 businessName: defaultBusinessName,
-                businessType: businessType || 'Restaurant', // Ensure businessType has a default
+                businessType: businessType || 'Italian Restaurant', // Default to Italian Restaurant (one of the 5 valid types)
                 phone: phone || null,
                 password: 'cognito-auth', // Placeholder - Cognito handles auth
                 isActive: true,
-                loginCount: 0
+                loginCount: 0,
+                subscriptionPlan: 'Free Trial',
+                subscriptionStatus: 'trial',
+                trialEndDate: trialEndDate
             };
-            
+
             console.log('📝 Creating new Owner with:', ownerData);
-            
+
             try {
                 owner = await Owner.create(ownerData);
                 console.log('✅ Created Owner record for Cognito user:', {
@@ -127,7 +145,7 @@ const syncCognitoUserToOwner = async (req, res, next) => {
                 console.error('❌ Error creating Owner record:', createError);
                 console.error('Error name:', createError.name);
                 console.error('Error message:', createError.message);
-                
+
                 // If unique constraint violation (email already exists), try to find again
                 if (createError.name === 'SequelizeUniqueConstraintError' || createError.message.includes('unique')) {
                     console.log('🔄 Email might already exist, attempting to find Owner again...');
@@ -182,7 +200,7 @@ const syncCognitoUserToOwner = async (req, res, next) => {
                     owner.phone = phone;
                 }
                 await owner.save();
-                
+
                 console.log('✅ Found existing Owner record (email matches):', {
                     email,
                     ownerId: owner.id,
@@ -243,7 +261,7 @@ const syncCognitoUserToOwner = async (req, res, next) => {
                 hasOwnerId: !!req.user.ownerId
             } : 'No req.user'
         });
-        
+
         // CRITICAL: If sync fails, we MUST return an error
         // Don't continue without ownerId - routes will fail with "Owner ID is required"
         return res.status(500).json({

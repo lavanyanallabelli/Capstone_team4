@@ -49,11 +49,23 @@ const EmployeeManagement = () => {
             if (response.success) {
                 setEmployees([...employees, response.data]);
                 setShowCreateForm(false);
-                alert(`Employee created successfully! Temporary password: ${response.tempPassword}`);
+
+                // Determine role name based on position
+                const position = employeeData.position || 'Employee';
+                const roleName = position.toLowerCase() === 'manager' ? 'Manager' :
+                    position.toLowerCase() === 'employee' ? 'Employee' :
+                        position; // Custom position
+
+                alert(`${roleName} created successfully! Employee ID: ${response.data?.employeeId || response.loginCredentials?.employeeId}`);
             }
         } catch (error) {
             console.error('Error creating employee:', error);
-            alert('Failed to create employee. Please try again.');
+            // Extract error message from API response
+            const errorMessage = error.response?.data?.message ||
+                error.response?.data?.error ||
+                error.message ||
+                'Failed to create employee. Please try again.';
+            alert(`Error: ${errorMessage}`);
         }
     };
 
@@ -111,7 +123,7 @@ Employee: ${employee.firstName} ${employee.lastName}
 Email: ${employee.email}
 Position: ${employee.position || 'Employee'}
 Status: ${employee.isActive ? 'Active' : 'Inactive'}
-Hire Date: ${employee.hireDate ? new Date(employee.hireDate).toLocaleDateString() : 'N/A'}
+Join Date: ${employee.hireDate ? new Date(employee.hireDate).toLocaleDateString() : (employee.createdAt ? new Date(employee.createdAt).toLocaleDateString() : 'N/A')}
 Last Login: ${employee.lastLogin ? new Date(employee.lastLogin).toLocaleString() : 'Never'}
 Login Count: ${employee.loginCount || 0}
 Created: ${new Date(employee.createdAt).toLocaleString()}
@@ -126,7 +138,7 @@ Created: ${new Date(employee.createdAt).toLocaleString()}
                 const response = await apiService.deleteEmployee(employeeId);
                 if (response.success) {
                     // Use emp.id (from backend) or emp.employeeId (fallback)
-                    setEmployees(employees.filter(emp => 
+                    setEmployees(employees.filter(emp =>
                         emp.id !== employeeId && emp.employeeId !== employeeId
                     ));
                     alert('Employee deleted successfully!');
@@ -192,7 +204,7 @@ Created: ${new Date(employee.createdAt).toLocaleString()}
                                 className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium flex items-center transition-colors"
                             >
                                 <UserPlus className="w-5 h-5 mr-2" />
-                                Add Employee
+                                Add Staff
                             </button>
                         )}
                     </div>
@@ -315,92 +327,92 @@ Created: ${new Date(employee.createdAt).toLocaleString()}
                                             // Backend returns 'id' (UUID), frontend might use 'employeeId' - use both for compatibility
                                             const employeeId = employee.id || employee.employeeId;
                                             return (
-                                            <tr key={employeeId} className="hover:bg-gray-50">
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="flex items-center">
-                                                        <div className="flex-shrink-0 h-10 w-10">
-                                                            <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                                                                <span className="text-sm font-medium text-blue-600">
-                                                                    {`${employee.firstName} ${employee.lastName}`.split(' ').map(n => n[0]).join('')}
-                                                                </span>
+                                                <tr key={employeeId} className="hover:bg-gray-50">
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <div className="flex items-center">
+                                                            <div className="flex-shrink-0 h-10 w-10">
+                                                                <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                                                                    <span className="text-sm font-medium text-blue-600">
+                                                                        {`${employee.firstName} ${employee.lastName}`.split(' ').map(n => n[0]).join('')}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="ml-4">
+                                                                <div className="text-sm font-medium text-gray-900">
+                                                                    {`${employee.firstName} ${employee.lastName}`}
+                                                                </div>
+                                                                <div className="text-sm text-gray-500 font-mono">
+                                                                    Employee ID: {employee.employeeId || employeeId}
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                        <div className="ml-4">
-                                                            <div className="text-sm font-medium text-gray-900">
-                                                                {`${employee.firstName} ${employee.lastName}`}
-                                                            </div>
-                                                            <div className="text-sm text-gray-500 font-mono">
-                                                                Employee ID: {employee.employeeId || employeeId}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-sm text-gray-900">{employee.email}</div>
-                                                    <div className="text-sm text-gray-500">{employee.phone || 'No phone'}</div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${employee.isActive
-                                                        ? 'bg-green-100 text-green-800'
-                                                        : 'bg-red-100 text-red-800'
-                                                        }`}>
-                                                        {employee.isActive ? 'Active' : 'Inactive'}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                    {employee.hireDate ? new Date(employee.hireDate).toLocaleDateString() : 'N/A'}
-                                                </td>
-                                                {canViewEmployeeActivity && (
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                        {employee.position || 'Employee'}
                                                     </td>
-                                                )}
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                                    <div className="flex space-x-2">
-                                                        {canViewEmployeeActivity && (
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <div className="text-sm text-gray-900">{employee.email}</div>
+                                                        <div className="text-sm text-gray-500">{employee.phone || 'No phone'}</div>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${employee.isActive
+                                                            ? 'bg-green-100 text-green-800'
+                                                            : 'bg-red-100 text-red-800'
+                                                            }`}>
+                                                            {employee.isActive ? 'Active' : 'Inactive'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                        {employee.hireDate ? new Date(employee.hireDate).toLocaleDateString() : (employee.createdAt ? new Date(employee.createdAt).toLocaleDateString() : 'N/A')}
+                                                    </td>
+                                                    {canViewEmployeeActivity && (
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                            {employee.position || 'Employee'}
+                                                        </td>
+                                                    )}
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                                        <div className="flex space-x-2">
+                                                            {canViewEmployeeActivity && (
+                                                                <button
+                                                                    onClick={() => handleViewActivity(employee)}
+                                                                    className="text-blue-600 hover:text-blue-900"
+                                                                    title="View employee activity"
+                                                                >
+                                                                    <Eye className="w-4 h-4" />
+                                                                </button>
+                                                            )}
+                                                            {canEditEmployee && (
+                                                                <button
+                                                                    onClick={() => setEditingEmployee(employee)}
+                                                                    className="text-green-600 hover:text-green-900"
+                                                                    title="Edit employee"
+                                                                >
+                                                                    <Edit className="w-4 h-4" />
+                                                                </button>
+                                                            )}
                                                             <button
-                                                                onClick={() => handleViewActivity(employee)}
+                                                                onClick={() => handleOpenEmailModal(employee)}
                                                                 className="text-blue-600 hover:text-blue-900"
-                                                                title="View employee activity"
+                                                                title="Send email to employee"
                                                             >
-                                                                <Eye className="w-4 h-4" />
+                                                                <Mail className="w-4 h-4" />
                                                             </button>
-                                                        )}
-                                                        {canEditEmployee && (
+                                                            {canDeactivateEmployee && (
+                                                                <button
+                                                                    onClick={() => handleToggleEmployeeStatus(employeeId, !employee.isActive)}
+                                                                    className={`${employee.isActive ? 'text-orange-600 hover:text-orange-900' : 'text-green-600 hover:text-green-900'}`}
+                                                                    title={employee.isActive ? 'Deactivate employee' : 'Activate employee'}
+                                                                >
+                                                                    {employee.isActive ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+                                                                </button>
+                                                            )}
                                                             <button
-                                                                onClick={() => setEditingEmployee(employee)}
-                                                                className="text-green-600 hover:text-green-900"
-                                                                title="Edit employee"
+                                                                onClick={() => handleDeleteEmployee(employeeId, `${employee.firstName} ${employee.lastName}`)}
+                                                                className="text-red-600 hover:text-red-900"
+                                                                title="Permanently delete employee"
                                                             >
-                                                                <Edit className="w-4 h-4" />
+                                                                <Trash2 className="w-4 h-4" />
                                                             </button>
-                                                        )}
-                                                        <button
-                                                            onClick={() => handleOpenEmailModal(employee)}
-                                                            className="text-blue-600 hover:text-blue-900"
-                                                            title="Send email to employee"
-                                                        >
-                                                            <Mail className="w-4 h-4" />
-                                                        </button>
-                                                        {canDeactivateEmployee && (
-                                                            <button
-                                                                onClick={() => handleToggleEmployeeStatus(employeeId, !employee.isActive)}
-                                                                className={`${employee.isActive ? 'text-orange-600 hover:text-orange-900' : 'text-green-600 hover:text-green-900'}`}
-                                                                title={employee.isActive ? 'Deactivate employee' : 'Activate employee'}
-                                                            >
-                                                                {employee.isActive ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
-                                                            </button>
-                                                        )}
-                                                        <button
-                                                            onClick={() => handleDeleteEmployee(employeeId, `${employee.firstName} ${employee.lastName}`)}
-                                                            className="text-red-600 hover:text-red-900"
-                                                            title="Permanently delete employee"
-                                                        >
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
+                                                        </div>
+                                                    </td>
+                                                </tr>
                                             );
                                         })
                                     )}
@@ -445,12 +457,17 @@ const CreateEmployeeForm = ({ onSubmit, onCancel }) => {
         lastName: '',
         email: '',
         phone: '',
-        position: ''
+        position: 'Employee'
     });
+    const [customPosition, setCustomPosition] = useState('');
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        onSubmit(formData);
+        // Use customPosition if "Other" was selected, otherwise use selected position
+        const finalPosition = formData.position === 'Other' && customPosition.trim()
+            ? customPosition.trim()
+            : formData.position;
+        onSubmit({ ...formData, position: finalPosition });
     };
 
     return (
@@ -460,7 +477,7 @@ const CreateEmployeeForm = ({ onSubmit, onCancel }) => {
                 animate={{ opacity: 1, scale: 1 }}
                 className="bg-white rounded-lg p-6 w-full max-w-md"
             >
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Create New Employee</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Add Staff Member</h3>
                 <form onSubmit={handleSubmit}>
                     <div className="mb-4">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -513,12 +530,52 @@ const CreateEmployeeForm = ({ onSubmit, onCancel }) => {
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                             Position
                         </label>
-                        <input
-                            type="text"
+                        <select
                             value={formData.position}
-                            onChange={(e) => setFormData({ ...formData, position: e.target.value })}
+                            onChange={(e) => {
+                                e.stopPropagation();
+                                const selectedPosition = e.target.value;
+                                setFormData({ ...formData, position: selectedPosition });
+                                if (selectedPosition !== 'Other') {
+                                    setCustomPosition('');
+                                }
+                            }}
+                            onClick={(e) => {
+                                // Prevent event bubbling to modal overlay
+                                e.stopPropagation();
+                            }}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
+                        >
+                            <option value="Employee">Employee</option>
+                            <option value="Manager">Manager</option>
+                            <option value="Other">Other</option>
+                        </select>
+                        {formData.position === 'Other' && (
+                            <input
+                                type="text"
+                                placeholder="Enter custom position"
+                                value={customPosition}
+                                onChange={(e) => {
+                                    e.stopPropagation();
+                                    const value = e.target.value;
+                                    setCustomPosition(value);
+                                    // Don't update formData.position yet - wait until submit
+                                }}
+                                onClick={(e) => {
+                                    // Prevent event bubbling to modal overlay
+                                    e.stopPropagation();
+                                }}
+                                onKeyDown={(e) => {
+                                    // Prevent Enter from submitting form while typing
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                    }
+                                }}
+                                autoFocus
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mt-2"
+                            />
+                        )}
                     </div>
                     <div className="flex justify-end space-x-3">
                         <button
@@ -532,7 +589,7 @@ const CreateEmployeeForm = ({ onSubmit, onCancel }) => {
                             type="submit"
                             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
                         >
-                            Create Employee
+                            Add Staff
                         </button>
                     </div>
                 </form>
@@ -543,21 +600,31 @@ const CreateEmployeeForm = ({ onSubmit, onCancel }) => {
 
 // Edit Employee Form Component
 const EditEmployeeForm = ({ employee, onSubmit, onCancel }) => {
+    const employeePosition = employee.position || 'Employee';
+    const isStandardPosition = ['Employee', 'Manager'].includes(employeePosition);
+
     const [formData, setFormData] = useState({
         firstName: employee.firstName || '',
         lastName: employee.lastName || '',
         email: employee.email || '',
-        phone: employee.phone || ''
+        phone: employee.phone || '',
+        position: isStandardPosition ? employeePosition : 'Other'
     });
+    const [customPosition, setCustomPosition] = useState(isStandardPosition ? '' : employeePosition);
 
     const handleSubmit = (e) => {
         e.preventDefault();
+        // Use customPosition if "Other" was selected, otherwise use selected position
+        const finalPosition = formData.position === 'Other' && customPosition.trim()
+            ? customPosition.trim()
+            : formData.position;
         // Only pass the fields that the backend expects
         onSubmit({
             firstName: formData.firstName,
             lastName: formData.lastName,
             email: formData.email,
-            phone: formData.phone
+            phone: formData.phone,
+            position: finalPosition
         });
     };
 
@@ -616,6 +683,57 @@ const EditEmployeeForm = ({ employee, onSubmit, onCancel }) => {
                             onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
+                    </div>
+                    <div className="mb-6">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Position
+                        </label>
+                        <select
+                            value={formData.position}
+                            onChange={(e) => {
+                                e.stopPropagation();
+                                const selectedPosition = e.target.value;
+                                setFormData({ ...formData, position: selectedPosition });
+                                if (selectedPosition !== 'Other') {
+                                    setCustomPosition('');
+                                }
+                            }}
+                            onClick={(e) => {
+                                // Prevent event bubbling to modal overlay
+                                e.stopPropagation();
+                            }}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            <option value="Employee">Employee</option>
+                            <option value="Manager">Manager</option>
+                            <option value="Other">Other</option>
+                        </select>
+                        {formData.position === 'Other' && (
+                            <input
+                                type="text"
+                                placeholder="Enter custom position"
+                                value={customPosition}
+                                onChange={(e) => {
+                                    e.stopPropagation();
+                                    const value = e.target.value;
+                                    setCustomPosition(value);
+                                    // Don't update formData.position yet - wait until submit
+                                }}
+                                onClick={(e) => {
+                                    // Prevent event bubbling to modal overlay
+                                    e.stopPropagation();
+                                }}
+                                onKeyDown={(e) => {
+                                    // Prevent Enter from submitting form while typing
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                    }
+                                }}
+                                autoFocus
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mt-2"
+                            />
+                        )}
                     </div>
                     <div className="flex justify-end space-x-3">
                         <button

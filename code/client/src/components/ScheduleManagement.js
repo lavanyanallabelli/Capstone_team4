@@ -355,14 +355,20 @@ const ScheduleManagement = () => {
 
   const handleSendEmail = async (scheduleId) => {
     try {
+      setSaving(true);
       const response = await apiService.sendScheduleEmail(scheduleId);
       if (response.success) {
-        alert("Schedule email sent successfully!");
-        loadData();
+        alert("✅ Schedule email sent successfully!");
+        loadData(); // Reload to update lastSentAt timestamp
+      } else {
+        alert(`❌ Failed to send email: ${response.message || response.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error("Error sending email:", error);
-      alert("Failed to send email. Please try again.");
+      const errorMessage = error.message || error.response?.data?.message || 'Failed to send email. Please check SMTP configuration.';
+      alert(`❌ ${errorMessage}`);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -666,10 +672,24 @@ const ScheduleManagement = () => {
                       <div className="flex items-center space-x-2 mt-3">
                         <button
                           onClick={() => handleSendEmail(schedule.id)}
-                          className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm"
+                          disabled={saving}
+                          className={`flex-1 flex items-center justify-center space-x-1 px-3 py-2 rounded-lg transition-colors text-sm ${
+                            saving
+                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                              : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                          }`}
                         >
-                          <Mail className="w-4 h-4" />
-                          <span>Send Email</span>
+                          {saving ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                              <span>Sending...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Mail className="w-4 h-4" />
+                              <span>Send Email</span>
+                            </>
+                          )}
                         </button>
                         <button
                           onClick={() => handleDeleteSchedule(schedule.id)}

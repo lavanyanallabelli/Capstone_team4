@@ -55,7 +55,7 @@ const router = express.Router();
 // Validation schemas
 const generalSettingsSchema = Joi.object({
     restaurantName: Joi.string().min(1).max(100).required(),
-    businessType: Joi.string().valid('Restaurant', 'Cafe', 'Fast Food', 'Fine Dining', 'Bar').required(),
+    businessType: Joi.string().valid('Italian Restaurant', 'Chinese Restaurant', 'Indian Restaurant', 'Mexican Restaurant', 'Cafe').required(),
     address: Joi.string().max(200).required(),
     phone: Joi.string().pattern(/^\+?[\d\s\-\(\)]+$/).required(),
     email: Joi.string().email().required(),
@@ -131,7 +131,7 @@ router.get('/', authorizePermission('canManageRestaurantDetails'), async (req, r
         });
 
         const ownerId = getOwnerId(req);
-        
+
         if (!ownerId) {
             console.error('❌ No ownerId in request');
             return res.status(401).json({
@@ -274,7 +274,7 @@ router.put('/general', authorizePermission('canManageRestaurantDetails'), async 
         });
 
         const ownerId = getOwnerId(req);
-        
+
         if (!ownerId) {
             console.error('❌ No ownerId in request');
             return res.status(401).json({
@@ -352,7 +352,7 @@ router.put('/hours', authorizePermission('canManageRestaurantDetails'), async (r
         });
 
         const ownerId = getOwnerId(req);
-        
+
         if (!ownerId) {
             console.error('❌ No ownerId in request');
             return res.status(401).json({
@@ -430,7 +430,7 @@ router.put('/payment', authorizePermission('canManagePaymentGateway'), async (re
         });
 
         const ownerId = getOwnerId(req);
-        
+
         if (!ownerId) {
             console.error('❌ No ownerId in request');
             return res.status(401).json({
@@ -508,7 +508,7 @@ router.put('/notifications', authorizePermission('canManageNotificationSettings'
         });
 
         const ownerId = getOwnerId(req);
-        
+
         if (!ownerId) {
             console.error('❌ No ownerId in request');
             return res.status(401).json({
@@ -585,7 +585,7 @@ router.post('/initialize', authorizePermission('canManageRestaurantDetails'), as
         const defaultSettings = {
             general: {
                 restaurantName: 'My Restaurant',
-                businessType: 'Restaurant',
+                businessType: 'Italian Restaurant',
                 address: '',
                 phone: '',
                 email: '',

@@ -235,12 +235,11 @@ const CTA = () => {
                                         required
                                     >
                                         <option value="">Select Business Type</option>
-                                        <option value="retail">Retail Store</option>
-                                        <option value="restaurant">Restaurant</option>
-                                        <option value="cafe">Café/Coffee Shop</option>
-                                        <option value="salon">Salon/Spa</option>
-                                        <option value="pharmacy">Pharmacy</option>
-                                        <option value="other">Other</option>
+                                        <option value="italian restaurant">Italian Restaurant</option>
+                                        <option value="chinese restaurant">Chinese Restaurant</option>
+                                        <option value="indian restaurant">Indian Restaurant</option>
+                                        <option value="mexican restaurant">Mexican Restaurant</option>
+                                        <option value="cafe">Cafe</option>
                                     </select>
                                 </motion.div>
 

@@ -2,6 +2,7 @@ const express = require('express');
 const { Order, Payment, Owner, Employee } = require('../models');
 const { authenticateToken } = require('../middleware/auth');
 const { Op } = require('sequelize');
+const { sendRefundNotification } = require('../services/emailService');
 
 const router = express.Router();
 
@@ -23,7 +24,13 @@ router.post('/', authenticateToken, async (req, res) => {
             orderType,
             tableNumber,
             customerName,
+            customerPhone,
             total,
+            discountAmount = 0,
+            serviceCharge = 0,
+            tax,
+            tip = 0,
+            finalTotal,
             status = 'pending'
         } = req.body;
 
@@ -50,8 +57,13 @@ router.post('/', authenticateToken, async (req, res) => {
         const normalizedOrderType = orderType === 'to-go' ? 'takeout' : orderType;
 
         const totalAmount = parseFloat(total) || 0;
-        const tax = totalAmount * 0.08; // 8% tax
-        const finalTotal = totalAmount * 1.08;
+        const discount = parseFloat(discountAmount) || 0;
+        const serviceChargeAmount = parseFloat(serviceCharge) || 0;
+        const taxAmount = parseFloat(tax) || (totalAmount * 0.08); // Use provided tax or default 8%
+        const tipAmount = parseFloat(tip) || 0;
+        const calculatedFinalTotal = parseFloat(finalTotal) || (
+            totalAmount - discount + serviceChargeAmount + taxAmount + tipAmount
+        );
 
         // Create order
         const order = await Order.create({
@@ -62,10 +74,13 @@ router.post('/', authenticateToken, async (req, res) => {
             items,
             orderType: normalizedOrderType,
             tableNumber: normalizedOrderType === 'dine-in' ? tableNumber : null,
-            customerName: (normalizedOrderType === 'delivery' || normalizedOrderType === 'pickup') ? customerName : null,
+            customerName: (normalizedOrderType === 'online-order' || normalizedOrderType === 'delivery' || normalizedOrderType === 'pickup' || normalizedOrderType === 'to-go') ? customerName : null,
             totalAmount,
-            tax,
-            finalTotal,
+            discountAmount: discount,
+            serviceCharge: serviceChargeAmount,
+            tax: taxAmount,
+            tip: tipAmount,
+            finalTotal: calculatedFinalTotal,
             status
         });
 
@@ -112,7 +127,7 @@ router.get('/', authenticateToken, async (req, res) => {
             order: [['orderDate', 'DESC']],
             include: [
                 { model: Employee, as: 'employee', attributes: ['id', 'firstName', 'lastName', 'email'] },
-                { model: Payment, as: 'payments', attributes: ['id', 'amount', 'method', 'status', 'transactionId', 'paymentDate', 'createdAt'] }
+                { model: Payment, as: 'payments', attributes: ['id', 'amount', 'method', 'status', 'transactionId', 'createdAt'] }
             ]
         });
 
@@ -461,6 +476,196 @@ router.post('/:orderId/payment', authenticateToken, async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Failed to process payment',
+            message: error.message
+        });
+    }
+});
+
+// Refund a payment
+router.patch('/:orderId/payment/:paymentId/refund', authenticateToken, async (req, res) => {
+    try {
+        const { orderId, paymentId } = req.params;
+        const { amount, reason } = req.body;
+        const ownerId = getOwnerId(req);
+
+        // Find order
+        const order = await Order.findOne({
+            where: {
+                id: orderId,
+                ownerId: ownerId
+            },
+            include: [{ model: Payment, as: 'payments' }]
+        });
+
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                error: 'Order not found'
+            });
+        }
+
+        // Find payment
+        const payment = await Payment.findOne({
+            where: {
+                id: paymentId,
+                orderId: orderId
+            }
+        });
+
+        if (!payment) {
+            return res.status(404).json({
+                success: false,
+                error: 'Payment not found'
+            });
+        }
+
+        if (payment.status !== 'completed') {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid payment status',
+                message: 'Only completed payments can be refunded'
+            });
+        }
+
+        const refundAmount = parseFloat(amount || payment.amount);
+        if (refundAmount > parseFloat(payment.amount)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid refund amount',
+                message: 'Refund amount cannot exceed payment amount'
+            });
+        }
+
+        // Update payment status to refunded
+        payment.status = 'refunded';
+        await payment.save();
+
+        // Optionally update order status to cancelled
+        if (refundAmount >= parseFloat(payment.amount)) {
+            order.status = 'cancelled';
+            await order.save();
+        }
+
+        // Check if user is a manager (not owner) and send email notification to owner
+        // Note: req.user.role is logged in auth middleware, but userRole is the actual field
+        let userRole = req.user?.userRole || req.user?.role || req.user?.['custom:userRole'] || 'employee';
+        console.log('🔍 Refund processed by user role (from token):', userRole);
+        console.log('🔍 req.user.userRole:', req.user?.userRole);
+        console.log('🔍 req.user.role:', req.user?.role);
+        console.log('🔍 req.user.email:', req.user?.email);
+
+        // Double-check role from database if available
+        if (req.user?.email && userRole !== 'owner') {
+            try {
+                const employee = await Employee.findOne({
+                    where: {
+                        email: req.user.email,
+                        ownerId: ownerId
+                    },
+                    attributes: ['role']
+                });
+                if (employee && employee.role) {
+                    console.log('🔍 Employee role from database:', employee.role);
+                    userRole = employee.role;
+                }
+            } catch (dbError) {
+                console.warn('⚠️ Could not check employee role in database:', dbError.message);
+            }
+        }
+
+        if (userRole === 'manager') {
+            console.log('📧 Manager detected - preparing to send email notification to owner');
+            try {
+                // Get owner information
+                const owner = await Owner.findOne({
+                    where: { id: ownerId }
+                });
+
+                if (!owner) {
+                    console.error('⚠️ Owner not found for ownerId:', ownerId);
+                } else if (!owner.email) {
+                    console.error('⚠️ Owner email not found for owner:', owner.id);
+                } else {
+                    console.log('✅ Owner found, email:', owner.email);
+
+                    // Get manager information
+                    let managerName = 'Manager';
+                    if (req.user?.email) {
+                        // Try to find manager by email
+                        const manager = await Employee.findOne({
+                            where: {
+                                ownerId: ownerId,
+                                email: req.user.email
+                            }
+                        });
+                        if (manager) {
+                            managerName = `${manager.firstName || ''} ${manager.lastName || ''}`.trim() || manager.email || 'Manager';
+                            console.log('✅ Manager found:', managerName);
+                        } else {
+                            // Fallback to email if employee not found
+                            managerName = req.user.email;
+                            console.log('⚠️ Manager not found in database, using email:', managerName);
+                        }
+                    }
+
+                    // Send email notification to owner
+                    const refundData = {
+                        orderNumber: order.orderNumber,
+                        refundAmount: refundAmount,
+                        reason: reason || 'No reason provided',
+                        managerName: managerName,
+                        orderDate: order.orderDate || order.createdAt,
+                        paymentMethod: payment.method || 'N/A'
+                    };
+
+                    console.log('📧 Attempting to send refund notification email...');
+                    console.log('📧 Email details:', {
+                        to: owner.email,
+                        ownerName: owner.name || owner.businessName,
+                        businessName: owner.businessName || 'POS System',
+                        refundData
+                    });
+
+                    await sendRefundNotification(
+                        owner.email,
+                        owner.name || owner.businessName,
+                        owner.businessName || 'POS System',
+                        refundData
+                    );
+                    console.log('✅ Refund notification email sent successfully to owner:', owner.email);
+                }
+            } catch (emailError) {
+                // Log error but don't fail the refund
+                console.error('❌ Failed to send refund notification email:');
+                console.error('   Error message:', emailError.message);
+                console.error('   Error stack:', emailError.stack);
+            }
+        } else {
+            console.log('ℹ️ User is not a manager (role:', userRole, '), skipping email notification');
+        }
+
+        console.log('✅ Payment refunded:', {
+            paymentId,
+            orderId,
+            refundAmount,
+            reason,
+            processedBy: userRole
+        });
+
+        res.json({
+            success: true,
+            data: {
+                payment,
+                order
+            },
+            message: 'Refund processed successfully'
+        });
+
+    } catch (error) {
+        console.error('Error processing refund:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to process refund',
             message: error.message
         });
     }

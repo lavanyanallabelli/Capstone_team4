@@ -5,7 +5,7 @@ const createTransporter = () => {
     const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
     const smtpPort = parseInt(process.env.SMTP_PORT) || 587;
     const smtpSecure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
-    
+
     // Default config
     const config = {
         host: smtpHost,
@@ -26,24 +26,39 @@ const createTransporter = () => {
     };
 
     // Provider-specific configurations
-    if (smtpHost.includes('outlook.com') || smtpHost.includes('hotmail.com') || smtpHost.includes('live.com')) {
+    // Check SMTP_USER email domain to determine provider (if SMTP_HOST is generic)
+    const smtpUser = process.env.SMTP_USER || '';
+    const isGmailUser = smtpUser.toLowerCase().includes('@gmail.com');
+    const isOutlookUser = smtpUser.toLowerCase().includes('@outlook.com') ||
+        smtpUser.toLowerCase().includes('@hotmail.com') ||
+        smtpUser.toLowerCase().includes('@live.com');
+
+    // Prioritize Gmail if user email is Gmail
+    if (isGmailUser || smtpHost.includes('gmail.com')) {
+        // Gmail configuration
+        config.host = 'smtp.gmail.com';
+        config.port = 587;
+        config.secure = false;
+        config.requireTLS = true; // Gmail requires TLS
+        console.log('📧 Using Gmail SMTP configuration');
+        console.log('   User email:', smtpUser ? `${smtpUser.substring(0, 3)}***` : 'NOT SET');
+    } else if (isOutlookUser || smtpHost.includes('outlook.com') || smtpHost.includes('hotmail.com') || smtpHost.includes('live.com')) {
         // Outlook/Hotmail configuration
         config.host = 'smtp-mail.outlook.com';
         config.port = 587;
         config.secure = false;
+        config.requireTLS = true;
         console.log('📧 Using Outlook/Hotmail SMTP configuration');
+        console.log('   User email:', smtpUser ? `${smtpUser.substring(0, 3)}***` : 'NOT SET');
     } else if (smtpHost.includes('yahoo.com')) {
         // Yahoo configuration
         config.host = 'smtp.mail.yahoo.com';
         config.port = 587;
         config.secure = false;
         console.log('📧 Using Yahoo SMTP configuration');
-    } else if (smtpHost.includes('gmail.com')) {
-        // Gmail configuration
-        config.host = 'smtp.gmail.com';
-        config.port = 587;
-        config.secure = false;
-        console.log('📧 Using Gmail SMTP configuration');
+    } else {
+        // Generic SMTP configuration
+        console.log('📧 Using generic SMTP configuration');
     }
 
     console.log('📧 Creating email transporter with config:', {
@@ -194,12 +209,12 @@ const sendScheduleEmail = async (employeeEmail, employeeName, scheduleData, week
         try {
             const { sendEmail } = require('./sesEmailService');
             // Build the same HTML as below by briefly constructing table
-            const days = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
-            const dayNames = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+            const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+            const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
             const weekStart = new Date(weekStartDate);
             const weekEnd = new Date(weekStart);
             weekEnd.setDate(weekEnd.getDate() + 6);
-            const fmt = (d) => d.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
+            const fmt = (d) => d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
             let rows = '';
             days.forEach((day, i) => {
                 const entry = scheduleData[day];
@@ -311,9 +326,9 @@ const sendScheduleEmail = async (employeeEmail, employeeName, scheduleData, week
                         
                         <p style="color: #666; line-height: 1.6;">
                             ${isUpdate
-                                ? `Your work schedule for the week of <strong>${formatDate(weekStart)} - ${formatDate(weekEnd)}</strong> has been updated. Please review your new schedule below.`
-                                : `Your work schedule for the week of <strong>${formatDate(weekStart)} - ${formatDate(weekEnd)}</strong> has been set. Please review your schedule below.`
-                            }
+                    ? `Your work schedule for the week of <strong>${formatDate(weekStart)} - ${formatDate(weekEnd)}</strong> has been updated. Please review your new schedule below.`
+                    : `Your work schedule for the week of <strong>${formatDate(weekStart)} - ${formatDate(weekEnd)}</strong> has been set. Please review your schedule below.`
+                }
                         </p>
                         
                         <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #667eea;">
@@ -379,7 +394,147 @@ const sendScheduleEmail = async (employeeEmail, employeeName, scheduleData, week
     }
 };
 
+// Send refund notification to owner when manager processes refund
+const sendRefundNotification = async (ownerEmail, ownerName, businessName, refundData) => {
+    const { orderNumber, refundAmount, reason, managerName, orderDate, paymentMethod } = refundData;
+
+    const hasSmtp = !!(process.env.SMTP_USER && process.env.SMTP_PASS);
+    // If SMTP not configured, attempt AWS SES fallback
+    if (!hasSmtp && (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY)) {
+        try {
+            const { sendEmail } = require('./sesEmailService');
+            const fromEmail = process.env.SES_FROM || process.env.SMTP_USER || 'no-reply@example.com';
+            const subject = `Refund Processed - Order ${orderNumber}`;
+            const html = buildRefundEmailHTML(businessName, refundData);
+            await sendEmail(ownerEmail, fromEmail, subject, html);
+            return true;
+        } catch (sesErr) {
+            console.error('❌ SES fallback failed for refund notification email:', sesErr.message);
+            // Continue to try SMTP below if possible
+        }
+    }
+
+    if (!hasSmtp) {
+        const error = new Error('SMTP configuration missing and SES fallback unavailable. Set SMTP_USER/SMTP_PASS or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY.');
+        console.error('❌ Email configuration error:', error.message);
+        throw error;
+    }
+
+    try {
+        const transporter = createTransporter();
+
+        // Verify connection before sending
+        await transporter.verify();
+        console.log('✅ SMTP server connection verified');
+
+        const mailOptions = {
+            from: process.env.SMTP_USER,
+            to: ownerEmail,
+            subject: `Refund Processed - Order ${orderNumber}`,
+            html: buildRefundEmailHTML(businessName, refundData)
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        console.log('✅ Refund notification email sent successfully!');
+        console.log('   📧 To:', ownerEmail);
+        console.log('   📨 Message ID:', info.messageId);
+        return true;
+    } catch (error) {
+        console.error('❌ Error sending refund notification email:');
+        console.error('   📧 To:', ownerEmail);
+        console.error('   🔴 Error:', error.message);
+        if (error.code) {
+            console.error('   🔴 Error Code:', error.code);
+        }
+        if (error.response) {
+            console.error('   🔴 SMTP Response:', error.response);
+        }
+        // Don't throw error - refund should still succeed even if email fails
+        return false;
+    }
+};
+
+// Helper function to build refund email HTML
+const buildRefundEmailHTML = (businessName, refundData) => {
+    const { orderNumber, refundAmount, reason, managerName, orderDate, paymentMethod } = refundData;
+    const formattedDate = orderDate ? new Date(orderDate).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    }) : 'N/A';
+    const formattedAmount = parseFloat(refundAmount).toFixed(2);
+
+    return `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+                <h1 style="color: white; margin: 0; font-size: 24px;">${businessName}</h1>
+                <p style="color: #e0e0e0; margin: 10px 0 0 0;">Refund Notification</p>
+            </div>
+            
+            <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                <h2 style="color: #333; margin-top: 0;">Refund Processed</h2>
+                
+                <p style="color: #666; line-height: 1.6;">
+                    A refund has been processed by <strong>${managerName || 'a manager'}</strong> for one of your orders.
+                </p>
+                
+                <div style="background: #fff3cd; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ffc107;">
+                    <h3 style="color: #856404; margin-top: 0; margin-bottom: 15px;">Refund Details</h3>
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                            <td style="padding: 8px 0; color: #856404; font-weight: bold;">Order Number:</td>
+                            <td style="padding: 8px 0; color: #856404;">${orderNumber}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; color: #856404; font-weight: bold;">Refund Amount:</td>
+                            <td style="padding: 8px 0; color: #856404; font-size: 18px; font-weight: bold;">$${formattedAmount}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; color: #856404; font-weight: bold;">Payment Method:</td>
+                            <td style="padding: 8px 0; color: #856404;">${paymentMethod || 'N/A'}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; color: #856404; font-weight: bold;">Order Date:</td>
+                            <td style="padding: 8px 0; color: #856404;">${formattedDate}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; color: #856404; font-weight: bold;">Processed By:</td>
+                            <td style="padding: 8px 0; color: #856404;">${managerName || 'Manager'}</td>
+                        </tr>
+                    </table>
+                </div>
+
+                ${reason ? `
+                    <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2196f3;">
+                        <h4 style="color: #1565c0; margin-top: 0;">Refund Reason:</h4>
+                        <p style="color: #1565c0; margin: 0; white-space: pre-wrap;">${reason}</p>
+                    </div>
+                ` : ''}
+                
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #6c757d;">
+                    <h4 style="color: #495057; margin-top: 0;">Important:</h4>
+                    <ul style="color: #495057; margin: 0; padding-left: 20px;">
+                        <li>This refund has been processed and recorded in your system</li>
+                        <li>Please verify the refund amount and reason</li>
+                        <li>Contact your manager if you have any questions</li>
+                    </ul>
+                </div>
+                
+                <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+                
+                <p style="color: #999; font-size: 12px; text-align: center; margin: 0;">
+                    This is an automated notification from ${businessName} POS System.<br>
+                    Please do not reply to this email.
+                </p>
+            </div>
+        </div>
+    `;
+};
+
 module.exports = {
     sendEmployeeCredentials,
-    sendScheduleEmail
+    sendScheduleEmail,
+    sendRefundNotification
 };

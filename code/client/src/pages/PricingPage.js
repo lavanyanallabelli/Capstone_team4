@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Check, Star, ArrowRight } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import PaymentCardForm from '../components/PaymentCardForm';
+import apiService from '../services/api';
 
 const PricingPage = () => {
     const { currentUser } = useAuth();
@@ -12,23 +14,27 @@ const PricingPage = () => {
 
     const plans = [
         {
-            name: 'Starter',
+            name: 'Free Trial',
+            planId: 'Free Trial',
             price: 'Free',
-            period: 'Forever',
-            description: 'Perfect for small businesses just getting started',
+            period: '30 days',
+            description: 'Perfect for trying out our service',
             features: [
-                'Up to 100 transactions/month',
+                'Full access to all features',
                 'Basic inventory management',
                 'Simple reporting',
                 'Email support',
-                '1 user account'
+                'Up to 5 user accounts',
+                '30-day trial period'
             ],
             buttonText: 'Get Started',
             popular: false,
-            color: 'from-gray-600 to-gray-700'
+            color: 'from-gray-600 to-gray-700',
+            purchasable: false
         },
         {
-            name: 'Professional',
+            name: 'Basic',
+            planId: 'Basic',
             price: '$29',
             period: 'per month',
             description: 'Ideal for growing businesses with advanced needs',
@@ -42,17 +48,19 @@ const PricingPage = () => {
                 'Custom receipts',
                 'Tax management'
             ],
-            buttonText: 'Start Free Trial',
+            buttonText: 'Subscribe Now',
             popular: true,
-            color: 'from-primary-600 to-secondary-600'
+            color: 'from-primary-600 to-secondary-600',
+            purchasable: true
         },
         {
             name: 'Enterprise',
+            planId: 'Enterprise',
             price: '$99',
             period: 'per month',
             description: 'For large businesses requiring enterprise features',
             features: [
-                'Everything in Professional',
+                'Everything in Basic',
                 'Unlimited user accounts',
                 'Advanced integrations',
                 'Custom branding',
@@ -61,11 +69,16 @@ const PricingPage = () => {
                 'Custom training',
                 'API access'
             ],
-            buttonText: 'Contact Sales',
+            buttonText: 'Subscribe Now',
             popular: false,
-            color: 'from-accent-600 to-purple-600'
+            color: 'from-accent-600 to-purple-600',
+            purchasable: true
         }
     ];
+
+    const [showPaymentForm, setShowPaymentForm] = useState(false);
+    const [selectedPlan, setSelectedPlan] = useState(null);
+    const [loading, setLoading] = useState(false);
 
     const containerVariants = {
         hidden: { opacity: 0 },
@@ -91,11 +104,57 @@ const PricingPage = () => {
     };
 
     const handleGetStarted = (plan) => {
-        if (currentUser) {
-            navigate('/dashboard');
-        } else {
-            navigate('/signup');
+        if (plan.planId === 'Free Trial') {
+            if (currentUser) {
+                navigate('/dashboard');
+            } else {
+                navigate('/signup');
+            }
+        } else if (plan.purchasable) {
+            // Show payment form for paid plans
+            setSelectedPlan(plan);
+            setShowPaymentForm(true);
         }
+    };
+
+    const handlePaymentSubmit = async (paymentData) => {
+        if (!selectedPlan) return;
+
+        setLoading(true);
+        try {
+            const subscriptionData = {
+                plan: selectedPlan.planId,
+                ...paymentData
+            };
+
+            const response = await apiService.purchaseSubscription(subscriptionData);
+
+            if (response.success) {
+                // Show success message and redirect to dashboard
+                alert('✅ Subscription activated successfully! You now have full access to all features.');
+                // Redirect to dashboard after a short delay
+                setTimeout(() => {
+                    navigate('/dashboard');
+                    // Force page reload to refresh subscription data in both dashboard and settings
+                    window.location.reload();
+                }, 500);
+            } else {
+                alert(`❌ Failed to activate subscription: ${response.message || 'Unknown error'}`);
+            }
+        } catch (error) {
+            console.error('Error purchasing subscription:', error);
+            const errorMessage = error.response?.data?.message || error.message || 'Failed to process subscription';
+            alert(`❌ Error: ${errorMessage}`);
+        } finally {
+            setLoading(false);
+            setShowPaymentForm(false);
+            setSelectedPlan(null);
+        }
+    };
+
+    const handlePaymentCancel = () => {
+        setShowPaymentForm(false);
+        setSelectedPlan(null);
     };
 
     return (
@@ -120,6 +179,18 @@ const PricingPage = () => {
                     </motion.div>
                 </div>
             </section>
+
+            {/* Payment Form Modal */}
+            {showPaymentForm && selectedPlan && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <PaymentCardForm
+                        plan={selectedPlan.name}
+                        onSubmit={handlePaymentSubmit}
+                        onCancel={handlePaymentCancel}
+                        loading={loading}
+                    />
+                </div>
+            )}
 
             {/* Pricing Cards */}
             <section className="py-20">

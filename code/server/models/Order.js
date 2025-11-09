@@ -41,7 +41,7 @@ const Order = sequelize.define('Order', {
         defaultValue: []
     },
     orderType: {
-        type: DataTypes.ENUM('dine-in', 'to-go', 'takeout', 'delivery', 'pickup', 'drive-thru'),
+        type: DataTypes.ENUM('dine-in', 'to-go', 'takeout', 'delivery', 'online-order', 'pickup', 'drive-thru'),
         allowNull: false
     },
     tableNumber: {
@@ -57,9 +57,24 @@ const Order = sequelize.define('Order', {
         allowNull: false,
         defaultValue: 0.00
     },
+    discountAmount: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+        defaultValue: 0.00
+    },
+    serviceCharge: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+        defaultValue: 0.00
+    },
     tax: {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: false,
+        defaultValue: 0.00
+    },
+    tip: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
         defaultValue: 0.00
     },
     finalTotal: {

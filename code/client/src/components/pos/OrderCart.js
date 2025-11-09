@@ -17,14 +17,23 @@ const OrderCart = ({
     tableNumber,
     customerName,
     total,
+    discount = 0,
+    serviceCharge = 0,
+    tax = 0,
+    tip = 0,
+    finalTotal,
     onUpdateQuantity,
     onRemoveItem,
     onClearOrder,
     onSubmitOrder
 }) => {
-    const taxRate = 0.08; // 8% tax
-    const tax = total * taxRate;
-    const finalTotal = total + tax;
+    // Use provided values or calculate defaults
+    const displayTotal = total || 0;
+    const displayDiscount = discount || 0;
+    const displayServiceCharge = serviceCharge || 0;
+    const displayTax = tax || 0;
+    const displayTip = tip || 0;
+    const displayFinalTotal = finalTotal || (displayTotal + displayTax);
 
     return (
         <div className="h-full flex flex-col bg-white">
@@ -57,7 +66,7 @@ const OrderCart = ({
                         </div>
                     )}
 
-                    {(orderType === 'delivery' || orderType === 'pickup') && customerName && (
+                    {orderType === 'pickup' && customerName && (
                         <div className="flex items-center text-sm">
                             <User className="w-4 h-4 mr-2 text-gray-500" />
                             <span className="font-medium">Customer:</span>
@@ -136,15 +145,35 @@ const OrderCart = ({
                     <div className="space-y-2 mb-4">
                         <div className="flex justify-between text-sm">
                             <span className="text-gray-600">Subtotal:</span>
-                            <span className="font-medium">${total.toFixed(2)}</span>
+                            <span className="font-medium">${displayTotal.toFixed(2)}</span>
                         </div>
-                        <div className="flex justify-between text-sm">
-                            <span className="text-gray-600">Tax (8%):</span>
-                            <span className="font-medium">${tax.toFixed(2)}</span>
-                        </div>
+                        {displayDiscount > 0 && (
+                            <div className="flex justify-between text-sm text-green-600">
+                                <span>Discount:</span>
+                                <span className="font-medium">-${displayDiscount.toFixed(2)}</span>
+                            </div>
+                        )}
+                        {displayServiceCharge > 0 && (
+                            <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">Service Charge:</span>
+                                <span className="font-medium">${displayServiceCharge.toFixed(2)}</span>
+                            </div>
+                        )}
+                        {displayTax > 0 && (
+                            <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">Tax:</span>
+                                <span className="font-medium">${displayTax.toFixed(2)}</span>
+                            </div>
+                        )}
+                        {displayTip > 0 && (
+                            <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">Tip:</span>
+                                <span className="font-medium">${displayTip.toFixed(2)}</span>
+                            </div>
+                        )}
                         <div className="flex justify-between text-lg font-bold border-t pt-2">
                             <span>Total:</span>
-                            <span className="text-green-600">${finalTotal.toFixed(2)}</span>
+                            <span className="text-green-600">${displayFinalTotal.toFixed(2)}</span>
                         </div>
                     </div>
 

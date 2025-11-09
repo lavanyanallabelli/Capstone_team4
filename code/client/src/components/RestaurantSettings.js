@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import { USER_ROLES } from '../aws/userRoles';
 import apiService from '../services/api';
+import { useNavigate } from 'react-router-dom';
 import {
     Settings,
     Building,
@@ -17,11 +18,13 @@ import {
     Trash2,
     AlertCircle,
     Edit,
-    Pencil
+    Pencil,
+    ArrowUpCircle
 } from 'lucide-react';
 
 const RestaurantSettings = () => {
     const { currentUser, logout } = useAuth();
+    const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('profile');
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -485,6 +488,47 @@ const RestaurantSettings = () => {
                                             <p>Member Since: {new Date(ownerProfile.createdAt).toLocaleDateString()}</p>
                                             <p>Last Login: {ownerProfile.lastLogin ? new Date(ownerProfile.lastLogin).toLocaleString() : 'Never'}</p>
                                             <p>Login Count: {ownerProfile.loginCount || 0}</p>
+                                        </div>
+
+                                        {/* Subscription Information */}
+                                        <div className="mt-4 pt-4 border-t border-gray-200">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <h4 className="text-sm font-medium text-gray-700">Subscription Details</h4>
+                                                {(ownerProfile.subscriptionStatus === 'trial' ||
+                                                    ownerProfile.subscriptionStatus === 'expired' ||
+                                                    (ownerProfile.subscriptionStatus === 'active' && ownerProfile.subscriptionPlan !== 'Enterprise')) && (
+                                                        <button
+                                                            onClick={() => navigate('/pricing')}
+                                                            className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md font-medium flex items-center space-x-1 transition-colors"
+                                                        >
+                                                            <ArrowUpCircle className="w-3 h-3" />
+                                                            <span>Upgrade Plan</span>
+                                                        </button>
+                                                    )}
+                                            </div>
+                                            <div className="space-y-1 text-sm text-gray-600">
+                                                <p>Plan: <span className={`font-medium ${ownerProfile.subscriptionPlan === 'Free Trial' ? 'text-yellow-600' :
+                                                    ownerProfile.subscriptionStatus === 'active' ? 'text-green-600' : 'text-red-600'
+                                                    }`}>
+                                                    {ownerProfile.subscriptionPlan || 'Free Trial'}
+                                                </span></p>
+                                                <p>Status: <span className={`font-medium ${ownerProfile.subscriptionStatus === 'active' ? 'text-green-600' :
+                                                    ownerProfile.subscriptionStatus === 'trial' ? 'text-yellow-600' : 'text-red-600'
+                                                    }`}>
+                                                    {ownerProfile.subscriptionStatus ? ownerProfile.subscriptionStatus.charAt(0).toUpperCase() + ownerProfile.subscriptionStatus.slice(1) : 'Trial'}
+                                                </span></p>
+                                                {ownerProfile.subscriptionStatus === 'active' ? (
+                                                    <>
+                                                        <p>Current Period: {ownerProfile.subscriptionStartDate ? new Date(ownerProfile.subscriptionStartDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'N/A'}</p>
+                                                        <p>Next Billing: {ownerProfile.subscriptionEndDate ? new Date(ownerProfile.subscriptionEndDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'N/A'}</p>
+                                                        {ownerProfile.autoPayment && (
+                                                            <p>Auto-Payment: <span className="text-green-600 font-medium">Enabled</span></p>
+                                                        )}
+                                                    </>
+                                                ) : (
+                                                    <p>Trial Expires: {ownerProfile.trialEndDate ? new Date(ownerProfile.trialEndDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'N/A'}</p>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 )}

@@ -24,15 +24,11 @@ const SignupForm = ({ onClose, onSwitchToLogin, isPage = false }) => {
 
     const businessTypes = [
         { value: '', label: 'Select Business Type' },
-        { value: 'retail', label: 'Retail Store' },
-        { value: 'restaurant', label: 'Restaurant' },
-        { value: 'cafe', label: 'Café/Coffee Shop' },
-        { value: 'salon', label: 'Salon/Spa' },
-        { value: 'pharmacy', label: 'Pharmacy' },
-        { value: 'grocery', label: 'Grocery Store' },
-        { value: 'clothing', label: 'Clothing Store' },
-        { value: 'electronics', label: 'Electronics' },
-        { value: 'other', label: 'Other' }
+        { value: 'italian restaurant', label: 'Italian Restaurant' },
+        { value: 'chinese restaurant', label: 'Chinese Restaurant' },
+        { value: 'indian restaurant', label: 'Indian Restaurant' },
+        { value: 'mexican restaurant', label: 'Mexican Restaurant' },
+        { value: 'cafe', label: 'Cafe' }
     ];
 
     const handleChange = (e) => {
