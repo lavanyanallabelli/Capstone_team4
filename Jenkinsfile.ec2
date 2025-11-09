@@ -128,21 +128,61 @@ REACT_APP_REDIRECT_SIGN_OUT=${env.REACT_APP_REDIRECT_SIGN_OUT}
         success {
             echo "✅ Build succeeded: ${env.BUILD_NUMBER} (${params.BRANCH})"
             withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_URL')]) {
-                sh '''
-cat > payload.json <<EOF
+                script {
+                    def slackMessage = """
 {
-  "blocks": [
+  "attachments": [
     {
-      "type": "section",
-      "text": { "type": "mrkdwn", "text": "*Project:* POS System\n*Branch:* $BRANCH\n*Build #:* $BUILD_NUMBER\n*Commit:* $LAST_COMMIT_HASH\n*Author:* $LAST_COMMIT_AUTHOR\n*Message:* $LAST_COMMIT_MESSAGE\n\n*Build URL:* $BUILD_URL" }
+      "color": "good",
+      "blocks": [
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": ":white_check_mark: *Jenkins Dev Build Succeeded!*"
+          }
+        },
+        {
+          "type": "section",
+          "fields": [
+            {
+              "type": "mrkdwn",
+              "text": "*Project:*\\nPOS System"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*Branch:*\\n${params.BRANCH}"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*Build #:*\\n${env.BUILD_NUMBER}"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*Commit:*\\n${env.LAST_COMMIT_HASH}"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*Author:*\\n${env.LAST_COMMIT_AUTHOR}"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*Message:*\\n${env.LAST_COMMIT_MESSAGE}"
+            }
+          ]
+        }
+      ]
     }
   ]
 }
-EOF
-HTTP_CODE=$(curl -sS -o /tmp/slack_resp.txt -w "%{http_code}" -X POST -H 'Content-type: application/json' --data @payload.json "$SLACK_URL" || true)
+"""
+                    writeFile file: 'slack_payload.json', text: slackMessage
+                    sh '''
+HTTP_CODE=$(curl -sS -o /tmp/slack_resp.txt -w "%{http_code}" -X POST -H 'Content-type: application/json' --data @slack_payload.json "$SLACK_URL" || true)
 echo "Slack HTTP: $HTTP_CODE"
 echo "Slack resp:" && cat /tmp/slack_resp.txt || true
-                '''
+                    '''
+                }
             }
             mail (
                 to: 'chetanjogi042@gmail.com',
@@ -165,23 +205,63 @@ Build URL: ${env.BUILD_URL}
         }
 
         failure {
-            echo "Build failed!"
+            echo "❌ Build failed!"
             withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_URL')]) {
-                sh '''
-cat > payload.json <<EOF
+                script {
+                    def slackMessage = """
 {
-  "blocks": [
+  "attachments": [
     {
-      "type": "section",
-      "text": { "type": "mrkdwn", "text": "*Project:* POS System\n*Branch:* $BRANCH\n*Build #:* $BUILD_NUMBER\n*Commit:* $LAST_COMMIT_HASH\n*Author:* $LAST_COMMIT_AUTHOR\n*Message:* $LAST_COMMIT_MESSAGE\n\n*Logs:* ${BUILD_URL}console" }
+      "color": "danger",
+      "blocks": [
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": ":x: *Jenkins Dev Build Failed!*"
+          }
+        },
+        {
+          "type": "section",
+          "fields": [
+            {
+              "type": "mrkdwn",
+              "text": "*Project:*\\nPOS System"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*Branch:*\\n${params.BRANCH}"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*Build #:*\\n${env.BUILD_NUMBER}"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*Commit:*\\n${env.LAST_COMMIT_HASH}"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*Author:*\\n${env.LAST_COMMIT_AUTHOR}"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*Message:*\\n${env.LAST_COMMIT_MESSAGE}"
+            }
+          ]
+        }
+      ]
     }
   ]
 }
-EOF
-HTTP_CODE=$(curl -sS -o /tmp/slack_resp.txt -w "%{http_code}" -X POST -H 'Content-type: application/json' --data @payload.json "$SLACK_URL" || true)
+"""
+                    writeFile file: 'slack_payload.json', text: slackMessage
+                    sh '''
+HTTP_CODE=$(curl -sS -o /tmp/slack_resp.txt -w "%{http_code}" -X POST -H 'Content-type: application/json' --data @slack_payload.json "$SLACK_URL" || true)
 echo "Slack HTTP: $HTTP_CODE"
 echo "Slack resp:" && cat /tmp/slack_resp.txt || true
-                '''
+                    '''
+                }
             }
             
             // ✅ Email notification retained
