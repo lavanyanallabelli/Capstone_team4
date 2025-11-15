@@ -25,7 +25,7 @@ const { authenticateToken } = require('./middleware/auth');
 const { syncCognitoUserToOwner } = require('./middleware/cognitoSync');
 
 // Load environment variables - try .env.qa first (QA), fallback to .env (dev/local)
-const envQaPath = path.join(__dirname, '..', 'QAServer', '.env.qa');
+const envQaPath = path.join(__dirname, '.env.qa');
 const envPath = path.join(__dirname, '.env');
 const envFile = require('fs').existsSync(envQaPath) ? envQaPath : envPath;
 

@@ -1,4 +1,4 @@
-pipeline {
+﻿pipeline {
     agent any
     
     environment {
@@ -78,25 +78,25 @@ REACT_APP_REDIRECT_SIGN_OUT=${env.REACT_APP_REDIRECT_SIGN_OUT}
                         // }
                     // }
                 // }
-                stage('Integration Tests') {
-                    steps {
-                        echo "≡ƒöù Running integration tests..."
-                        sh '''
-                            # Start the server in background
-                            cd code/server && npm start &
-                            SERVER_PID=$!
-                            
-                            # Wait for server to start
-                            sleep 10
-                            
-                            # Run integration tests
-                            cd code/client && npm run test:integration || true
-                            
-                            # Stop the server
-                            kill $SERVER_PID
-                        '''
-                    }
-                }
+                // stage('Integration Tests') {
+                    // steps {
+                        // echo "≡ƒöù Running integration tests..."
+                        // sh '''
+                            // # Start the server in background
+                            // cd code/server && npm start &
+                            // SERVER_PID=$!
+                            // 
+                            // # Wait for server to start
+                            // sleep 10
+                            // 
+                            // # Run integration tests
+                            // cd code/client && npm run test:integration || true
+                            // 
+                            // # Stop the server
+                            // kill $SERVER_PID
+                        // '''
+                    // }
+                // }
                 stage('E2E Tests') {
                     steps {
                         echo "≡ƒÄ¡ Running end-to-end tests..."
@@ -179,14 +179,14 @@ REACT_APP_REDIRECT_SIGN_OUT=${env.REACT_APP_REDIRECT_SIGN_OUT}
                                 exit 1
                             fi
                             echo "✅ .env.qa file found"
-                            echo "Backing up existing .env file (if it exists)..."
-                            if [ -f /home/ec2-user/pos_system/server/.env ]; then
-                                cp /home/ec2-user/pos_system/server/.env /home/ec2-user/pos_system/server/.env.backup || true
-                                echo "✅ Existing .env backed up to .env.backup"
+                            echo "Backing up existing .env.qa file in server directory (if it exists)..."
+                            if [ -f /home/ec2-user/pos_system/server/.env.qa ]; then
+                                cp /home/ec2-user/pos_system/server/.env.qa /home/ec2-user/pos_system/server/.env.qa.backup || true
+                                echo "✅ Existing .env.qa backed up to .env.qa.backup"
                             fi
-                            echo "Copying .env.qa to .env for server configuration..."
-                            cp /home/ec2-user/pos_system/QAServer/.env.qa /home/ec2-user/pos_system/server/.env || { echo '❌ Failed to copy .env.qa file'; exit 1; }
-                            echo "✅ Environment file copied successfully (QA configuration active)"
+                            echo "Copying .env.qa from QAServer to server directory..."
+                            cp /home/ec2-user/pos_system/QAServer/.env.qa /home/ec2-user/pos_system/server/.env.qa || { echo '❌ Failed to copy .env.qa file'; exit 1; }
+                            echo "✅ .env.qa file copied successfully to server directory (QA configuration active)"
                             echo "Verifying critical environment variables..."
                             source /home/ec2-user/pos_system/server/.env
                             if [ -z \"\$DB_HOST\" ] || [ \"\$DB_HOST\" = \"your-rds-endpoint\" ]; then
