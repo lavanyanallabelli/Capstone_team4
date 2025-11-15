@@ -1,4 +1,4 @@
-pipeline {
+﻿pipeline {
     agent any
     
     environment {
@@ -172,9 +172,32 @@ REACT_APP_REDIRECT_SIGN_OUT=${env.REACT_APP_REDIRECT_SIGN_OUT}
                         scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/server/* $SSH_USER@54.196.161.29:/home/ec2-user/pos_system/server/
                         ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@54.196.161.29 "
                             cd /home/ec2-user/pos_system/server
+                            echo "Checking if .env.qa file exists..."
+                            if [ ! -f /home/ec2-user/pos_system/QAServer/.env.qa ]; then
+                                echo '❌ ERROR: .env.qa file not found at /home/ec2-user/pos_system/QAServer/.env.qa'
+                                echo 'Please create the file with required environment variables'
+                                exit 1
+                            fi
+                            echo "✅ .env.qa file found"
+                            echo "Backing up existing .env file (if it exists)..."
+                            if [ -f /home/ec2-user/pos_system/server/.env ]; then
+                                cp /home/ec2-user/pos_system/server/.env /home/ec2-user/pos_system/server/.env.backup || true
+                                echo "✅ Existing .env backed up to .env.backup"
+                            fi
                             echo "Copying .env.qa to .env for server configuration..."
-                            cp /home/ec2-user/pos_system/QAServer/.env.qa /home/ec2-user/pos_system/server/.env || { echo 'Failed to copy .env.qa file'; exit 1; }
-                            echo "✅ Environment file configured successfully"
+                            cp /home/ec2-user/pos_system/QAServer/.env.qa /home/ec2-user/pos_system/server/.env || { echo '❌ Failed to copy .env.qa file'; exit 1; }
+                            echo "✅ Environment file copied successfully (QA configuration active)"
+                            echo "Verifying critical environment variables..."
+                            source /home/ec2-user/pos_system/server/.env
+                            if [ -z \"\$DB_HOST\" ] || [ \"\$DB_HOST\" = \"your-rds-endpoint\" ]; then
+                                echo '⚠️  WARNING: DB_HOST is not set or has default value'
+                            fi
+                            if [ -z \"\$AWS_USER_POOL_ID\" ] || [ \"\$AWS_USER_POOL_ID\" = \"your_cognito_user_pool_id\" ]; then
+                                echo '⚠️  WARNING: AWS_USER_POOL_ID is not set or has default value'
+                            fi
+                            if [ -z \"\$CORS_ORIGINS\" ]; then
+                                echo '⚠️  WARNING: CORS_ORIGINS is not set'
+                            fi
                             npm install
                             pm2 delete pos-backend-qa || true
                             PORT=5001 pm2 start server.js --name pos-backend-qa

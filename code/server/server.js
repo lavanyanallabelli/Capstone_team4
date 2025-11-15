@@ -2,8 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
-const dotenv = require('dotenv');
 const path = require('path');
+const dotenv = require('dotenv').config({ path: '.env.qa' });
 
 // Import database
 const { connectDB, sequelize } = require('./config/database');
@@ -24,9 +24,13 @@ const subscriptionRoutes = require('./routes/subscription');
 const { authenticateToken } = require('./middleware/auth');
 const { syncCognitoUserToOwner } = require('./middleware/cognitoSync');
 
-// Load environment variables - explicitly from server directory
-dotenv.config({ path: path.join(__dirname, '.env') });
-console.log('📁 Loading .env from:', path.join(__dirname, '.env'));
+// Load environment variables - try .env.qa first (QA), fallback to .env (dev/local)
+const envQaPath = path.join(__dirname, '..', 'QAServer', '.env.qa');
+const envPath = path.join(__dirname, '.env');
+const envFile = require('fs').existsSync(envQaPath) ? envQaPath : envPath;
+
+dotenv.config({ path: envFile });
+console.log('📁 Loading environment from:', envFile);
 console.log('✅ Environment variables loaded');
 
 const app = express();
