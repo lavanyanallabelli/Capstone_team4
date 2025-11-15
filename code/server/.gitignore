@@ -12,3 +12,4 @@ coverage/
 *.sqlite3
 .vscode/
 .idea/
+.env.qa

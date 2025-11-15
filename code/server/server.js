@@ -31,20 +31,37 @@ const PORT = process.env.PORT || 8000;
 const HOST = '0.0.0.0'; // allow external traffic
 
 // Startup debug logs (non-sensitive)
-console.log('=== Startup Configuration ===');
-console.log('NODE_ENV:', process.env.NODE_ENV);
-console.log('PORT:', PORT);
-console.log('FRONTEND_URL:', process.env.FRONTEND_URL);
-console.log('DB_HOST:', (process.env.DB_HOST || '').replace(/^(..).*(..$)/, '$1***$2')); // mask
-console.log('DB_NAME:', process.env.DB_NAME);
-console.log('AWS_REGION:', process.env.AWS_REGION);
-console.log('JWKS_URI set:', Boolean(process.env.JWKS_URI));
-console.log('============================');
-
+// console.log('=== Startup Configuration ===');
+// console.log('NODE_ENV:', process.env.NODE_ENV);
+// console.log('PORT:', PORT);
+// console.log('FRONTEND_URL:', process.env.FRONTEND_URL);
+// console.log('DB_HOST:', (process.env.DB_HOST || '').replace(/^(..).*(..$)/, '$1***$2')); // mask
+// console.log('DB_NAME:', process.env.DB_NAME);
+// console.log('AWS_REGION:', process.env.AWS_REGION);
+// console.log('JWKS_URI set:', Boolean(process.env.JWKS_URI));
+// console.log('============================');
+// 
 // Middleware
 app.use(helmet());
+
+// CORS Configuration - Read from environment variables
+// CORS_ORIGINS can be a comma-separated string or JSON array string
+// Example: "http://localhost:3000,http://3.87.100.22:3000,http://54.196.161.29:3001"
+// Or: '["http://localhost:3000","http://3.87.100.22:3000","http://54.196.161.29:3001"]'
+let corsOrigins = ['http://localhost:3000']; // Default fallback
+if (process.env.CORS_ORIGINS) {
+    try {
+        // Try parsing as JSON array first
+        corsOrigins = JSON.parse(process.env.CORS_ORIGINS);
+    } catch (e) {
+        // If not JSON, treat as comma-separated string
+        corsOrigins = process.env.CORS_ORIGINS.split(',').map(origin => origin.trim());
+    }
+}
+console.log('🌐 CORS Origins configured:', corsOrigins);
+
 app.use(cors({
-    origin: ['http://localhost:3000', 'http://3.87.100.22:3000'],
+    origin: corsOrigins,
     credentials: true
 }));
 app.use(morgan('combined'));
