@@ -3,6 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const dotenv = require('dotenv');
+const path = require('path');
 
 // Import database
 const { connectDB, sequelize } = require('./config/database');
@@ -23,8 +24,10 @@ const subscriptionRoutes = require('./routes/subscription');
 const { authenticateToken } = require('./middleware/auth');
 const { syncCognitoUserToOwner } = require('./middleware/cognitoSync');
 
-// Load environment variables
-dotenv.config();
+// Load environment variables - explicitly from server directory
+dotenv.config({ path: path.join(__dirname, '.env') });
+console.log('📁 Loading .env from:', path.join(__dirname, '.env'));
+console.log('✅ Environment variables loaded');
 
 const app = express();
 const PORT = process.env.PORT || 8000;
