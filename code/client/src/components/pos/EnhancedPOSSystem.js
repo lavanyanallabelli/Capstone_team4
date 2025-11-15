@@ -405,6 +405,9 @@ const EnhancedPOSSystem = () => {
                 });
                 setShowPaymentModal(false);
 
+                // Dispatch event to notify Dashboard to refresh analytics
+                window.dispatchEvent(new Event('orderUpdated'));
+
                 setTimeout(() => {
                     clearOrder();
                     setOrderConfirmation(null);

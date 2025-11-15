@@ -26,43 +26,55 @@ const Reports = ({ onClose }) => {
             case 'today':
                 start = new Date(now);
                 start.setHours(0, 0, 0, 0);
+                end = new Date(now);
+                end.setHours(23, 59, 59, 999);
                 break;
             case 'week':
                 start = new Date(now);
                 start.setDate(start.getDate() - 7);
+                start.setHours(0, 0, 0, 0);
+                end = new Date(now);
+                end.setHours(23, 59, 59, 999);
                 break;
             case 'month':
                 start = new Date(now);
                 start.setMonth(start.getMonth() - 1);
+                start.setHours(0, 0, 0, 0);
+                end = new Date(now);
+                end.setHours(23, 59, 59, 999);
                 break;
             case 'custom':
                 start = new Date(startDate);
+                start.setHours(0, 0, 0, 0);
                 end = new Date(endDate);
                 end.setHours(23, 59, 59, 999);
                 break;
             default:
                 start = new Date(now);
                 start.setHours(0, 0, 0, 0);
+                end = new Date(now);
+                end.setHours(23, 59, 59, 999);
         }
 
+        // Filter orders by date range and only include completed/ready orders (matching analytics)
         return orders.filter(order => {
             const orderDate = new Date(order.orderDate || order.createdAt);
-            return orderDate >= start && orderDate <= end;
+            const isInDateRange = orderDate >= start && orderDate <= end;
+            const isCompleted = order.status?.toLowerCase() === 'completed' || order.status?.toLowerCase() === 'ready';
+            return isInDateRange && isCompleted;
         });
     }, [dateRange, startDate, endDate]);
 
     const calculateReportData = (orders) => {
+        // Orders are already filtered to completed/ready in filterOrdersByDateRange
+        // So all orders here are completed/ready
         const totalRevenue = orders.reduce((sum, order) =>
             sum + parseFloat(order.finalTotal || order.totalAmount || 0), 0
         );
 
-        const completedOrders = orders.filter(order =>
-            order.status?.toLowerCase() === 'completed'
-        );
-
-        const completedRevenue = completedOrders.reduce((sum, order) =>
-            sum + parseFloat(order.finalTotal || order.totalAmount || 0), 0
-        );
+        // All orders are already completed/ready, so completedOrders = orders
+        const completedOrders = orders;
+        const completedRevenue = totalRevenue;
 
         const ordersByType = {};
         const ordersByStatus = {};
@@ -77,17 +89,40 @@ const Reports = ({ onClose }) => {
             const status = order.status || 'unknown';
             ordersByStatus[status] = (ordersByStatus[status] || 0) + 1;
 
-            // Daily revenue
-            const date = new Date(order.orderDate || order.createdAt).toISOString().split('T')[0];
-            if (!dailyRevenue[date]) {
-                dailyRevenue[date] = 0;
+            // Daily revenue - use local date components to avoid timezone issues
+            const orderDate = new Date(order.orderDate || order.createdAt);
+            // Normalize to local midnight to avoid timezone shifts
+            orderDate.setHours(0, 0, 0, 0);
+
+            // Use local date components to construct date string
+            const year = orderDate.getFullYear();
+            const month = String(orderDate.getMonth() + 1).padStart(2, '0');
+            const day = String(orderDate.getDate()).padStart(2, '0');
+            const dateStr = `${year}-${month}-${day}`;
+
+            if (!dailyRevenue[dateStr]) {
+                dailyRevenue[dateStr] = {
+                    date: dateStr,
+                    revenue: 0,
+                    day: orderDate.toLocaleDateString('en-US', { weekday: 'short' })
+                };
             }
-            dailyRevenue[date] += parseFloat(order.finalTotal || order.totalAmount || 0);
+            dailyRevenue[dateStr].revenue += parseFloat(order.finalTotal || order.totalAmount || 0);
         });
 
-        const dailyRevenueArray = Object.entries(dailyRevenue)
-            .map(([date, revenue]) => ({ date, revenue }))
+        // Convert to array and sort by date, remove duplicates
+        const dailyRevenueArray = Object.values(dailyRevenue)
             .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        // Final deduplication check
+        const uniqueDailyRevenue = [];
+        const seenDates = new Set();
+        dailyRevenueArray.forEach(day => {
+            if (!seenDates.has(day.date)) {
+                seenDates.add(day.date);
+                uniqueDailyRevenue.push(day);
+            }
+        });
 
         setReportData({
             totalRevenue,
@@ -97,7 +132,7 @@ const Reports = ({ onClose }) => {
             averageOrderValue: orders.length > 0 ? totalRevenue / orders.length : 0,
             ordersByType,
             ordersByStatus,
-            dailyRevenue: dailyRevenueArray
+            dailyRevenue: uniqueDailyRevenue
         });
     };
 

@@ -175,6 +175,9 @@ const POSSystem = () => {
                 });
                 setShowPaymentModal(false);
 
+                // Dispatch event to notify Dashboard to refresh analytics
+                window.dispatchEvent(new Event('orderUpdated'));
+
                 // Clear current order after a delay
                 setTimeout(() => {
                     clearOrder();

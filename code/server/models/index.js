@@ -8,6 +8,7 @@ const Order = require('./Order');
 const Payment = require('./Payment');
 const Setting = require('./Setting');
 const Schedule = require('./Schedule');
+const BusinessType = require('./BusinessType');
 
 // Define associations
 Owner.hasMany(Employee, { foreignKey: 'ownerId', as: 'employees' });
@@ -42,5 +43,6 @@ module.exports = {
     Order,
     Payment,
     Setting,
-    Schedule
+    Schedule,
+    BusinessType
 };

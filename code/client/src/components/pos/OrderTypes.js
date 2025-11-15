@@ -23,28 +23,28 @@ const OrderTypes = ({
             name: 'Dine In',
             icon: Utensils,
             color: 'bg-blue-500',
-            description: 'Customer dining in restaurant'
+
         },
         {
             id: 'to-go',
             name: 'To Go',
             icon: ShoppingBag,
             color: 'bg-green-500',
-            description: 'Takeout order'
+
         },
         {
             id: 'drive-thru',
             name: 'Drive Thru',
             icon: Coffee,
             color: 'bg-orange-500',
-            description: 'Drive through service'
+
         },
         {
             id: 'pickup',
             name: 'Pickup',
             icon: Home,
             color: 'bg-pink-500',
-            description: 'Customer pickup'
+
         }
     ];
 
@@ -91,8 +91,8 @@ const OrderTypes = ({
                     </div>
                 )}
 
-                {(orderType === 'pickup' || orderType === 'to-go') && (
-                    <>
+                {orderType === 'pickup' && (
+                    <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                                 Customer Name
@@ -119,13 +119,40 @@ const OrderTypes = ({
                                 />
                             </div>
                         )}
-                    </>
+                    </div>
                 )}
 
-                {/* Order Type Description */}
-                <div className="text-sm text-gray-600 bg-gray-50 p-2 rounded-lg">
-                    {orderTypes.find(type => type.id === orderType)?.description}
-                </div>
+                {orderType === 'to-go' && (
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Customer Name
+                            </label>
+                            <input
+                                type="text"
+                                value={customerName}
+                                onChange={(e) => setCustomerName(e.target.value)}
+                                placeholder="Enter customer name"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                        </div>
+                        {customerPhone !== undefined && setCustomerPhone && (
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Customer Phone (Optional)
+                                </label>
+                                <input
+                                    type="tel"
+                                    value={customerPhone || ''}
+                                    onChange={(e) => setCustomerPhone(e.target.value)}
+                                    placeholder="Enter phone number"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                />
+                            </div>
+                        )}
+                    </div>
+                )}
+
             </div>
         </div>
     );

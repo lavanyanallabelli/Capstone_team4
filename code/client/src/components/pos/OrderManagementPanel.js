@@ -1,14 +1,11 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-    Edit,
     Split,
     Tag,
-    DollarSign,
     X,
     Check,
     Trash2,
-    RefreshCw
 } from 'lucide-react';
 
 const OrderManagementPanel = ({
@@ -50,14 +47,6 @@ const OrderManagementPanel = ({
 
     const actions = [
         {
-            label: 'Modify Order',
-            icon: Edit,
-            action: () => {
-                onModifyOrder();
-            },
-            color: 'bg-blue-500 hover:bg-blue-600'
-        },
-        {
             label: 'Split Bill',
             icon: Split,
             action: () => {
@@ -76,12 +65,6 @@ const OrderManagementPanel = ({
             color: 'bg-green-500 hover:bg-green-600'
         },
         {
-            label: 'Add Tip',
-            icon: DollarSign,
-            action: () => setShowTip(true),
-            color: 'bg-yellow-500 hover:bg-yellow-600'
-        },
-        {
             label: 'Cancel Order',
             icon: Trash2,
             action: () => {
@@ -91,12 +74,6 @@ const OrderManagementPanel = ({
             },
             color: 'bg-red-500 hover:bg-red-600'
         },
-        {
-            label: 'Refresh',
-            icon: RefreshCw,
-            action: onRefreshOrder,
-            color: 'bg-gray-500 hover:bg-gray-600'
-        }
     ];
 
     return (

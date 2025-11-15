@@ -18,6 +18,7 @@ import {
   Clock,
   ChevronDown,
   ChevronRight,
+  X,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -54,10 +55,12 @@ const Dashboard = () => {
     subscriptionStartDate: null,
     subscriptionEndDate: null
   });
+  const [ownerProfile, setOwnerProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isEmployeeManagementOpen, setIsEmployeeManagementOpen] = useState(false);
   const [isMenuManagementOpen, setIsMenuManagementOpen] = useState(false);
+  const [showWelcomeBanner, setShowWelcomeBanner] = useState(true);
 
   // Fetch real dashboard data
   useEffect(() => {
@@ -74,17 +77,22 @@ const Dashboard = () => {
 
         if (isOwner) {
           // Fetch data for owners
-          const [menuResponse, employeesResponse, analyticsResponse, ownerProfileResponse] =
+          // Fetch both today's data for dashboard stats and 7-day data for comparison
+          const [menuResponse, employeesResponse, analyticsTodayResponse, analytics7dResponse, ownerProfileResponse] =
             await Promise.all([
               apiService.getMenuItems(),
               apiService.getEmployees(),
-              apiService.getAnalyticsOverview("7d"),
+              apiService.getAnalyticsOverview({ period: 'today' }),
+              apiService.getAnalyticsOverview({ period: '7d' }),
               apiService.getOwnerProfile(),
             ]);
 
           // Update subscription data from owner profile
           if (ownerProfileResponse.success && ownerProfileResponse.data) {
             const ownerData = ownerProfileResponse.data;
+
+            // Store owner profile for display
+            setOwnerProfile(ownerData);
 
             // Calculate trialEndDate from createdAt if not set (for existing users)
             let trialEndDate = null;
@@ -124,24 +132,44 @@ const Dashboard = () => {
           console.log("Dashboard API Responses:", {
             menu: menuResponse,
             employees: employeesResponse,
-            analytics: analyticsResponse,
+            analyticsToday: analyticsTodayResponse,
+            analytics7d: analytics7dResponse,
           });
+
+          // Extract analytics data correctly
+          // Use today's data for dashboard stats
+          let totalSales = 0;
+          let ordersToday = 0;
+
+          if (analyticsTodayResponse && analyticsTodayResponse.success && analyticsTodayResponse.data) {
+            const analyticsToday = analyticsTodayResponse.data;
+            // Total Sales should be today's revenue
+            totalSales = parseFloat(analyticsToday.sales?.totalRevenue || 0);
+            // Orders Today should be today's orders
+            ordersToday = parseInt(analyticsToday.sales?.totalOrders || 0);
+
+            console.log("📊 Dashboard Analytics Today Data:", {
+              fullResponse: analyticsTodayResponse,
+              salesData: analyticsToday.sales,
+              totalRevenue: analyticsToday.sales?.totalRevenue,
+              totalOrders: analyticsToday.sales?.totalOrders,
+              extractedTotalSales: totalSales,
+              extractedOrdersToday: ordersToday
+            });
+          } else {
+            console.error("❌ Dashboard Analytics Today Response Error:", analyticsTodayResponse);
+          }
+
+          console.log("Analytics today response:", analyticsTodayResponse);
+          console.log("Extracted sales:", { totalSales, ordersToday });
 
           const newData = {
             menuItemsCount: menuResponse.success ? menuResponse.data.length : 0,
             employeesCount: employeesResponse.success
               ? employeesResponse.data.length
               : 0,
-            totalSales: analyticsResponse.success
-              ? analyticsResponse.data.data?.sales?.totalRevenue ||
-              analyticsResponse.data.sales?.totalRevenue ||
-              0
-              : 0,
-            ordersToday: analyticsResponse.success
-              ? analyticsResponse.data.data?.sales?.totalOrders ||
-              analyticsResponse.data.sales?.totalOrders ||
-              0
-              : 0,
+            totalSales: totalSales,
+            ordersToday: ordersToday,
             myOrders: 0, // Not applicable for owners
             myPerformance: 0, // Not applicable for owners
           };
@@ -170,6 +198,23 @@ const Dashboard = () => {
     };
 
     fetchDashboardData();
+
+    // Listen for profile update events and order updates
+    const handleProfileUpdate = () => {
+      fetchDashboardData();
+    };
+
+    const handleOrderUpdate = () => {
+      fetchDashboardData();
+    };
+
+    window.addEventListener('profileUpdated', handleProfileUpdate);
+    window.addEventListener('orderUpdated', handleOrderUpdate);
+
+    return () => {
+      window.removeEventListener('profileUpdated', handleProfileUpdate);
+      window.removeEventListener('orderUpdated', handleOrderUpdate);
+    };
   }, [isOwner, currentUser]);
 
   const refreshDashboard = () => {
@@ -354,7 +399,7 @@ const Dashboard = () => {
                   POS Pro Dashboard
                 </h1>
                 <p className="text-sm text-gray-600">
-                  Welcome back, {currentUser?.businessName || "User"}!
+                  Welcome back, {ownerProfile?.businessName || currentUser?.businessName || "User"}!
                   <span
                     className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${isOwner
                       ? "bg-purple-100 text-purple-800"
@@ -412,62 +457,71 @@ const Dashboard = () => {
           animate="visible"
         >
           {/* Welcome Section */}
-          <motion.div
-            variants={itemVariants}
-            className="bg-gradient-to-r from-primary-500 to-secondary-500 rounded-2xl p-8 text-white mb-8"
-          >
-            <h2 className="text-3xl font-bold mb-4">
-              {isOwner
-                ? "Welcome to Your Restaurant Management Hub! 👑"
-                : "Welcome to Your POS Station! 👨‍🍳"}
-            </h2>
-            <p className="text-lg text-blue-100 mb-6">
-              {isOwner
-                ? `You're now managing your restaurant operations. Your ${daysRemaining}-day free trial has started, and you have full control over your POS system.`
-                : `You're ready to handle orders and serve customers. Your ${daysRemaining}-day free trial gives you access to all operational features.`}
-            </p>
-            <div className="flex flex-wrap gap-4">
-              {isOwner ? (
-                <>
-                  <motion.button
-                    onClick={() => navigate("/employees")}
-                    className="bg-white text-primary-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    Manage Employees
-                  </motion.button>
-                  <motion.button
-                    onClick={() => navigate("/analytics")}
-                    className="border-2 border-white text-white px-6 py-3 rounded-lg font-semibold hover:bg-white hover:text-primary-600 transition-colors"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    View Analytics
-                  </motion.button>
-                </>
-              ) : (
-                <>
-                  <motion.button
-                    onClick={() => navigate("/orders/new")}
-                    className="bg-white text-primary-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    Take New Order
-                  </motion.button>
-                  <motion.button
-                    onClick={() => navigate("/menu")}
-                    className="border-2 border-white text-white px-6 py-3 rounded-lg font-semibold hover:bg-white hover:text-primary-600 transition-colors"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    View Menu
-                  </motion.button>
-                </>
-              )}
-            </div>
-          </motion.div>
+          {showWelcomeBanner && (
+            <motion.div
+              variants={itemVariants}
+              className="bg-gradient-to-r from-primary-500 to-secondary-500 rounded-2xl p-8 text-white mb-8 relative"
+            >
+              <button
+                onClick={() => setShowWelcomeBanner(false)}
+                className="absolute top-4 right-4 text-white hover:text-gray-200 transition-colors p-1 rounded-full hover:bg-white/20"
+                aria-label="Close welcome banner"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <h2 className="text-3xl font-bold mb-4">
+                {isOwner
+                  ? "Welcome to Your Restaurant Management Hub! 👑"
+                  : "Welcome to Your POS Station! 👨‍🍳"}
+              </h2>
+              <p className="text-lg text-blue-100 mb-6">
+                {isOwner
+                  ? `You're now managing your restaurant operations. Your ${daysRemaining}-day free trial has started, and you have full control over your POS system.`
+                  : `You're ready to handle orders and serve customers. Your ${daysRemaining}-day free trial gives you access to all operational features.`}
+              </p>
+              <div className="flex flex-wrap gap-4">
+                {isOwner ? (
+                  <>
+                    <motion.button
+                      onClick={() => navigate("/employees")}
+                      className="bg-white text-primary-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      Manage Employees
+                    </motion.button>
+                    <motion.button
+                      onClick={() => navigate("/analytics")}
+                      className="border-2 border-white text-white px-6 py-3 rounded-lg font-semibold hover:bg-white hover:text-primary-600 transition-colors"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      View Analytics
+                    </motion.button>
+                  </>
+                ) : (
+                  <>
+                    <motion.button
+                      onClick={() => navigate("/orders/new")}
+                      className="bg-white text-primary-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      Take New Order
+                    </motion.button>
+                    <motion.button
+                      onClick={() => navigate("/menu")}
+                      className="border-2 border-white text-white px-6 py-3 rounded-lg font-semibold hover:bg-white hover:text-primary-600 transition-colors"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      View Menu
+                    </motion.button>
+                  </>
+                )}
+              </div>
+            </motion.div>
+          )}
 
           {/* Stats Grid */}
           <motion.div
@@ -793,7 +847,7 @@ const Dashboard = () => {
                 <div className="flex justify-between items-center py-2 border-b border-gray-100">
                   <span className="text-gray-600">Business Name</span>
                   <span className="font-medium">
-                    {currentUser?.businessName}
+                    {ownerProfile?.businessName || currentUser?.businessName || "Not specified"}
                   </span>
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-gray-100">
@@ -814,7 +868,7 @@ const Dashboard = () => {
                 <div className="flex justify-between items-center py-2 border-b border-gray-100">
                   <span className="text-gray-600">Business Type</span>
                   <span className="font-medium capitalize">
-                    {currentUser?.businessType || "Not specified"}
+                    {ownerProfile?.businessType || currentUser?.businessType || "Not specified"}
                   </span>
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-gray-100">

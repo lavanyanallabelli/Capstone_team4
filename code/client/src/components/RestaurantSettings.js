@@ -31,6 +31,7 @@ const RestaurantSettings = () => {
     const [ownerProfile, setOwnerProfile] = useState(null);
     const [isProfileEditing, setIsProfileEditing] = useState(false);
     const [isGeneralEditing, setIsGeneralEditing] = useState(false);
+    const [businessTypes, setBusinessTypes] = useState([]);
     const [profileFormData, setProfileFormData] = useState({
         name: '',
         email: '',
@@ -82,6 +83,7 @@ const RestaurantSettings = () => {
     // Load owner profile and settings on mount - must be before conditional return
     useEffect(() => {
         if (userRole === USER_ROLES.OWNER) {
+            loadBusinessTypes();
             loadOwnerProfile();
             loadSettings();
         }
@@ -124,6 +126,27 @@ const RestaurantSettings = () => {
         }
     };
 
+    const loadBusinessTypes = async () => {
+        try {
+            const response = await apiService.get('/settings/business-types');
+            if (response && response.success) {
+                setBusinessTypes(response.data || []);
+            } else if (response && response.data && response.data.success) {
+                setBusinessTypes(response.data.data || []);
+            }
+        } catch (error) {
+            console.error('Error loading business types:', error);
+            // Set default business types if API fails
+            setBusinessTypes([
+                { typename: 'Italian' },
+                { typename: 'Chinese' },
+                { typename: 'Indian' },
+                { typename: 'Mexican' },
+                { typename: 'Cafe' }
+            ]);
+        }
+    };
+
     const loadSettings = async () => {
         try {
             const response = await apiService.getSettings();
@@ -160,6 +183,8 @@ const RestaurantSettings = () => {
                 alert('Profile updated successfully!');
                 await loadOwnerProfile(); // Reload to get latest data
                 setIsProfileEditing(false);
+                // Dispatch event to notify Dashboard to refresh
+                window.dispatchEvent(new Event('profileUpdated'));
             }
         } catch (error) {
             console.error('Error updating profile:', error);
@@ -251,6 +276,8 @@ const RestaurantSettings = () => {
                         if (ownerResponse.success) {
                             // Reload owner profile to get updated data
                             await loadOwnerProfile();
+                            // Dispatch event to notify Dashboard to refresh
+                            window.dispatchEvent(new Event('profileUpdated'));
                         }
                     }
                 }
@@ -451,11 +478,25 @@ const RestaurantSettings = () => {
                                             disabled={!isProfileEditing}
                                             className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isProfileEditing ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                                         >
-                                            <option value="Restaurant">Restaurant</option>
-                                            <option value="Cafe">Cafe</option>
-                                            <option value="Fast Food">Fast Food</option>
-                                            <option value="Fine Dining">Fine Dining</option>
-                                            <option value="Bar">Bar</option>
+                                            {businessTypes.length > 0 ? (
+                                                businessTypes.map((type) => {
+                                                    const displayName = type.typename === 'Cafe' ? 'Cafe' : `${type.typename} Restaurant`;
+                                                    const value = type.typename === 'Cafe' ? 'Cafe' : `${type.typename} Restaurant`;
+                                                    return (
+                                                        <option key={type.businesstypeid || type.typename} value={value}>
+                                                            {displayName}
+                                                        </option>
+                                                    );
+                                                })
+                                            ) : (
+                                                <>
+                                                    <option value="Italian Restaurant">Italian Restaurant</option>
+                                                    <option value="Chinese Restaurant">Chinese Restaurant</option>
+                                                    <option value="Indian Restaurant">Indian Restaurant</option>
+                                                    <option value="Mexican Restaurant">Mexican Restaurant</option>
+                                                    <option value="Cafe">Cafe</option>
+                                                </>
+                                            )}
                                         </select>
                                     </div>
                                 </div>
@@ -601,11 +642,25 @@ const RestaurantSettings = () => {
                                             disabled={!isGeneralEditing}
                                             className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isGeneralEditing ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                                         >
-                                            <option value="Restaurant">Restaurant</option>
-                                            <option value="Cafe">Cafe</option>
-                                            <option value="Fast Food">Fast Food</option>
-                                            <option value="Fine Dining">Fine Dining</option>
-                                            <option value="Bar">Bar</option>
+                                            {businessTypes.length > 0 ? (
+                                                businessTypes.map((type) => {
+                                                    const displayName = type.typename === 'Cafe' ? 'Cafe' : `${type.typename} Restaurant`;
+                                                    const value = type.typename === 'Cafe' ? 'Cafe' : `${type.typename} Restaurant`;
+                                                    return (
+                                                        <option key={type.businesstypeid || type.typename} value={value}>
+                                                            {displayName}
+                                                        </option>
+                                                    );
+                                                })
+                                            ) : (
+                                                <>
+                                                    <option value="Italian Restaurant">Italian Restaurant</option>
+                                                    <option value="Chinese Restaurant">Chinese Restaurant</option>
+                                                    <option value="Indian Restaurant">Indian Restaurant</option>
+                                                    <option value="Mexican Restaurant">Mexican Restaurant</option>
+                                                    <option value="Cafe">Cafe</option>
+                                                </>
+                                            )}
                                         </select>
                                     </div>
                                 </div>

@@ -1,6 +1,6 @@
 const express = require('express');
 const Joi = require('joi');
-const { Setting, Owner } = require('../models');
+const { Setting, Owner, BusinessType } = require('../models');
 const { authorizePermission } = require('../middleware/auth');
 
 // Helper to get ownerId from request
@@ -713,6 +713,28 @@ router.post('/notifications/test', authorizePermission('canManageNotificationSet
         res.status(500).json({
             success: false,
             error: 'Failed to send test notification',
+            message: error.message
+        });
+    }
+});
+
+// Get all business types
+router.get('/business-types', async (req, res) => {
+    try {
+        const businessTypes = await BusinessType.findAll({
+            order: [['typename', 'ASC']],
+            attributes: ['businesstypeid', 'typename']
+        });
+
+        res.json({
+            success: true,
+            data: businessTypes
+        });
+    } catch (error) {
+        console.error('❌ Error fetching business types:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch business types',
             message: error.message
         });
     }
