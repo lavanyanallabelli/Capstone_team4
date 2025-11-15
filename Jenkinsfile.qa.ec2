@@ -188,7 +188,7 @@ REACT_APP_REDIRECT_SIGN_OUT=${env.REACT_APP_REDIRECT_SIGN_OUT}
                             cp /home/ec2-user/pos_system/QAServer/.env.qa /home/ec2-user/pos_system/server/.env.qa || { echo '❌ Failed to copy .env.qa file'; exit 1; }
                             echo "✅ .env.qa file copied successfully to server directory (QA configuration active)"
                             echo "Verifying critical environment variables..."
-                            source /home/ec2-user/pos_system/server/.env
+                            source /home/ec2-user/pos_system/server/.env.qa
                             if [ -z \"\$DB_HOST\" ] || [ \"\$DB_HOST\" = \"your-rds-endpoint\" ]; then
                                 echo '⚠️  WARNING: DB_HOST is not set or has default value'
                             fi
