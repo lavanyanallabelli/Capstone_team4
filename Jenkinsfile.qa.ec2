@@ -1,4 +1,4 @@
-pipeline {
+﻿pipeline {
     agent any
     
     environment {
@@ -222,7 +222,7 @@ ENDSSH
           "fields": [
             {
               "type": "mrkdwn",
-              "text": "*Branch:* ${env.BRANCH_NAME}"
+              "text": "*Branch:* QA"
             },
             {
               "type": "mrkdwn",
@@ -266,7 +266,7 @@ echo "Slack resp:" && cat /tmp/slack_resp.txt || true
 The POS system has been successfully deployed to QA environment.
 
 Build Number: ${env.BUILD_NUMBER}
-Branch: ${env.BRANCH_NAME}
+Branch: QA
 Environment: QA
 QA Testing URL: http://54.196.161.29:3001
 Backend API: http://54.196.161.29:5001
@@ -297,7 +297,7 @@ Please proceed with QA testing and validation.
           "fields": [
             {
               "type": "mrkdwn",
-              "text": "*Branch:* ${env.BRANCH_NAME}"
+              "text": "*Branch:* QA"
             },
             {
               "type": "mrkdwn",
@@ -341,7 +341,7 @@ echo "Slack resp:" && cat /tmp/slack_resp.txt || true
 The POS system QA deployment has failed.
 
 Build Number: ${env.BUILD_NUMBER}
-Branch: ${env.BRANCH_NAME}
+Branch: QA
 Environment: QA
 Build URL: ${env.BUILD_URL}
 
