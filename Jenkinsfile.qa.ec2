@@ -1,4 +1,4 @@
-pipeline {
+﻿pipeline {
     agent any
     
     environment {
@@ -13,7 +13,7 @@ pipeline {
         REACT_APP_USER_POOL_WEB_CLIENT_ID = '3q99asqjvgb0eakf80eorms0ho'
         REACT_APP_OAUTH_DOMAIN = 'https://us-east-1i2erulynd.auth.us-east-1.amazoncognito.com'
         REACT_APP_API_ENDPOINT = 'http://54.196.161.29:5001/api'
-        REACT_APP_API_URL = 'http://54.196.161.29:5001'
+        REACT_APP_API_URL = 'http://54.196.161.29:5001/api'
         REACT_APP_REDIRECT_SIGN_IN = 'http://54.196.161.29:3001/'
         REACT_APP_REDIRECT_SIGN_OUT = 'http://54.196.161.29:3001/'
     }
