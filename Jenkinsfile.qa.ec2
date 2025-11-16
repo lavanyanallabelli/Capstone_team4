@@ -222,27 +222,27 @@ ENDSSH
           "fields": [
             {
               "type": "mrkdwn",
-              "text": "*Branch:*\\n${env.BRANCH_NAME}"
+              "text": "*Branch:* ${env.BRANCH_NAME}"
             },
             {
               "type": "mrkdwn",
-              "text": "*Build #:*\\n${env.BUILD_NUMBER}"
+              "text": "*Build #:* ${env.BUILD_NUMBER}"
             },
             {
               "type": "mrkdwn",
-              "text": "*Project:*\\nPOS System"
+              "text": "*Project:* POS System"
             },
             {
               "type": "mrkdwn",
-              "text": "*Commit:*\\n${env.LAST_COMMIT_HASH}"
+              "text": "*Commit:* ${env.LAST_COMMIT_HASH}"
             },
             {
               "type": "mrkdwn",
-              "text": "*Author:*\\n${env.LAST_COMMIT_AUTHOR}"
+              "text": "*Author:* ${env.LAST_COMMIT_AUTHOR}"
             },
             {
               "type": "mrkdwn",
-              "text": "*Message:*\\n${env.LAST_COMMIT_MESSAGE}"
+              "text": "*Message:* ${env.LAST_COMMIT_MESSAGE}"
             }
           ]
         }
@@ -297,27 +297,27 @@ Please proceed with QA testing and validation.
           "fields": [
             {
               "type": "mrkdwn",
-              "text": "*Branch:*\\n${env.BRANCH_NAME}"
+              "text": "*Branch:* ${env.BRANCH_NAME}"
             },
             {
               "type": "mrkdwn",
-              "text": "*Build #:*\\n${env.BUILD_NUMBER}"
+              "text": "*Build #:* ${env.BUILD_NUMBER}"
             },
             {
               "type": "mrkdwn",
-              "text": "*Project:*\\nPOS System"
+              "text": "*Project:* POS System"
             },
             {
               "type": "mrkdwn",
-              "text": "*Commit:*\\n${env.LAST_COMMIT_HASH}"
+              "text": "*Commit:* ${env.LAST_COMMIT_HASH}"
             },
             {
               "type": "mrkdwn",
-              "text": "*Author:*\\n${env.LAST_COMMIT_AUTHOR}"
+              "text": "*Author:* ${env.LAST_COMMIT_AUTHOR}"
             },
             {
               "type": "mrkdwn",
-              "text": "*Message:*\\n${env.LAST_COMMIT_MESSAGE}"
+              "text": "*Message:* ${env.LAST_COMMIT_MESSAGE}"
             }
           ]
         }
