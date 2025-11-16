@@ -70,7 +70,7 @@ app.use(cors({
     origin: function (origin, callback) {
         // Allow requests with no origin (like mobile apps or curl requests)
         if (!origin) return callback(null, true);
-        
+
         if (corsOrigins.indexOf(origin) !== -1) {
             callback(null, true);
         } else {
@@ -86,7 +86,8 @@ app.use(cors({
 
 // Middleware - Helmet after CORS to avoid conflicts
 app.use(helmet({
-    crossOriginResourcePolicy: { policy: "cross-origin" }
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    crossOriginEmbedderPolicy: false
 }));
 app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
