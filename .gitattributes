@@ -1,0 +1,21 @@
+# Force UTF-8 without BOM for Jenkinsfiles
+*.groovy text eol=lf charset=utf-8
+Jenkinsfile* text eol=lf charset=utf-8
+
+# Force UTF-8 without BOM for all text files
+*.js text eol=lf charset=utf-8
+*.jsx text eol=lf charset=utf-8
+*.ts text eol=lf charset=utf-8
+*.tsx text eol=lf charset=utf-8
+*.json text eol=lf charset=utf-8
+*.md text eol=lf charset=utf-8
+*.txt text eol=lf charset=utf-8
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+

@@ -7,4 +7,5 @@ insert_final_newline = true
 
 [*.{groovy,Jenkinsfile*}]
 charset = utf-8
+# Note: Some editors may add BOM. Use .gitattributes to ensure Git handles encoding correctly.
 
