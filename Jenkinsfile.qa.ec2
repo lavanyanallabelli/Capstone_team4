@@ -170,7 +170,7 @@ REACT_APP_REDIRECT_SIGN_OUT=${env.REACT_APP_REDIRECT_SIGN_OUT}
                         echo "Deploying backend to QA..."
                         ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@54.196.161.29 "mkdir -p /home/ec2-user/pos_system/server"
                         scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/server/* $SSH_USER@54.196.161.29:/home/ec2-user/pos_system/server/
-                        ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@54.196.161.29 "
+                        ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@54.196.161.29 << 'ENDSSH'
                             cd /home/ec2-user/pos_system/server
                             echo "Checking if .env.qa file exists..."
                             if [ ! -f /home/ec2-user/pos_system/QAServer/.env.qa ]; then
@@ -189,20 +189,20 @@ REACT_APP_REDIRECT_SIGN_OUT=${env.REACT_APP_REDIRECT_SIGN_OUT}
                             echo "✅ .env.qa file copied successfully to server directory (QA configuration active)"
                             echo "Verifying critical environment variables..."
                             source /home/ec2-user/pos_system/server/.env.qa
-                            if [ -z \"\$DB_HOST\" ] || [ \"\$DB_HOST\" = \"your-rds-endpoint\" ]; then
+                            if [ -z "$DB_HOST" ] || [ "$DB_HOST" = "your-rds-endpoint" ]; then
                                 echo '⚠️  WARNING: DB_HOST is not set or has default value'
                             fi
-                            if [ -z \"\$AWS_USER_POOL_ID\" ] || [ \"\$AWS_USER_POOL_ID\" = \"your_cognito_user_pool_id\" ]; then
+                            if [ -z "$AWS_USER_POOL_ID" ] || [ "$AWS_USER_POOL_ID" = "your_cognito_user_pool_id" ]; then
                                 echo '⚠️  WARNING: AWS_USER_POOL_ID is not set or has default value'
                             fi
-                            if [ -z \"\$CORS_ORIGINS\" ]; then
+                            if [ -z "$CORS_ORIGINS" ]; then
                                 echo '⚠️  WARNING: CORS_ORIGINS is not set'
                             fi
                             npm install
                             pm2 delete pos-backend-qa || true
                             PORT=5001 pm2 start server.js --name pos-backend-qa
                             pm2 save
-                        "
+ENDSSH
                     '''
                 }
             }
