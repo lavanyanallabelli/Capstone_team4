@@ -3,7 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const path = require('path');
-const dotenv = require('dotenv').config({ path: '.env.qa' });
+const dotenv = require('dotenv');
 
 // Import database
 const { connectDB, sequelize } = require('./config/database');
