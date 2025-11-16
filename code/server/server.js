@@ -48,9 +48,6 @@ const HOST = '0.0.0.0'; // allow external traffic
 // console.log('JWKS_URI set:', Boolean(process.env.JWKS_URI));
 // console.log('============================');
 // 
-// Middleware
-app.use(helmet());
-
 // CORS Configuration - Read from environment variables
 // CORS_ORIGINS can be a comma-separated string or JSON array string
 // Example: "http://localhost:3000,http://3.87.100.22:3000,http://54.196.161.29:3001"
@@ -66,10 +63,30 @@ if (process.env.CORS_ORIGINS) {
     }
 }
 console.log('🌐 CORS Origins configured:', corsOrigins);
+console.log('🌐 CORS_ORIGINS env var:', process.env.CORS_ORIGINS);
 
+// Configure CORS with proper options
 app.use(cors({
-    origin: corsOrigins,
-    credentials: true
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        
+        if (corsOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            console.warn('⚠️ CORS blocked origin:', origin);
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    exposedHeaders: ['Content-Type', 'Authorization']
+}));
+
+// Middleware - Helmet after CORS to avoid conflicts
+app.use(helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
