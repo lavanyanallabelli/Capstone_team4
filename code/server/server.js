@@ -4,7 +4,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const path = require('path');
 const dotenv = require('dotenv');
-dotenv.config({ path: envFile }); 
+dotenv.config({ path: envFile });
 
 // Import database
 const { connectDB, sequelize } = require('./config/database');
@@ -26,12 +26,8 @@ const { authenticateToken } = require('./middleware/auth');
 const { syncCognitoUserToOwner } = require('./middleware/cognitoSync');
 
 // Load environment variables - use .env.qa for QA environment
-const envQaPath = path.join(__dirname, '.env.qa');
-const envPath = path.join(__dirname, '.env');
-const envFile = require('fs').existsSync(envQaPath) ? envQaPath : envPath;
-
-dotenv.config({ path: envFile });
-console.log('📁 Loading environment from:', envFile);
+dotenv.config({ path: path.join(__dirname, '.env.qa') });
+console.log('📁 Loading environment from:', path.join(__dirname, '.env.qa'));
 console.log('✅ Environment variables loaded');
 console.log('🔍 CORS_ORIGINS from env:', process.env.CORS_ORIGINS);
 
