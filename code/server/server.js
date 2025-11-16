@@ -4,7 +4,11 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const path = require('path');
 const dotenv = require('dotenv');
-dotenv.config({ path: envFile });
+// Load environment variables - use .env.qa for QA environment
+dotenv.config({ path: path.join(__dirname, '.env.qa') });
+console.log('📁 Loading environment from:', path.join(__dirname, '.env.qa'));
+console.log('✅ Environment variables loaded');
+console.log('🔍 CORS_ORIGINS from env:', process.env.CORS_ORIGINS);
 
 // Import database
 const { connectDB, sequelize } = require('./config/database');
@@ -24,12 +28,6 @@ const subscriptionRoutes = require('./routes/subscription');
 // Import middleware
 const { authenticateToken } = require('./middleware/auth');
 const { syncCognitoUserToOwner } = require('./middleware/cognitoSync');
-
-// Load environment variables - use .env.qa for QA environment
-dotenv.config({ path: path.join(__dirname, '.env.qa') });
-console.log('📁 Loading environment from:', path.join(__dirname, '.env.qa'));
-console.log('✅ Environment variables loaded');
-console.log('🔍 CORS_ORIGINS from env:', process.env.CORS_ORIGINS);
 
 const app = express();
 const PORT = process.env.PORT || 8000;
