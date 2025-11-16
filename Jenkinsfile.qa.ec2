@@ -83,13 +83,13 @@ REACT_APP_REDIRECT_SIGN_OUT=${env.REACT_APP_REDIRECT_SIGN_OUT}
             // parallel {
                 // stage('Security Audit') {
                     // steps {
-                        // echo "≡ƒöÆ Running security audit..."
+                        // echo "🔒 Running security audit..."
                         // sh 'npm audit --audit-level high'
                     // }
                 // }
                 // stage('Code Quality') {
                     // steps {
-                        // echo "≡ƒôè Running code quality checks..."
+                        // echo "📝 Running code quality checks..."
                         // sh '''
                             // cd code/client && npm run lint || true
                             // cd ../server && npm run lint || true
@@ -98,7 +98,7 @@ REACT_APP_REDIRECT_SIGN_OUT=${env.REACT_APP_REDIRECT_SIGN_OUT}
                 // }
                 // stage('Dependency Check') {
                     // steps {
-                        // echo "≡ƒôï Checking for outdated dependencies..."
+                        // echo "📦 Checking for outdated dependencies..."
                         // sh 'npm outdated || true'
                     // }
                 // }
@@ -107,7 +107,7 @@ REACT_APP_REDIRECT_SIGN_OUT=${env.REACT_APP_REDIRECT_SIGN_OUT}
         
         // stage('Performance Testing') {
             // steps {
-                // echo "ΓÜí Running performance tests..."
+                // echo "⚡ Running performance tests..."
                 // sh '''
                     // cd code/client
                     // npm run test:performance || true
@@ -180,7 +180,7 @@ ENDSSH
         
         stage('QA Validation') {
             steps {
-                echo "Γ£à Running QA validation tests..."
+                echo "✅ Running QA validation tests..."
                 sh '''
                     # Wait for deployment to be ready
                     sleep 30
@@ -189,7 +189,7 @@ ENDSSH
                     curl -f http://54.196.161.29:3001/ || echo "Frontend health check passed"
                     curl -f http://54.196.161.29:5001/health || echo "Backend health check passed"
                     
-                    echo "Γ£à QA validation completed successfully"
+                    echo "✅ QA validation completed successfully"
                 '''
             }
         }
@@ -197,7 +197,7 @@ ENDSSH
     
     post {
         always {
-            echo "≡ƒº╣ Cleaning up workspace..."
+            echo "🧹 Cleaning up workspace..."
             cleanWs()
         }
         success {
@@ -261,7 +261,7 @@ echo "Slack resp:" && cat /tmp/slack_resp.txt || true
             }
             mail (
                 to: 'chetanjogi042@gmail.com',
-                subject: "Γ£à POS System QA Deployment Successful - ${env.BUILD_NUMBER}",
+                subject: "✅ POS System QA Deployment Successful - ${env.BUILD_NUMBER}",
                 body: """
 The POS system has been successfully deployed to QA environment.
 
@@ -336,7 +336,7 @@ echo "Slack resp:" && cat /tmp/slack_resp.txt || true
             }
             mail (
                 to: 'cuteamy104@gmail.com',
-                subject: "Γ¥î POS System QA Deployment Failed - ${env.BUILD_NUMBER}",
+                subject: "❌ POS System QA Deployment Failed - ${env.BUILD_NUMBER}",
                 body: """
 The POS system QA deployment has failed.
 
