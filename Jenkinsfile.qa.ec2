@@ -152,7 +152,7 @@ REACT_APP_REDIRECT_SIGN_OUT=${env.REACT_APP_REDIRECT_SIGN_OUT}
                         echo "Deploying frontend build to QA..."
                         ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@54.196.161.29 "mkdir -p /home/ec2-user/pos_system/build"
                         scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/client/build/* $SSH_USER@54.196.161.29:/home/ec2-user/pos_system/build/
-                        ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@54.196.161.29"
+                        ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@54.196.161.29 "
                             pm2 stop pos-system-qa || true
                             pm2 serve /home/ec2-user/pos_system/build 3001 --name pos-system-qa --spa
                             pm2 save
