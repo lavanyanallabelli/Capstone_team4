@@ -7,9 +7,9 @@ pipeline {
         REACT_APP_USER_POOL_ID = 'us-east-1_i2eRulYnD'
         REACT_APP_USER_POOL_WEB_CLIENT_ID = '3q99asqjvgb0eakf80eorms0ho'
         REACT_APP_OAUTH_DOMAIN = 'https://us-east-1i2erulynd.auth.us-east-1.amazoncognito'
-        REACT_APP_API_URL = 'http://44.220.156.130:5000/api'
-        REACT_APP_REDIRECT_SIGN_IN = 'http://44.220.156.130/'
-        REACT_APP_REDIRECT_SIGN_OUT = 'http://44.220.156.130/'
+        REACT_APP_API_URL = 'http://13.220.117.57:5000/api'
+        REACT_APP_REDIRECT_SIGN_IN = 'http://13.220.117.57/'
+        REACT_APP_REDIRECT_SIGN_OUT = 'http://13.220.117.57/'
     }
 
     parameters {
@@ -76,9 +76,9 @@ REACT_APP_REDIRECT_SIGN_OUT=${env.REACT_APP_REDIRECT_SIGN_OUT}
                 withCredentials([sshUserPrivateKey(credentialsId: 'AWS_DEV_SSH_KEY', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
                     sh '''
                     echo "Deploying frontend build..."
-                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@44.220.156.130 "mkdir -p /home/ec2-user/pos_system/build"
-                    scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/client/build/* $SSH_USER@44.220.156.130:/home/ec2-user/pos_system/build/
-                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@44.220.156.130 "
+                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@13.220.117.57 "mkdir -p /home/ec2-user/pos_system/build"
+                    scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/client/build/* $SSH_USER@13.220.117.57:/home/ec2-user/pos_system/build/
+                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@13.220.117.57 "
                         pm2 stop pos-system || true
                         pm2 serve /home/ec2-user/pos_system/build 3000 --name pos-system --spa
                         pm2 save
@@ -97,18 +97,18 @@ REACT_APP_REDIRECT_SIGN_OUT=${env.REACT_APP_REDIRECT_SIGN_OUT}
                     sh """
                     echo "Deploying backend..."
                     echo "Verifying SSH connection..."
-                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@44.220.156.130 "echo 'SSH connection successful'" || { echo "SSH connection failed!"; exit 1; }
+                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@13.220.117.57 "echo 'SSH connection successful'" || { echo "SSH connection failed!"; exit 1; }
 
                     echo "Creating server directory..."
-                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@44.220.156.130 "mkdir -p /home/ec2-user/pos_system/server" || { echo "Failed to create directory!"; exit 1; }
+                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@13.220.117.57 "mkdir -p /home/ec2-user/pos_system/server" || { echo "Failed to create directory!"; exit 1; }
 
                     echo "Copying server files..."
-                    scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/server/* $SSH_USER@44.220.156.130:/home/ec2-user/pos_system/server/ || { echo "Failed to copy files!"; exit 1; }
+                    scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/server/* $SSH_USER@13.220.117.57:/home/ec2-user/pos_system/server/ || { echo "Failed to copy files!"; exit 1; }
 
                     echo "Using existing .env on EC2 (no .env creation from Jenkins)"
 
                     echo "Installing dependencies and starting backend..."
-                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@44.220.156.130 "
+                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@13.220.117.57 "
                         cd /home/ec2-user/pos_system/server || { echo 'Failed to cd to server directory'; exit 1; }
                         npm install || { echo 'npm install failed'; exit 1; }
                         pm2 delete pos-backend || true
