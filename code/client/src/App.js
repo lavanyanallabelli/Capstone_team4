@@ -20,6 +20,7 @@ import TrialExpiredPage from './pages/TrialExpiredPage';
 import EmailVerification from './components/auth/EmailVerification';
 import ResetPasswordConfirm from './components/auth/ResetPasswordConfirm';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import ReactivateAccount from './components/auth/ReactivateAccount';
 import ProtectedRoute from './components/ProtectedRoute';
 import './App.css';
 
@@ -40,6 +41,7 @@ function App() {
                         <Route path="/verify-email" element={<EmailVerification />} />
                         <Route path="/reset-password" element={<ResetPasswordPage />} />
                         <Route path="/reset-password-confirm" element={<ResetPasswordConfirm />} />
+                        <Route path="/reactivate-account" element={<ReactivateAccount />} />
                         <Route
                             path="/dashboard"
                             element={

@@ -126,10 +126,31 @@ class ApiService {
             const data = await response.json();
 
             if (!response.ok) {
-                // Handle 403 (Forbidden) - likely expired token
+                // Handle 403 (Forbidden) - likely expired token or inactive account
                 if (response.status === 403) {
                     const errorMessage = data.message || data.error || '';
-                    if (errorMessage.includes('Token verification failed') ||
+                    if (data.accountInactive || errorMessage.includes('deactivated') || errorMessage.includes('inactive')) {
+                        console.warn('⚠️ Account is inactive, logging out');
+                        // Clear all auth data
+                        localStorage.removeItem('employeeToken');
+                        localStorage.removeItem('employeeUser');
+                        // Sign out from Cognito if using it
+                        try {
+                            const { Auth } = await import('aws-amplify');
+                            await Auth.signOut();
+                        } catch (e) {
+                            // Ignore Cognito signout errors
+                        }
+                        // Redirect to login with reactivation option
+                        if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
+                            window.location.href = '/login?inactive=true';
+                        }
+                        // Throw error with accountInactive flag
+                        const error = new Error(data.message || 'Your account has been deactivated');
+                        error.accountInactive = true;
+                        error.email = data.email;
+                        throw error;
+                    } else if (errorMessage.includes('Token verification failed') ||
                         errorMessage.includes('expired') ||
                         errorMessage.includes('Invalid token')) {
                         console.warn('⚠️ Token expired or invalid, clearing from storage');
@@ -237,6 +258,18 @@ class ApiService {
 
     async changePassword(passwordData) {
         return this.post('/auth/change-password', passwordData);
+    }
+
+    async requestReactivation(email) {
+        return this.post('/auth/request-reactivation', { email }, { includeAuth: false });
+    }
+
+    async reactivateAccount(token) {
+        const response = await this.post('/auth/reactivate-account', { token }, { includeAuth: false });
+        if (response.success && response.data.token) {
+            this.setAuthToken(response.data.token);
+        }
+        return response;
     }
 
     // Menu methods

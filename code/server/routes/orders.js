@@ -549,10 +549,10 @@ router.patch('/:orderId/payment/:paymentId/refund', authenticateToken, async (re
         // Check if user is a manager (not owner) and send email notification to owner
         // Note: req.user.role is logged in auth middleware, but userRole is the actual field
         let userRole = req.user?.userRole || req.user?.role || req.user?.['custom:userRole'] || 'employee';
-        console.log('🔍 Refund processed by user role (from token):', userRole);
-        console.log('🔍 req.user.userRole:', req.user?.userRole);
-        console.log('🔍 req.user.role:', req.user?.role);
-        console.log('🔍 req.user.email:', req.user?.email);
+        // console.log('🔍 Refund processed by user role (from token):', userRole);
+        // console.log('🔍 req.user.userRole:', req.user?.userRole);
+        // console.log('🔍 req.user.role:', req.user?.role);
+        // console.log('🔍 req.user.email:', req.user?.email);
 
         // Double-check role from database if available
         if (req.user?.email && userRole !== 'owner') {
@@ -565,7 +565,7 @@ router.patch('/:orderId/payment/:paymentId/refund', authenticateToken, async (re
                     attributes: ['role']
                 });
                 if (employee && employee.role) {
-                    console.log('🔍 Employee role from database:', employee.role);
+                 //   console.log('🔍 Employee role from database:', employee.role);
                     userRole = employee.role;
                 }
             } catch (dbError) {

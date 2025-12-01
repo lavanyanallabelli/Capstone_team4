@@ -19,13 +19,45 @@ const OnlineOrders = () => {
         try {
             setLoading(true);
             const response = await apiService.getOrders();
+            console.log('📦 Online Orders - API Response:', {
+                success: response.success,
+                totalOrders: response.data?.length || 0,
+                data: response.data
+            });
+
             if (response.success) {
+                // Debug: Check what order types we have
+                const orderTypes = [...new Set((response.data || []).map(o => o.orderType))];
+                const orderStatuses = [...new Set((response.data || []).map(o => o.status))];
+                console.log('📦 Debug - All order types in response:', orderTypes);
+                console.log('📦 Debug - All order statuses in response:', orderStatuses);
+                console.log('📦 Debug - Sample orders:', (response.data || []).slice(0, 3).map(o => ({
+                    id: o.id,
+                    orderNumber: o.orderNumber,
+                    orderType: o.orderType,
+                    status: o.status,
+                    customerName: o.customerName
+                })));
+
                 // Filter only online orders that are not completed
                 const onlineOrders = (response.data || []).filter(order =>
                     order.orderType === 'online-order' &&
                     order.status !== 'completed' &&
                     order.status !== 'cancelled'
                 );
+
+                console.log('📦 Online Orders - Filtered:', {
+                    totalOrders: response.data?.length || 0,
+                    onlineOrdersCount: onlineOrders.length,
+                    onlineOrders: onlineOrders.map(o => ({
+                        id: o.id,
+                        orderNumber: o.orderNumber,
+                        orderType: o.orderType,
+                        status: o.status,
+                        customerName: o.customerName
+                    }))
+                });
+
                 // Sort by date (newest first)
                 onlineOrders.sort((a, b) =>
                     new Date(b.orderDate || b.createdAt) - new Date(a.orderDate || a.createdAt)
@@ -33,7 +65,7 @@ const OnlineOrders = () => {
                 setOrders(onlineOrders);
             }
         } catch (error) {
-            console.error('Error loading online orders:', error);
+            console.error('❌ Error loading online orders:', error);
         } finally {
             setLoading(false);
         }

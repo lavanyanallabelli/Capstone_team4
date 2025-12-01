@@ -100,6 +100,27 @@ const syncCognitoUserToOwner = async (req, res, next) => {
             }
         });
 
+        // CRITICAL: Check if account is inactive FIRST - block access even if Cognito authentication succeeds
+        // This must happen BEFORE creating a new owner record
+        if (owner) {
+            if (!owner.isActive) {
+                console.error('🚫 BLOCKED: Inactive account attempting to access API:', email);
+                console.error('🚫 Account details:', {
+                    email: owner.email,
+                    ownerId: owner.id,
+                    isActive: owner.isActive,
+                    deactivatedAt: owner.updatedAt
+                });
+                return res.status(403).json({
+                    success: false,
+                    error: 'Account deactivated',
+                    message: 'Your account has been deactivated. Please contact support to reactivate.',
+                    accountInactive: true,
+                    email: email
+                });
+            }
+        }
+
         console.log('🔍 Owner lookup result:', owner ? {
             found: true,
             ownerId: owner.id,
@@ -143,8 +164,8 @@ const syncCognitoUserToOwner = async (req, res, next) => {
                 });
             } catch (createError) {
                 console.error('❌ Error creating Owner record:', createError);
-                console.error('Error name:', createError.name);
-                console.error('Error message:', createError.message);
+                // console.error('Error name:', createError.name);
+                // console.error('Error message:', createError.message);
 
                 // If unique constraint violation (email already exists), try to find again
                 if (createError.name === 'SequelizeUniqueConstraintError' || createError.message.includes('unique')) {
@@ -211,7 +232,7 @@ const syncCognitoUserToOwner = async (req, res, next) => {
 
         // CRITICAL: Verify owner was created/found before continuing
         if (!owner || !owner.id) {
-            console.error('❌ CRITICAL: Owner record not found or has no ID after sync attempt');
+            //  console.error('❌ CRITICAL: Owner record not found or has no ID after sync attempt');
             return res.status(500).json({
                 success: false,
                 error: 'Account sync failed',

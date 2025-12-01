@@ -18,22 +18,36 @@ const MenuDisplay = ({ items, onAddToOrder }) => {
     return (
         <div className="p-4 h-full overflow-y-auto">
             <div className="grid grid-cols-5 gap-3">
-                {items.map((item) => (
-                    <motion.div
-                        key={item.id}
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => onAddToOrder(item)}
-                        className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
-                    >
-                        {/* Item Details */}
-                        <div className="p-3 flex items-center justify-center min-h-[60px]">
-                            <h3 className="font-semibold text-gray-900 text-sm text-center">
-                                {item.name}
-                            </h3>
-                        </div>
-                    </motion.div>
-                ))}
+                {items.map((item) => {
+                    const isUnavailable = item.isAvailable === false;
+                    return (
+                        <motion.div
+                            key={item.id}
+                            whileHover={isUnavailable ? {} : { scale: 1.02 }}
+                            whileTap={isUnavailable ? {} : { scale: 0.98 }}
+                            onClick={() => !isUnavailable && onAddToOrder(item)}
+                            className={`rounded-lg shadow-sm border overflow-hidden transition-all ${
+                                isUnavailable
+                                    ? 'bg-gray-100 border-gray-300 opacity-60 cursor-not-allowed'
+                                    : 'bg-white border-gray-200 hover:shadow-md cursor-pointer'
+                            }`}
+                        >
+                            {/* Item Details */}
+                            <div className="p-3 flex items-center justify-center min-h-[60px]">
+                                <h3 className={`font-semibold text-sm text-center ${
+                                    isUnavailable ? 'text-gray-400' : 'text-gray-900'
+                                }`}>
+                                    {item.name}
+                                </h3>
+                            </div>
+                            {isUnavailable && (
+                                <div className="px-2 pb-2">
+                                    <span className="text-xs text-red-500 font-medium">Unavailable</span>
+                                </div>
+                            )}
+                        </motion.div>
+                    );
+                })}
             </div>
         </div>
     );

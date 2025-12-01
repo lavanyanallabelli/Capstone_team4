@@ -79,6 +79,14 @@ const Owner = sequelize.define('Owner', {
         type: DataTypes.JSONB,
         allowNull: true
     },
+    reactivationToken: {
+        type: DataTypes.STRING(255),
+        allowNull: true
+    },
+    reactivationTokenExpiry: {
+        type: DataTypes.DATE,
+        allowNull: true
+    },
     createdAt: {
         type: DataTypes.DATE,
         allowNull: false,

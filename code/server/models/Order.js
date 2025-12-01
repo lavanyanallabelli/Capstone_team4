@@ -87,6 +87,32 @@ const Order = sequelize.define('Order', {
         allowNull: false,
         defaultValue: 'pending'
     },
+    customerPhone: {
+        type: DataTypes.STRING(20),
+        allowNull: true
+    },
+    deliveryAddress: {
+        type: DataTypes.JSONB,
+        allowNull: true
+    },
+    deliveryFee: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+        defaultValue: 0.00
+    },
+    doordashOrderId: {
+        type: DataTypes.STRING(100),
+        allowNull: true,
+        unique: true
+    },
+    doordashStoreId: {
+        type: DataTypes.STRING(100),
+        allowNull: true
+    },
+    doordashMetadata: {
+        type: DataTypes.JSONB,
+        allowNull: true
+    },
     createdAt: {
         type: DataTypes.DATE,
         allowNull: false,

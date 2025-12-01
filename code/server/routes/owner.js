@@ -74,6 +74,18 @@ router.get('/profile', async (req, res) => {
             });
         }
 
+        // Check if account is inactive
+        if (!owner.isActive) {
+            console.error('🚫 Blocked access to inactive account:', owner.email);
+            return res.status(403).json({
+                success: false,
+                error: 'Account deactivated',
+                message: 'Your account has been deactivated. Please contact support to reactivate.',
+                accountInactive: true,
+                email: owner.email
+            });
+        }
+
         // If trialEndDate is not set, calculate it from createdAt (30 days from registration)
         let ownerData = owner.toJSON();
         if (!ownerData.trialEndDate && ownerData.createdAt) {

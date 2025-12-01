@@ -247,6 +247,8 @@ const RestaurantSettings = () => {
     const handleSave = async (section) => {
         try {
             if (section === 'general') {
+                let ownerUpdateSuccess = true;
+
                 // First, update owner profile if restaurantName, businessType, phone, or email changed
                 // This ensures Profile tab and General tab stay in sync
                 if (ownerProfile) {
@@ -271,26 +273,112 @@ const RestaurantSettings = () => {
                     }
 
                     if (needsOwnerUpdate) {
-                        console.log('📝 Updating owner profile from General tab:', ownerUpdates);
-                        const ownerResponse = await apiService.updateOwnerProfile(ownerUpdates);
-                        if (ownerResponse.success) {
-                            // Reload owner profile to get updated data
-                            await loadOwnerProfile();
-                            // Dispatch event to notify Dashboard to refresh
-                            window.dispatchEvent(new Event('profileUpdated'));
+                        try {
+                            console.log('📝 Updating owner profile from General tab:', ownerUpdates);
+                            const ownerResponse = await apiService.updateOwnerProfile(ownerUpdates);
+                            if (ownerResponse && ownerResponse.success) {
+                                // Reload owner profile to get updated data
+                                await loadOwnerProfile();
+                                // Dispatch event to notify Dashboard to refresh
+                                window.dispatchEvent(new Event('profileUpdated'));
+                                ownerUpdateSuccess = true;
+                            } else {
+                                console.warn('Owner profile update failed:', ownerResponse);
+                                ownerUpdateSuccess = false;
+                            }
+                        } catch (ownerError) {
+                            console.error('Error updating owner profile:', ownerError);
+                            ownerUpdateSuccess = false;
                         }
                     }
                 }
 
                 // Save general settings to backend (address, website, description, etc.)
-                const response = await apiService.updateGeneralSettings(settings.general);
-                if (response.success) {
-                    alert('General settings saved successfully!');
-                    // Reload settings to get any server-side updates
-                    await loadSettings();
-                    setIsGeneralEditing(false);
-                } else {
-                    alert('Failed to save general settings. Please try again.');
+                try {
+                    // Normalize businessType to match backend validation
+                    const validBusinessTypes = ['Italian Restaurant', 'Chinese Restaurant', 'Indian Restaurant', 'Mexican Restaurant', 'Cafe'];
+                    let normalizedBusinessType = settings.general.businessType;
+
+                    // If businessType doesn't match exactly, try to normalize it
+                    if (!validBusinessTypes.includes(normalizedBusinessType)) {
+                        const businessTypeMap = {
+                            'italian restaurant': 'Italian Restaurant',
+                            'chinese restaurant': 'Chinese Restaurant',
+                            'indian restaurant': 'Indian Restaurant',
+                            'mexican restaurant': 'Mexican Restaurant',
+                            'cafe': 'Cafe',
+                            'italian': 'Italian Restaurant',
+                            'chinese': 'Chinese Restaurant',
+                            'indian': 'Indian Restaurant',
+                            'mexican': 'Mexican Restaurant'
+                        };
+                        const normalized = businessTypeMap[normalizedBusinessType?.toLowerCase()];
+                        if (normalized) {
+                            normalizedBusinessType = normalized;
+                        } else {
+                            // Default to first valid type if unknown
+                            normalizedBusinessType = validBusinessTypes[0];
+                        }
+                    }
+
+                    // Prepare settings data with normalized values
+                    const settingsToSave = {
+                        ...settings.general,
+                        businessType: normalizedBusinessType,
+                        // Ensure website is either a valid URI or empty string (not null)
+                        website: settings.general.website && settings.general.website.trim() !== ''
+                            ? settings.general.website.trim()
+                            : '',
+                        // Ensure description is either a string or empty
+                        description: settings.general.description || '',
+                        // Ensure logo is either a valid URI or empty string (not null)
+                        logo: settings.general.logo && settings.general.logo.trim() !== ''
+                            ? settings.general.logo.trim()
+                            : ''
+                    };
+
+                    console.log('Saving general settings (normalized):', settingsToSave);
+                    const response = await apiService.updateGeneralSettings(settingsToSave);
+                    console.log('General settings save response:', response);
+                    if (response && response.success) {
+                        alert('General settings saved successfully!');
+                        // Reload settings to get any server-side updates
+                        await loadSettings();
+                        setIsGeneralEditing(false);
+                    } else {
+                        // Extract validation error details
+                        let errorMsg = response?.message || response?.error || 'Unknown error';
+                        if (response?.details && Array.isArray(response.details)) {
+                            const validationErrors = response.details.map(d => d.message || d).join(', ');
+                            errorMsg = `Validation error: ${validationErrors}`;
+                        }
+                        console.error('Failed to save general settings:', response);
+                        // If owner update succeeded but general settings failed, mention both
+                        if (ownerUpdateSuccess) {
+                            alert(`Profile updated, but general settings failed: ${errorMsg}`);
+                        } else {
+                            alert(`Failed to save general settings: ${errorMsg}`);
+                        }
+                    }
+                } catch (settingsError) {
+                    console.error('Error saving general settings:', settingsError);
+                    let errorMsg = settingsError.message || 'Please try again.';
+                    // Extract validation error details from response
+                    if (settingsError.response?.data) {
+                        const errorData = settingsError.response.data;
+                        if (errorData.details && Array.isArray(errorData.details)) {
+                            const validationErrors = errorData.details.map(d => d.message || d).join(', ');
+                            errorMsg = `Validation error: ${validationErrors}`;
+                        } else if (errorData.message || errorData.error) {
+                            errorMsg = errorData.message || errorData.error;
+                        }
+                    }
+                    // If owner update succeeded but general settings failed, mention both
+                    if (ownerUpdateSuccess) {
+                        alert(`Profile updated, but failed to save general settings: ${errorMsg}`);
+                    } else {
+                        alert(`Failed to save general settings: ${errorMsg}`);
+                    }
                 }
             } else if (section === 'hours') {
                 // Save hours settings to backend

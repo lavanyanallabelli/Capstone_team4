@@ -59,9 +59,31 @@ const generalSettingsSchema = Joi.object({
     address: Joi.string().max(200).required(),
     phone: Joi.string().pattern(/^\+?[\d\s\-\(\)]+$/).required(),
     email: Joi.string().email().required(),
-    website: Joi.string().uri().optional(),
-    description: Joi.string().max(500).optional(),
-    logo: Joi.string().uri().optional()
+    website: Joi.string().allow('', null).custom((value, helpers) => {
+        // If empty or null, allow it
+        if (!value || value.trim() === '') {
+            return value;
+        }
+        // If not empty, validate as URI
+        const uriPattern = /^https?:\/\/.+/;
+        if (!uriPattern.test(value)) {
+            return helpers.error('string.uri');
+        }
+        return value;
+    }).optional(),
+    description: Joi.string().max(500).allow('', null).optional(),
+    logo: Joi.string().allow('', null).custom((value, helpers) => {
+        // If empty or null, allow it
+        if (!value || value.trim() === '') {
+            return value;
+        }
+        // If not empty, validate as URI
+        const uriPattern = /^https?:\/\/.+/;
+        if (!uriPattern.test(value)) {
+            return helpers.error('string.uri');
+        }
+        return value;
+    }).optional()
 });
 
 const hoursSettingsSchema = Joi.object({

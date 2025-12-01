@@ -1,9 +1,11 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const Joi = require('joi');
 const { Owner, Employee } = require('../models');
+const { sendReactivationEmail } = require('../services/emailService');
 
 const router = express.Router();
 
@@ -165,22 +167,24 @@ router.post('/login', async (req, res) => {
             });
         }
 
-        // Check if user is active
-        if (!user.isActive) {
-            return res.status(401).json({
-                success: false,
-                error: 'Account deactivated',
-                message: 'Your account has been deactivated. Please contact support.'
-            });
-        }
-
-        // Verify password
+        // Verify password first (security: don't reveal account status with wrong password)
         const isValidPassword = await bcrypt.compare(password, user.password);
         if (!isValidPassword) {
             return res.status(401).json({
                 success: false,
                 error: 'Invalid credentials',
                 message: 'Email or password is incorrect'
+            });
+        }
+
+        // Check if user is active (only after password is verified)
+        if (!user.isActive) {
+            return res.status(401).json({
+                success: false,
+                error: 'Account deactivated',
+                message: 'Your account has been deactivated. Please contact support.',
+                accountInactive: true,
+                email: user.email
             });
         }
 
@@ -501,6 +505,151 @@ router.get('/verify', async (req, res) => {
             success: false,
             error: 'Invalid token',
             data: { valid: false }
+        });
+    }
+});
+
+// Request account reactivation
+router.post('/request-reactivation', async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        if (!email) {
+            return res.status(400).json({
+                success: false,
+                error: 'Email is required'
+            });
+        }
+
+        // Find user by email
+        const user = await Owner.findOne({ where: { email } });
+        if (!user) {
+            // Don't reveal if user exists or not for security
+            return res.json({
+                success: true,
+                message: 'If an account with this email exists and is inactive, a reactivation email has been sent.'
+            });
+        }
+
+        // Only send email if account is inactive
+        if (user.isActive) {
+            return res.json({
+                success: true,
+                message: 'If an account with this email exists and is inactive, a reactivation email has been sent.'
+            });
+        }
+
+        // Generate reactivation token
+        const reactivationToken = crypto.randomBytes(32).toString('hex');
+        const reactivationTokenExpiry = new Date();
+        reactivationTokenExpiry.setHours(reactivationTokenExpiry.getHours() + 24); // 24 hours expiry
+
+        // Save token to user
+        await user.update({
+            reactivationToken,
+            reactivationTokenExpiry
+        });
+
+        // Send reactivation email
+        try {
+            await sendReactivationEmail(user.email, user.name, reactivationToken);
+            console.log('✅ Reactivation email sent to:', user.email);
+        } catch (emailError) {
+            console.error('❌ Error sending reactivation email:', emailError);
+            // Still return success to not reveal if account exists
+        }
+
+        res.json({
+            success: true,
+            message: 'If an account with this email exists and is inactive, a reactivation email has been sent.'
+        });
+    } catch (error) {
+        console.error('Error requesting reactivation:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to process reactivation request',
+            message: error.message
+        });
+    }
+});
+
+// Verify and reactivate account
+router.post('/reactivate-account', async (req, res) => {
+    try {
+        const { token } = req.body;
+
+        if (!token) {
+            return res.status(400).json({
+                success: false,
+                error: 'Reactivation token is required'
+            });
+        }
+
+        // Find user by reactivation token
+        const user = await Owner.findOne({
+            where: {
+                reactivationToken: token
+            }
+        });
+
+        if (!user) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid or expired reactivation token'
+            });
+        }
+
+        // Check if token is expired
+        if (user.reactivationTokenExpiry && new Date() > new Date(user.reactivationTokenExpiry)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Reactivation token has expired. Please request a new one.'
+            });
+        }
+
+        // Reactivate account
+        await user.update({
+            isActive: true,
+            reactivationToken: null,
+            reactivationTokenExpiry: null
+        });
+
+        console.log('✅ Account reactivated:', user.email);
+
+        // Generate JWT token and log user in
+        const jwtToken = jwt.sign(
+            {
+                sub: user.id,
+                email: user.email,
+                'custom:userRole': 'owner',
+                'custom:businessId': user.id,
+                'custom:businessName': user.businessName,
+                'custom:businessType': user.businessType,
+                'custom:phone': user.phone
+            },
+            process.env.JWT_SECRET || 'fallback-secret',
+            { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
+        );
+
+        // Remove sensitive data from response
+        const safeUser = user.toJSON();
+        delete safeUser.password;
+        delete safeUser.reactivationToken;
+
+        res.json({
+            success: true,
+            data: {
+                user: safeUser,
+                token: jwtToken
+            },
+            message: 'Account reactivated successfully. You are now logged in.'
+        });
+    } catch (error) {
+        console.error('Error reactivating account:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to reactivate account',
+            message: error.message
         });
     }
 });

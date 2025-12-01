@@ -19,6 +19,26 @@ const ProtectedRoute = ({ children }) => {
             }
 
             try {
+                // First check if account is active
+                const ownerProfileResponse = await apiService.getOwnerProfile();
+                if (ownerProfileResponse.success && ownerProfileResponse.data) {
+                    const ownerData = ownerProfileResponse.data;
+                    if (ownerData.isActive === false) {
+                        console.error('🚫 Account is inactive, redirecting to login');
+                        // Clear auth and redirect
+                        try {
+                            const { Auth } = await import('aws-amplify');
+                            await Auth.signOut();
+                        } catch (e) {
+                            // Ignore Cognito signout errors
+                        }
+                        localStorage.clear();
+                        window.location.href = '/login';
+                        return;
+                    }
+                }
+
+                // Then check subscription status
                 const response = await apiService.getSubscriptionStatus();
                 if (response.success && response.data) {
                     const isExpired = response.data.isTrialExpired && !response.data.isActive;
@@ -28,6 +48,19 @@ const ProtectedRoute = ({ children }) => {
                 }
             } catch (error) {
                 console.error('Error checking subscription:', error);
+                // Check if error is due to inactive account
+                if (error.accountInactive || error.response?.data?.accountInactive) {
+                    console.error('🚫 Account is inactive, redirecting to login');
+                    try {
+                        const { Auth } = await import('aws-amplify');
+                        await Auth.signOut();
+                    } catch (e) {
+                        // Ignore Cognito signout errors
+                    }
+                    localStorage.clear();
+                    window.location.href = '/login';
+                    return;
+                }
                 // On error, check if it's a subscription expired error
                 if (error.response?.status === 403 && error.response?.data?.redirectTo) {
                     setSubscriptionCheck({ loading: false, expired: true });

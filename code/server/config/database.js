@@ -67,16 +67,16 @@ const connectDB = async (retries = 3, delay = 5000) => {
                 );
 
                 if (results.length === 0) {
-                    console.log(`📝 Creating database '${dbName}'...`);
+                //    console.log(`📝 Creating database '${dbName}'...`);
                     await defaultSequelize.query(`CREATE DATABASE "${dbName}"`);
-                    console.log(`✅ Database '${dbName}' created successfully`);
+                  //  console.log(`✅ Database '${dbName}' created successfully`);
                 }
 
                 await defaultSequelize.close();
             } catch (dbError) {
                 await defaultSequelize.close();
                 // If we can't create database, continue anyway (might already exist or permission issue)
-                console.log('⚠️ Could not create database (might already exist):', dbError.message);
+             //   console.log('⚠️ Could not create database (might already exist):', dbError.message);
             }
 
             // Now connect to our actual database
@@ -85,17 +85,17 @@ const connectDB = async (retries = 3, delay = 5000) => {
             return true;
         } catch (error) {
             console.error(`❌ Connection attempt ${attempt} failed:`, error.message);
-            
+
             if (attempt < retries) {
                 console.log(`⏳ Retrying in ${delay / 1000} seconds...`);
                 await new Promise(resolve => setTimeout(resolve, delay));
             } else {
-                console.error('❌ Unable to connect to PostgreSQL after', retries, 'attempts');
-                console.error('💡 Please check:');
-                console.error('   1. Database server is running');
-                console.error('   2. Network connectivity to', process.env.DB_HOST || 'localhost');
-                console.error('   3. Firewall rules allow connection on port', process.env.DB_PORT || 5432);
-                console.error('   4. Database credentials in .env file are correct');
+                // console.error('❌ Unable to connect to PostgreSQL after', retries, 'attempts');
+                // console.error('💡 Please check:');
+                // console.error('   1. Database server is running');
+                // console.error('   2. Network connectivity to', process.env.DB_HOST || 'localhost');
+                // console.error('   3. Firewall rules allow connection on port', process.env.DB_PORT || 5432);
+                // console.error('   4. Database credentials in .env file are correct');
                 throw error;
             }
         }

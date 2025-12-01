@@ -214,8 +214,12 @@ const EnhancedPOSSystem = () => {
 
     // Add item to order
     const addToOrder = (item) => {
-        // Check if item is available (allow adding even if marked unavailable in POS)
-        // But we'll still respect the availability flag for display
+        // Check if item is available before adding to cart
+        if (item.isAvailable === false) {
+            alert('This item is unavailable');
+            return; // Prevent adding unavailable items
+        }
+
         const existingItem = currentOrder.find(orderItem => orderItem.id === item.id);
         if (existingItem) {
             setCurrentOrder(prev =>

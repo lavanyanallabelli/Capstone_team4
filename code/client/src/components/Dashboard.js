@@ -91,6 +91,14 @@ const Dashboard = () => {
           if (ownerProfileResponse.success && ownerProfileResponse.data) {
             const ownerData = ownerProfileResponse.data;
 
+            // Check if account is inactive
+            if (ownerData.isActive === false) {
+              console.error('🚫 Account is inactive, logging out');
+              logout();
+              navigate('/login');
+              return;
+            }
+
             // Store owner profile for display
             setOwnerProfile(ownerData);
 

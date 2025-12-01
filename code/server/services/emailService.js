@@ -533,8 +533,105 @@ const buildRefundEmailHTML = (businessName, refundData) => {
     `;
 };
 
+// Send account reactivation email
+const sendReactivationEmail = async (ownerEmail, ownerName, reactivationToken) => {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const reactivationLink = `${frontendUrl}/reactivate-account?token=${reactivationToken}`;
+
+    const hasSmtp = !!(process.env.SMTP_USER && process.env.SMTP_PASS);
+    // If SMTP not configured, attempt AWS SES fallback
+    if (!hasSmtp && (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY)) {
+        try {
+            const { sendEmail } = require('./sesEmailService');
+            const fromEmail = process.env.SES_FROM || process.env.SMTP_USER || 'no-reply@example.com';
+            const subject = 'Reactivate Your Account - POS Pro';
+            const html = buildReactivationEmailHTML(ownerName, reactivationLink);
+            await sendEmail(ownerEmail, fromEmail, subject, html);
+            return true;
+        } catch (sesErr) {
+            console.error('❌ SES fallback failed for reactivation email:', sesErr.message);
+        }
+    }
+
+    if (!hasSmtp) {
+        const error = new Error('SMTP configuration missing and SES fallback unavailable. Set SMTP_USER/SMTP_PASS or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY.');
+        console.error('❌ Email configuration error:', error.message);
+        throw error;
+    }
+
+    try {
+        const transporter = createTransporter();
+        await transporter.verify();
+        console.log('✅ SMTP server connection verified');
+
+        const mailOptions = {
+            from: process.env.SMTP_USER,
+            to: ownerEmail,
+            subject: 'Reactivate Your Account - POS Pro',
+            html: buildReactivationEmailHTML(ownerName, reactivationLink)
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        console.log('✅ Reactivation email sent successfully!');
+        console.log('   📧 To:', ownerEmail);
+        console.log('   📨 Message ID:', info.messageId);
+        return true;
+    } catch (error) {
+        console.error('❌ Error sending reactivation email:');
+        console.error('   📧 To:', ownerEmail);
+        console.error('   🔴 Error:', error.message);
+        throw error;
+    }
+};
+
+// Helper function to build reactivation email HTML
+const buildReactivationEmailHTML = (ownerName, reactivationLink) => {
+    return `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+                <h1 style="color: white; margin: 0; font-size: 24px;">Account Reactivation</h1>
+                <p style="color: #e0e0e0; margin: 10px 0 0 0;">POS Pro System</p>
+            </div>
+            
+            <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                <h2 style="color: #333; margin-top: 0;">Hello ${ownerName || 'there'}!</h2>
+                
+                <p style="color: #666; line-height: 1.6;">
+                    You requested to reactivate your account. Click the button below to verify your email and reactivate your account.
+                </p>
+                
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="${reactivationLink}" 
+                       style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                        Reactivate Account
+                    </a>
+                </div>
+                
+                <p style="color: #999; font-size: 12px; margin-top: 30px;">
+                    If the button doesn't work, copy and paste this link into your browser:<br>
+                    <a href="${reactivationLink}" style="color: #667eea; word-break: break-all;">${reactivationLink}</a>
+                </p>
+                
+                <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ffc107;">
+                    <p style="color: #856404; margin: 0; font-size: 14px;">
+                        <strong>Security Note:</strong> This link will expire in 24 hours. If you didn't request this reactivation, please ignore this email.
+                    </p>
+                </div>
+                
+                <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+                
+                <p style="color: #999; font-size: 12px; text-align: center; margin: 0;">
+                    This is an automated email from POS Pro System.<br>
+                    Please do not reply to this email.
+                </p>
+            </div>
+        </div>
+    `;
+};
+
 module.exports = {
     sendEmployeeCredentials,
     sendScheduleEmail,
-    sendRefundNotification
+    sendRefundNotification,
+    sendReactivationEmail
 };
