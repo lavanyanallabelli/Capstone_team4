@@ -13,7 +13,6 @@ pipeline {
         
         // Docker Hub configuration
         DOCKER_HUB_REPO = 'lavanyanallabelli/pos-system'
-        DOCKER_IMAGE_TAG = "${env.BUILD_NUMBER}-${env.LAST_COMMIT_HASH}"
     }
 
     parameters {
@@ -33,6 +32,7 @@ pipeline {
                     env.LAST_COMMIT_MESSAGE = sh(script: "git log -1 --pretty=%B | tr -d '\\n'", returnStdout: true).trim()
                     env.LAST_COMMIT_AUTHOR  = sh(script: "git log -1 --pretty=%an", returnStdout: true).trim()
                     env.LAST_COMMIT_HASH    = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+                    env.DOCKER_IMAGE_TAG = "${env.BUILD_NUMBER}-${env.LAST_COMMIT_HASH}"
                 }
             }
         }
