@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { CheckCircle, XCircle, Loader2, AlertCircle } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import apiService from '../../services/api';
-import { useAuth } from '../../contexts/AuthContext';
+// import { useAuth } from '../../contexts/AuthContext'; // Commented out - unused import
 
 const ReactivateAccount = () => {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
-    const { login } = useAuth();
+    // const { login } = useAuth(); // Commented out - unused variable
     const [status, setStatus] = useState('loading'); // loading, success, error
     const [message, setMessage] = useState('');
     const token = searchParams.get('token');
@@ -23,11 +23,11 @@ const ReactivateAccount = () => {
 
             try {
                 const response = await apiService.reactivateAccount(token);
-                
+
                 if (response.success) {
                     setStatus('success');
                     setMessage('Account reactivated successfully! Redirecting to dashboard...');
-                    
+
                     // Store token and user data
                     if (response.data.token) {
                         localStorage.setItem('token', response.data.token);

@@ -223,7 +223,7 @@ const Dashboard = () => {
       window.removeEventListener('profileUpdated', handleProfileUpdate);
       window.removeEventListener('orderUpdated', handleOrderUpdate);
     };
-  }, [isOwner, currentUser]);
+  }, [isOwner, currentUser, logout, navigate]);
 
   const refreshDashboard = () => {
     setError(null);

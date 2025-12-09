@@ -1,5 +1,5 @@
 pipeline {
-    agent any
+    agent { label 'docker-slave' }
 
     environment {
         // Frontend (React) environment variables — public only
@@ -7,9 +7,13 @@ pipeline {
         REACT_APP_USER_POOL_ID = 'us-east-1_i2eRulYnD'
         REACT_APP_USER_POOL_WEB_CLIENT_ID = '3q99asqjvgb0eakf80eorms0ho'
         REACT_APP_OAUTH_DOMAIN = 'https://us-east-1i2erulynd.auth.us-east-1.amazoncognito'
-        REACT_APP_API_URL = 'http://13.220.117.57:5000/api'
-        REACT_APP_REDIRECT_SIGN_IN = 'http://13.220.117.57/'
-        REACT_APP_REDIRECT_SIGN_OUT = 'http://13.220.117.57/'
+        REACT_APP_API_URL = 'http://34.224.223.112:5000/api'
+        REACT_APP_REDIRECT_SIGN_IN = 'http://34.224.223.112/'
+        REACT_APP_REDIRECT_SIGN_OUT = 'http://34.224.223.112/'
+        
+        // Docker Hub configuration
+        DOCKER_HUB_REPO = 'lavanyanallabelli/pos-system'
+        DOCKER_IMAGE_TAG = "${env.BUILD_NUMBER}-${env.LAST_COMMIT_HASH}"
     }
 
     parameters {
@@ -71,14 +75,65 @@ REACT_APP_REDIRECT_SIGN_OUT=${env.REACT_APP_REDIRECT_SIGN_OUT}
             }
         }
 
+        stage('Build Docker Images') {
+            steps {
+                script {
+                    // Build Frontend Docker Image
+                    sh """
+                        echo "Building Frontend Docker image..."
+                        docker build -t ${env.DOCKER_HUB_REPO}-frontend:${env.DOCKER_IMAGE_TAG} \\
+                                     -t ${env.DOCKER_HUB_REPO}-frontend:latest \\
+                                     -f code/client/Dockerfile code/client/ || \\
+                        docker build -t ${env.DOCKER_HUB_REPO}-frontend:${env.DOCKER_IMAGE_TAG} \\
+                                     -t ${env.DOCKER_HUB_REPO}-frontend:latest \\
+                                     code/client/
+                    """
+                    
+                    // Build Backend Docker Image
+                    sh """
+                        echo "Building Backend Docker image..."
+                        docker build -t ${env.DOCKER_HUB_REPO}-backend:${env.DOCKER_IMAGE_TAG} \\
+                                     -t ${env.DOCKER_HUB_REPO}-backend:latest \\
+                                     -f code/server/Dockerfile code/server/ || \\
+                        docker build -t ${env.DOCKER_HUB_REPO}-backend:${env.DOCKER_IMAGE_TAG} \\
+                                     -t ${env.DOCKER_HUB_REPO}-backend:latest \\
+                                     code/server/
+                    """
+                }
+            }
+        }
+
+        stage('Push Docker Images to Docker Hub') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    script {
+                        sh """
+                            echo "Logging in to Docker Hub..."
+                            echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
+                            
+                            echo "Pushing Frontend image..."
+                            docker push ${env.DOCKER_HUB_REPO}-frontend:${env.DOCKER_IMAGE_TAG}
+                            docker push ${env.DOCKER_HUB_REPO}-frontend:latest
+                            
+                            echo "Pushing Backend image..."
+                            docker push ${env.DOCKER_HUB_REPO}-backend:${env.DOCKER_IMAGE_TAG}
+                            docker push ${env.DOCKER_HUB_REPO}-backend:latest
+                            
+                            echo "✅ Docker images pushed successfully!"
+                        """
+                    }
+                }
+            }
+        }
+
         stage('Deploy Frontend to DEV EC2') {
             steps {
                 withCredentials([sshUserPrivateKey(credentialsId: 'AWS_DEV_SSH_KEY', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
                     sh '''
                     echo "Deploying frontend build..."
-                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@13.220.117.57 "mkdir -p /home/ec2-user/pos_system/build"
-                    scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/client/build/* $SSH_USER@13.220.117.57:/home/ec2-user/pos_system/build/
-                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@13.220.117.57 "
+                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@34.224.223.112 "mkdir -p /home/ec2-user/pos_system/build"
+                    scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/client/build/* $SSH_USER@34.224.223.112:/home/ec2-user/pos_system/build/
+                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@34.224.223.112 "
                         pm2 stop pos-system || true
                         pm2 serve /home/ec2-user/pos_system/build 3000 --name pos-system --spa
                         pm2 save
@@ -97,18 +152,18 @@ REACT_APP_REDIRECT_SIGN_OUT=${env.REACT_APP_REDIRECT_SIGN_OUT}
                     sh """
                     echo "Deploying backend..."
                     echo "Verifying SSH connection..."
-                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@13.220.117.57 "echo 'SSH connection successful'" || { echo "SSH connection failed!"; exit 1; }
+                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@34.224.223.112 "echo 'SSH connection successful'" || { echo "SSH connection failed!"; exit 1; }
 
                     echo "Creating server directory..."
-                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@13.220.117.57 "mkdir -p /home/ec2-user/pos_system/server" || { echo "Failed to create directory!"; exit 1; }
+                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@34.224.223.112 "mkdir -p /home/ec2-user/pos_system/server" || { echo "Failed to create directory!"; exit 1; }
 
                     echo "Copying server files..."
-                    scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/server/* $SSH_USER@13.220.117.57:/home/ec2-user/pos_system/server/ || { echo "Failed to copy files!"; exit 1; }
+                    scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/server/* $SSH_USER@34.224.223.112:/home/ec2-user/pos_system/server/ || { echo "Failed to copy files!"; exit 1; }
 
                     echo "Using existing .env on EC2 (no .env creation from Jenkins)"
 
                     echo "Installing dependencies and starting backend..."
-                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@13.220.117.57 "
+                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@34.224.223.112 "
                         cd /home/ec2-user/pos_system/server || { echo 'Failed to cd to server directory'; exit 1; }
                         npm install || { echo 'npm install failed'; exit 1; }
                         pm2 delete pos-backend || true

@@ -3,7 +3,6 @@ import { motion } from 'framer-motion';
 import {
     Utensils,
     ShoppingBag,
-    Coffee,
     Home
 } from 'lucide-react';
 
@@ -30,13 +29,6 @@ const OrderTypes = ({
             name: 'To Go',
             icon: ShoppingBag,
             color: 'bg-green-500',
-
-        },
-        {
-            id: 'drive-thru',
-            name: 'Drive Thru',
-            icon: Coffee,
-            color: 'bg-orange-500',
 
         },
         {

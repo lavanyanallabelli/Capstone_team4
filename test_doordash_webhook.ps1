@@ -20,13 +20,13 @@ $orderPayload = @{
     created_at = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
     items = @(
         @{
-            name = "Pizza Margherita"
+            name = "pepparoni pizza"
             price = 1299
             quantity = 2
             item_id = "item-001"
         },
         @{
-            name = "Caesar Salad"
+            name = "diet coke"
             price = 899
             quantity = 1
             item_id = "item-002"
