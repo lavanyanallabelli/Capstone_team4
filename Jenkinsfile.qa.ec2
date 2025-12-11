@@ -1,4 +1,4 @@
-pipeline {
+﻿pipeline {
     agent any
     
     environment {
@@ -12,10 +12,10 @@ pipeline {
         REACT_APP_USER_POOL_ID = 'us-east-1_i2eRulYnD'
         REACT_APP_USER_POOL_WEB_CLIENT_ID = '3q99asqjvgb0eakf80eorms0ho'
         REACT_APP_OAUTH_DOMAIN = 'https://us-east-1i2erulynd.auth.us-east-1.amazoncognito.com'
-        REACT_APP_API_ENDPOINT = 'http://54.163.60.99:5001/api'
-        REACT_APP_API_URL = 'http://54.163.60.99:5001/api'
-        REACT_APP_REDIRECT_SIGN_IN = 'http://54.163.60.99:3001/'
-        REACT_APP_REDIRECT_SIGN_OUT = 'http://54.163.60.99:3001/'
+        REACT_APP_API_ENDPOINT = 'http://3.93.173.13:5001/api'
+        REACT_APP_API_URL = 'http://3.93.173.13:5001/api'
+        REACT_APP_REDIRECT_SIGN_IN = 'http://3.93.173.13:3001/'
+        REACT_APP_REDIRECT_SIGN_OUT = 'http://3.93.173.13:3001/'
     }
     
     stages {
@@ -120,9 +120,9 @@ REACT_APP_REDIRECT_SIGN_OUT=${env.REACT_APP_REDIRECT_SIGN_OUT}
                 withCredentials([sshUserPrivateKey(credentialsId: 'capstone-qa-key', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
                     sh '''
                         echo "Deploying frontend build to QA..."
-                        ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@54.163.60.99 "mkdir -p /home/ec2-user/pos_system/build"
-                        scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/client/build/* $SSH_USER@54.163.60.99:/home/ec2-user/pos_system/build/
-                        ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@54.163.60.99 << 'ENDFRONTEND'
+                        ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@3.93.173.13 "mkdir -p /home/ec2-user/pos_system/build"
+                        scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/client/build/* $SSH_USER@3.93.173.13:/home/ec2-user/pos_system/build/
+                        ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@3.93.173.13 << 'ENDFRONTEND'
                             pm2 stop pos-system-qa || true
                             pm2 serve /home/ec2-user/pos_system/build 3001 --name pos-system-qa --spa
                             pm2 save
@@ -138,9 +138,9 @@ ENDFRONTEND
                 withCredentials([sshUserPrivateKey(credentialsId: 'capstone-qa-key', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
                     sh '''
                         echo "Deploying backend to QA..."
-                        ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@54.163.60.99 "mkdir -p /home/ec2-user/pos_system/server"
-                        scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/server/* $SSH_USER@54.163.60.99:/home/ec2-user/pos_system/server/
-                        ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@54.163.60.99 << 'ENDSSH'
+                        ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@3.93.173.13 "mkdir -p /home/ec2-user/pos_system/server"
+                        scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/server/* $SSH_USER@3.93.173.13:/home/ec2-user/pos_system/server/
+                        ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@3.93.173.13 << 'ENDSSH'
                             cd /home/ec2-user/pos_system/server
                             echo "Checking if .env.qa file exists..."
                             if [ ! -f /home/ec2-user/pos_system/QAServer/.env.qa ]; then
@@ -186,8 +186,8 @@ ENDSSH
                     sleep 30
                     
                     # Run health checks
-                    curl -f http://54.163.60.99:3001/ || echo "Frontend health check passed"
-                    curl -f http://54.163.60.99:5001/health || echo "Backend health check passed"
+                    curl -f http://3.93.173.13:3001/ || echo "Frontend health check passed"
+                    curl -f http://3.93.173.13:5001/health || echo "Backend health check passed"
                     
                     echo "✅ QA validation completed successfully"
                 '''
@@ -268,8 +268,8 @@ The POS system has been successfully deployed to QA environment.
 Build Number: ${env.BUILD_NUMBER}
 Branch: QA
 Environment: QA
-QA Testing URL: http://54.163.60.99:3001
-Backend API: http://54.163.60.99:5001
+QA Testing URL: http://3.93.173.13:3001
+Backend API: http://3.93.173.13:5001
 
 Please proceed with QA testing and validation.
                 """
