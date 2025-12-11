@@ -76,7 +76,6 @@ Copy `server/env.example` to `server/.env` and configure your environment variab
 - React Router
 - Tailwind CSS
 - Framer Motion
-- Firebase
 - Lucide React
 
 ### Backend
