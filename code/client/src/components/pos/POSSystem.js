@@ -232,17 +232,7 @@ const POSSystem = () => {
             {/* Main Content */}
             <div className="flex-1 flex overflow-hidden">
                 {/* Left Side - Menu */}
-                <div className="w-2/3 bg-white border-r">
-                    {/* Order Type Selection */}
-                    <OrderTypes
-                        orderType={orderType}
-                        setOrderType={setOrderType}
-                        tableNumber={tableNumber}
-                        setTableNumber={setTableNumber}
-                        customerName={customerName}
-                        setCustomerName={setCustomerName}
-                    />
-
+                <div className="w-2/3 bg-white border-r flex flex-col">
                     {/* Category Filter */}
                     <div className="p-4 border-b">
                         <div className="flex space-x-2 overflow-x-auto">
@@ -261,16 +251,28 @@ const POSSystem = () => {
                         </div>
                     </div>
 
-                    {/* Menu Display */}
-                    <MenuDisplay
-                        items={filteredMenuItems}
-                        onAddToOrder={addToOrder}
-                    />
+                    {/* Menu Display - Items at the top */}
+                    <div className="flex-1 overflow-y-auto">
+                        <MenuDisplay
+                            items={filteredMenuItems}
+                            onAddToOrder={addToOrder}
+                        />
+                    </div>
 
                     {/* Recent Orders */}
                     <div className="border-t p-4 bg-gray-50">
                         <RecentOrders refreshTrigger={orderConfirmation} />
                     </div>
+
+                    {/* Order Type Selection - Moved to bottom */}
+                    <OrderTypes
+                        orderType={orderType}
+                        setOrderType={setOrderType}
+                        tableNumber={tableNumber}
+                        setTableNumber={setTableNumber}
+                        customerName={customerName}
+                        setCustomerName={setCustomerName}
+                    />
                 </div>
 
                 {/* Right Side - Order Cart */}

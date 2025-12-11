@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import apiService from '../../services/api';
@@ -67,6 +68,7 @@ const EnhancedPOSSystem = () => {
     const [splitBillOrders, setSplitBillOrders] = useState([]); // Set but not currently used in UI
     const [showRefundModal, setShowRefundModal] = useState(false);
     const [, setAvailabilityUpdateTime] = useState(Date.now());
+    const [selectedPizzaItem, setSelectedPizzaItem] = useState(null);
 
     // Redirect employees away from dashboard if they try to access it
     useEffect(() => {
@@ -212,12 +214,24 @@ const EnhancedPOSSystem = () => {
         };
     });
 
+    // Check if item is a pizza
+    const isPizzaItem = (item) => {
+        const name = (item.name || '').toLowerCase();
+        return name.includes('pizza');
+    };
+
     // Add item to order
     const addToOrder = (item) => {
         // Check if item is available before adding to cart
         if (item.isAvailable === false) {
             alert('This item is unavailable');
             return; // Prevent adding unavailable items
+        }
+
+        // If it's a pizza item, show size selection instead of adding directly
+        if (isPizzaItem(item)) {
+            setSelectedPizzaItem(item);
+            return;
         }
 
         const existingItem = currentOrder.find(orderItem => orderItem.id === item.id);
@@ -236,6 +250,41 @@ const EnhancedPOSSystem = () => {
                 price: parseFloat(item.price || 0)
             }]);
         }
+    };
+
+    // Add pizza with selected size
+    const addPizzaWithSize = (size) => {
+        if (!selectedPizzaItem) return;
+
+        const sizePrices = {
+            'small': selectedPizzaItem.price * 0.8, // 80% of base price
+            'medium': selectedPizzaItem.price, // 100% of base price
+            'large': selectedPizzaItem.price * 1.2 // 120% of base price
+        };
+
+        const pizzaWithSize = {
+            ...selectedPizzaItem,
+            id: `${selectedPizzaItem.id}-${size}`,
+            name: `${selectedPizzaItem.name} (${size.charAt(0).toUpperCase() + size.slice(1)})`,
+            size: size,
+            price: sizePrices[size] || selectedPizzaItem.price,
+            quantity: 1
+        };
+
+        const existingItem = currentOrder.find(orderItem => orderItem.id === pizzaWithSize.id);
+        if (existingItem) {
+            setCurrentOrder(prev =>
+                prev.map(orderItem =>
+                    orderItem.id === pizzaWithSize.id
+                        ? { ...orderItem, quantity: orderItem.quantity + 1 }
+                        : orderItem
+                )
+            );
+        } else {
+            setCurrentOrder(prev => [...prev, pizzaWithSize]);
+        }
+
+        setSelectedPizzaItem(null); // Clear selection after adding
     };
 
     // Update item quantity
@@ -599,9 +648,215 @@ const EnhancedPOSSystem = () => {
                 <ViewOrders onClose={() => setCurrentView(canAccessDashboard ? VIEWS.DASHBOARD : VIEWS.POS)} />
             ) : (
                 <div className="flex-1 flex overflow-hidden">
-                    {/* Left Side - Menu */}
-                    <div className="w-2/3 bg-white border-r flex flex-col">
-                        {/* Order Type Selection */}
+                    {/* Left Side - Menu Items */}
+                    <div className="flex-1 flex flex-col bg-white border-r">
+                        {/* Modify View or Menu Display */}
+                        {selectedCategory === 'modify' ? (
+                            <div className="flex-1 overflow-y-auto p-4">
+                                {/* Items Section */}
+                                <div className="mb-4">
+                                    <h3 className="text-lg font-bold text-gray-900 mb-2">Items</h3>
+                                    <div className="grid grid-cols-5 gap-2">
+                                        {[1, 2, 3, 4, 5].map((num) => (
+                                            <motion.button
+                                                key={`item-${num}`}
+                                                whileHover={{ scale: 1.02 }}
+                                                whileTap={{ scale: 0.98 }}
+                                                onClick={() => addToOrder({
+                                                    id: `modify-item-${num}`,
+                                                    name: `Item ${num}`,
+                                                    price: 0,
+                                                    isAvailable: true
+                                                })}
+                                                className="p-2 rounded-lg shadow-sm border border-gray-200 bg-white hover:shadow-md cursor-pointer transition-all"
+                                            >
+                                                <h3 className="font-semibold text-sm text-center text-gray-900">
+                                                    Item {num}
+                                                </h3>
+                                            </motion.button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Sauces Section */}
+                                <div className="mb-4">
+                                    <h3 className="text-lg font-bold text-gray-900 mb-2">Sauces</h3>
+                                    <div className="grid grid-cols-5 gap-2">
+                                        {[1, 2, 3, 4, 5].map((num) => (
+                                            <motion.button
+                                                key={`sauce-${num}`}
+                                                whileHover={{ scale: 1.02 }}
+                                                whileTap={{ scale: 0.98 }}
+                                                onClick={() => addToOrder({
+                                                    id: `modify-sauce-${num}`,
+                                                    name: `Sauce ${num}`,
+                                                    price: 0,
+                                                    isAvailable: true
+                                                })}
+                                                className="p-2 rounded-lg shadow-sm border border-gray-200 bg-white hover:shadow-md cursor-pointer transition-all"
+                                            >
+                                                <h3 className="font-semibold text-sm text-center text-gray-900">
+                                                    Sauce {num}
+                                                </h3>
+                                            </motion.button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Toppings Section */}
+                                <div className="mb-4">
+                                    <h3 className="text-lg font-bold text-gray-900 mb-2">Toppings</h3>
+                                    <div className="grid grid-cols-7 gap-2">
+                                        {[1, 2, 3, 4, 5, 6, 7].map((num) => (
+                                            <motion.button
+                                                key={`topping-${num}`}
+                                                whileHover={{ scale: 1.02 }}
+                                                whileTap={{ scale: 0.98 }}
+                                                onClick={() => addToOrder({
+                                                    id: `modify-topping-${num}`,
+                                                    name: `Topping ${num}`,
+                                                    price: 0,
+                                                    isAvailable: true
+                                                })}
+                                                className="p-2 rounded-lg shadow-sm border border-gray-200 bg-white hover:shadow-md cursor-pointer transition-all"
+                                            >
+                                                <h3 className="font-semibold text-sm text-center text-gray-900">
+                                                    Topping {num}
+                                                </h3>
+                                            </motion.button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex-1 overflow-y-auto p-4">
+                                <MenuDisplay
+                                    items={filteredMenuItems}
+                                    onAddToOrder={addToOrder}
+                                />
+                            </div>
+                        )}
+
+                        {/* Pizza Size Selection - Show when pizza is selected */}
+                        {selectedPizzaItem && (
+                            <div className="px-4 pb-2 border-t border-gray-200 bg-blue-50">
+                                <div className="pt-2">
+                                    {/* <h3 className="text-sm font-semibold text-gray-700 mb-2"> */}
+                                    {/* Select Size for: {selectedPizzaItem.name} */}
+                                    {/* </h3> */}
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {['small', 'medium', 'large'].map((size) => (
+                                            <motion.button
+                                                key={size}
+                                                whileHover={{ scale: 1.02 }}
+                                                whileTap={{ scale: 0.98 }}
+                                                onClick={() => addPizzaWithSize(size)}
+                                                className="p-3 rounded-lg shadow-sm border-2 border-blue-300 bg-white hover:bg-blue-100 hover:border-blue-500 cursor-pointer transition-all"
+                                            >
+                                                <h3 className="font-semibold text-sm text-center text-gray-900 capitalize">
+                                                    {size}
+                                                </h3>
+                                            </motion.button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Extra Protein Blocks - Below menu items, above snacks */}
+                        <div className="px-4 pb-2 border-t border-gray-200">
+                            <div className="grid grid-cols-5 gap-2 pt-2">
+                                {[
+                                    { name: 'Extra Protein', id: 'extra-protein-1', price: 0 },
+                                    { name: 'Extra Protein', id: 'extra-protein-2', price: 0 },
+                                    { name: 'Extra Protein', id: 'extra-protein-3', price: 0 },
+                                    { name: 'Extra Protein', id: 'extra-protein-4', price: 0 },
+                                    { name: 'Extra Protein', id: 'extra-protein-5', price: 0 }
+                                ].map((protein) => (
+                                    <motion.button
+                                        key={protein.id}
+                                        whileHover={{ scale: 1.02 }}
+                                        whileTap={{ scale: 0.98 }}
+                                        onClick={() => addToOrder({
+                                            id: protein.id,
+                                            name: protein.name,
+                                            price: protein.price,
+                                            isAvailable: true
+                                        })}
+                                        className="p-2 rounded-lg shadow-sm border border-gray-200 bg-white hover:shadow-md cursor-pointer transition-all"
+                                    >
+                                        <h3 className="font-semibold text-sm text-center text-gray-900">
+                                            {protein.name}
+                                        </h3>
+                                    </motion.button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Snack Blocks - Below menu items, above drinks */}
+                        <div className="px-4 pb-2 border-t border-gray-200">
+                            <div className="grid grid-cols-5 gap-2 pt-2">
+                                {[
+                                    { name: 'Snacks', id: 'snacks-1', price: 0 },
+                                    { name: 'Snacks', id: 'snacks-2', price: 0 },
+                                    { name: 'Snacks', id: 'snacks-3', price: 0 },
+                                    { name: 'Snacks', id: 'snacks-4', price: 0 },
+                                    { name: 'Snacks', id: 'snacks-5', price: 0 }
+                                ].map((snack) => (
+                                    <motion.button
+                                        key={snack.id}
+                                        whileHover={{ scale: 1.02 }}
+                                        whileTap={{ scale: 0.98 }}
+                                        onClick={() => addToOrder({
+                                            id: snack.id,
+                                            name: snack.name,
+                                            price: snack.price,
+                                            isAvailable: true
+                                        })}
+                                        className="p-2 rounded-lg shadow-sm border border-gray-200 bg-white hover:shadow-md cursor-pointer transition-all"
+                                    >
+                                        <h3 className="font-semibold text-sm text-center text-gray-900">
+                                            {snack.name}
+                                        </h3>
+                                    </motion.button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Drink Blocks - Below menu items */}
+                        <div className="px-4 pb-2 border-t border-gray-200">
+                            <div className="grid grid-cols-5 gap-2 pt-2">
+                                {[
+                                    { name: 'Regular Drink', id: 'regular-drink', price: 0 },
+                                    { name: 'Large Drink', id: 'large-drink', price: 0 },
+                                    { name: 'Bottled Coke', id: 'bottled-coke', price: 0 },
+                                    { name: '', id: 'placeholder-1', price: 0, isPlaceholder: true },
+                                    { name: '', id: 'placeholder-2', price: 0, isPlaceholder: true }
+                                ].map((drink) => (
+                                    <motion.button
+                                        key={drink.id}
+                                        whileHover={drink.isPlaceholder ? {} : { scale: 1.02 }}
+                                        whileTap={drink.isPlaceholder ? {} : { scale: 0.98 }}
+                                        onClick={() => !drink.isPlaceholder && addToOrder({
+                                            id: drink.id,
+                                            name: drink.name,
+                                            price: drink.price,
+                                            isAvailable: true
+                                        })}
+                                        className={`p-2 rounded-lg shadow-sm border border-gray-200 transition-all ${drink.isPlaceholder
+                                            ? 'bg-gray-50 border-gray-200 cursor-default'
+                                            : 'bg-white hover:shadow-md cursor-pointer'
+                                            }`}
+                                    >
+                                        <h3 className="font-semibold text-sm text-center text-gray-900">
+                                            {drink.name || ''}
+                                        </h3>
+                                    </motion.button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Order Type Selection - At the bottom */}
                         <OrderTypes
                             orderType={orderType}
                             setOrderType={setOrderType}
@@ -612,22 +867,14 @@ const EnhancedPOSSystem = () => {
                             customerPhone={customerPhone}
                             setCustomerPhone={setCustomerPhone}
                         />
-
-                        {/* Enhanced Category Filter */}
-                        <EnhancedMenuCategories
-                            categories={categories}
-                            selectedCategory={selectedCategory}
-                            onSelectCategory={setSelectedCategory}
-                        />
-
-                        {/* Menu Display */}
-                        <div className="flex-1 overflow-y-auto">
-                            <MenuDisplay
-                                items={filteredMenuItems}
-                                onAddToOrder={addToOrder}
-                            />
-                        </div>
                     </div>
+
+                    {/* Middle - Category Sidebar - Vertical blocks between menu and order */}
+                    <EnhancedMenuCategories
+                        categories={categories}
+                        selectedCategory={selectedCategory}
+                        onSelectCategory={setSelectedCategory}
+                    />
 
                     {/* Right Side - Order Cart */}
                     <div className="w-1/3 bg-gray-50 flex flex-col">
@@ -661,6 +908,7 @@ const EnhancedPOSSystem = () => {
                                 onApplyTax={() => alert('Tax is automatically calculated')}
                                 onCancelOrder={handleCancelOrder}
                                 onRefreshOrder={loadMenuData}
+                                onNewOrder={clearOrder}
                             />
                         )}
                     </div>

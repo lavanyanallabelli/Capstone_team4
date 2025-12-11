@@ -6,6 +6,7 @@ import {
     X,
     Check,
     Trash2,
+    FileText,
 } from 'lucide-react';
 
 const OrderManagementPanel = ({
@@ -16,7 +17,8 @@ const OrderManagementPanel = ({
     onAddTip,
     onApplyTax,
     onCancelOrder,
-    onRefreshOrder
+    onRefreshOrder,
+    onNewOrder
 }) => {
     const [showDiscount, setShowDiscount] = useState(false);
     const [showTip, setShowTip] = useState(false);
@@ -46,6 +48,17 @@ const OrderManagementPanel = ({
     };
 
     const actions = [
+        {
+            label: 'New Order',
+            icon: FileText,
+            action: () => {
+                if (order.length > 0 && !window.confirm('Start a new order? Current order will be cleared.')) {
+                    return;
+                }
+                onNewOrder && onNewOrder();
+            },
+            color: 'bg-blue-500 hover:bg-blue-600'
+        },
         {
             label: 'Split Bill',
             icon: Split,
@@ -77,12 +90,8 @@ const OrderManagementPanel = ({
     ];
 
     return (
-        <div className="bg-white border-t p-4">
-            <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-semibold text-gray-700">Order Management</h3>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2">
+        <div className="bg-white border-t p-3">
+            <div className="grid grid-cols-4 gap-2">
                 {actions.map((action) => {
                     const Icon = action.icon;
                     return (

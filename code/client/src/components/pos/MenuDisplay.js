@@ -16,8 +16,8 @@ const MenuDisplay = ({ items, onAddToOrder }) => {
     }
 
     return (
-        <div className="p-4 h-full overflow-y-auto">
-            <div className="grid grid-cols-5 gap-3">
+        <div className="p-2 h-full overflow-y-auto">
+            <div className="grid grid-cols-6 gap-2">
                 {items.map((item) => {
                     const isUnavailable = item.isAvailable === false;
                     return (
@@ -26,22 +26,20 @@ const MenuDisplay = ({ items, onAddToOrder }) => {
                             whileHover={isUnavailable ? {} : { scale: 1.02 }}
                             whileTap={isUnavailable ? {} : { scale: 0.98 }}
                             onClick={() => !isUnavailable && onAddToOrder(item)}
-                            className={`rounded-lg shadow-sm border overflow-hidden transition-all ${
-                                isUnavailable
-                                    ? 'bg-gray-100 border-gray-300 opacity-60 cursor-not-allowed'
-                                    : 'bg-white border-gray-200 hover:shadow-md cursor-pointer'
-                            }`}
+                            className={`rounded-lg shadow-sm border overflow-hidden transition-all ${isUnavailable
+                                ? 'bg-gray-100 border-gray-300 opacity-60 cursor-not-allowed'
+                                : 'bg-white border-gray-200 hover:shadow-md cursor-pointer'
+                                }`}
                         >
                             {/* Item Details */}
-                            <div className="p-3 flex items-center justify-center min-h-[60px]">
-                                <h3 className={`font-semibold text-sm text-center ${
-                                    isUnavailable ? 'text-gray-400' : 'text-gray-900'
-                                }`}>
+                            <div className="p-2 flex items-center justify-center min-h-[50px]">
+                                <h3 className={`font-semibold text-sm text-center ${isUnavailable ? 'text-gray-400' : 'text-gray-900'
+                                    }`}>
                                     {item.name}
                                 </h3>
                             </div>
                             {isUnavailable && (
-                                <div className="px-2 pb-2">
+                                <div className="px-1 pb-1">
                                     <span className="text-xs text-red-500 font-medium">Unavailable</span>
                                 </div>
                             )}

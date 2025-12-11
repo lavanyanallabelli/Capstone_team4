@@ -3,18 +3,16 @@ import { motion } from 'framer-motion';
 import {
     Utensils,
     ShoppingBag,
-    Home
+    Home,
+    Truck,
+    Send
 } from 'lucide-react';
 
 const OrderTypes = ({
     orderType,
     setOrderType,
     tableNumber,
-    setTableNumber,
-    customerName,
-    setCustomerName,
-    customerPhone,
-    setCustomerPhone
+    setTableNumber
 }) => {
     const orderTypes = [
         {
@@ -37,15 +35,29 @@ const OrderTypes = ({
             icon: Home,
             color: 'bg-pink-500',
 
+        },
+        {
+            id: 'delivery',
+            name: 'Delivery',
+            icon: Truck,
+            color: 'bg-purple-500',
+
+        },
+        {
+            id: 'send-order',
+            name: 'Send Order',
+            icon: Send,
+            color: 'bg-orange-500',
+
         }
     ];
 
     return (
-        <div className="p-4 bg-white border-b">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Order Type</h3>
+        <div className="px-4 pt-4 pb-2 bg-white border-t shadow-lg">
+            {/* <h3 className="text-lg font-semibold text-gray-900 mb-4">Order Type</h3> */}
 
             {/* Order Type Buttons */}
-            <div className="grid grid-cols-4 gap-2 mb-4">
+            <div className="grid grid-cols-5 gap-2">
                 {orderTypes.map((type) => {
                     const Icon = type.icon;
                     return (
@@ -67,85 +79,20 @@ const OrderTypes = ({
             </div>
 
             {/* Additional Inputs based on Order Type */}
-            <div className="space-y-3">
-                {orderType === 'dine-in' && (
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Table Number
-                        </label>
-                        <input
-                            type="text"
-                            value={tableNumber}
-                            onChange={(e) => setTableNumber(e.target.value)}
-                            placeholder="Enter table number"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                    </div>
-                )}
-
-                {orderType === 'pickup' && (
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Customer Name
-                            </label>
-                            <input
-                                type="text"
-                                value={customerName}
-                                onChange={(e) => setCustomerName(e.target.value)}
-                                placeholder="Enter customer name"
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            />
-                        </div>
-                        {customerPhone !== undefined && setCustomerPhone && (
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Customer Phone (Optional)
-                                </label>
-                                <input
-                                    type="tel"
-                                    value={customerPhone || ''}
-                                    onChange={(e) => setCustomerPhone(e.target.value)}
-                                    placeholder="Enter phone number"
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                />
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {orderType === 'to-go' && (
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Customer Name
-                            </label>
-                            <input
-                                type="text"
-                                value={customerName}
-                                onChange={(e) => setCustomerName(e.target.value)}
-                                placeholder="Enter customer name"
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            />
-                        </div>
-                        {customerPhone !== undefined && setCustomerPhone && (
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Customer Phone (Optional)
-                                </label>
-                                <input
-                                    type="tel"
-                                    value={customerPhone || ''}
-                                    onChange={(e) => setCustomerPhone(e.target.value)}
-                                    placeholder="Enter phone number"
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                />
-                            </div>
-                        )}
-                    </div>
-                )}
-
-            </div>
+            {orderType === 'dine-in' && (
+                <div className="mt-3 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Table Number
+                    </label>
+                    <input
+                        type="text"
+                        value={tableNumber}
+                        onChange={(e) => setTableNumber(e.target.value)}
+                        placeholder="Enter table number"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                </div>
+            )}
         </div>
     );
 };
