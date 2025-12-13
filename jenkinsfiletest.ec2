@@ -1,7 +1,6 @@
 pipeline {
     agent { label 'docker-slave' }
 
-
     environment {
         // Frontend (React) environment variables — public only
         REACT_APP_AWS_REGION = 'us-east-1'
