@@ -358,37 +358,81 @@ Please check the build logs for more details about the failure.
             script {
                 echo "📊 Generating Jenkins Health Report..."
 
-                // Simplified report without accessing Jenkins.instance
+                // Gather system health information via shell commands
+                def buildDuration = currentBuild.durationString ?: "N/A"
+                def buildTimestamp = sh(script: 'date "+%Y-%m-%d %H:%M:%S %Z" 2>/dev/null || echo "N/A"', returnStdout: true).trim()
+                
+                // Disk space information
+                def diskUsage = sh(
+                    script: '''
+                        df -h / 2>/dev/null | tail -1 | awk '{print "Used: " $3 " / " $2 " (" $5 ")"}' || echo "N/A"
+                    ''',
+                    returnStdout: true
+                ).trim()
+                
+                // Memory usage
+                def memUsage = sh(
+                    script: '''
+                        free -h 2>/dev/null | grep Mem | awk '{print "Used: " $3 " / " $2 " (" int($3/$2*100) "%)"}' || echo "N/A"
+                    ''',
+                    returnStdout: true
+                ).trim()
+                
+                // Docker disk usage
+                def dockerUsage = sh(
+                    script: '''
+                        docker system df 2>/dev/null | grep -E "Images|Containers|Local Volumes" | head -3 | awk '{print $1": " $3 " / " $2}' | paste -sd ", " - 2>/dev/null || echo "N/A"
+                    ''',
+                    returnStdout: true
+                ).trim()
+                
+                // Agent/node name
+                def nodeName = env.NODE_NAME ?: "Unknown"
+                
+                // Build status
+                def buildStatus = currentBuild.currentResult ?: "UNKNOWN"
+                
+                // Previous build result
+                def previousResult = currentBuild.previousBuild?.result ?: "N/A"
+
                 def report = """
 🩺 *Jenkins Health Report*
 
 *Build Information:*
 • Build Number: ${env.BUILD_NUMBER}
 • Branch: ${params.BRANCH}
-• Project: POS System
+• Build Status: ${buildStatus}
+• Previous Build: ${previousResult}
+• Build Duration: ${buildDuration}
+• Build Time: ${buildTimestamp}
+• Node/Agent: ${nodeName}
 
-For detailed Jenkins health metrics:
-Manage Jenkins → Monitoring
+*System Health:*
+• Disk Usage: ${diskUsage}
+• Memory Usage: ${memUsage}
+• Docker Usage: ${dockerUsage}
+
+*Project Information:*
+• Project: POS System
+• Commit: ${env.LAST_COMMIT_HASH}
+• Author: ${env.LAST_COMMIT_AUTHOR}
+• Message: ${env.LAST_COMMIT_MESSAGE}
 """
 
                 emailext(
                     to: 'chetanjogi042@gmail.com',
-                    subject: "🩺 Jenkins Health Report - Build #${env.BUILD_NUMBER}",
+                    subject: "🩺 Jenkins Health Report - Build #${env.BUILD_NUMBER} (${buildStatus})",
                     body: """
 Jenkins Health Report
 ======================
 
 ${report}
 
-Build Details:
-----------------------
-Project: POS System
-Branch: ${params.BRANCH}
-Build #: ${env.BUILD_NUMBER}
-Commit: ${env.LAST_COMMIT_HASH}
-Author: ${env.LAST_COMMIT_AUTHOR}
-Message: ${env.LAST_COMMIT_MESSAGE}
 Build URL: ${env.BUILD_URL}
+Console Output: ${env.BUILD_URL}console
+
+---
+Generated automatically after build completion.
                     """
                 )
 
