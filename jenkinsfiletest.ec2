@@ -179,7 +179,8 @@ REACT_APP_REDIRECT_SIGN_OUT=${env.REACT_APP_REDIRECT_SIGN_OUT}
         }
 
     }
-    post {
+post {
+
         success {
             echo "✅ Build succeeded: ${env.BUILD_NUMBER} (${params.BRANCH})"
             withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_URL')]) {
@@ -344,13 +345,19 @@ Please check the build logs for more details about the failure.
         }
 
         always {
+
+            // -------------------------
+            // 1️⃣ Clean Workspace
+            // -------------------------
             cleanWs()
-
-            
             echo "🧹 Workspace cleaned."
-            echo "📊 Generating Jenkins Health Report..."
 
+            // -------------------------
+            // 2️⃣ Generate Health Report + Send Email
+            // -------------------------
             script {
+                echo "📊 Generating Jenkins Health Report..."
+
                 def j = Jenkins.instance
 
                 def nodes = j.computers?.size()
@@ -371,13 +378,16 @@ Please check the build logs for more details about the failure.
 For detailed graphs:
 Manage Jenkins → Monitoring
 """
-  emailext (
-                to: 'chetanjogi042@gmail.com',
-                subject: "🩺 Jenkins Health Report - Build #${env.BUILD_NUMBER}",
-                body: """
+
+                emailext(
+                    to: 'chetanjogi042@gmail.com',
+                    subject: "🩺 Jenkins Health Report - Build #${env.BUILD_NUMBER}",
+                    body: """
 Jenkins Health Report
 ======================
+
 ${report}
+
 Build Details:
 ----------------------
 Project: POS System
@@ -387,13 +397,11 @@ Commit: ${env.LAST_COMMIT_HASH}
 Author: ${env.LAST_COMMIT_AUTHOR}
 Message: ${env.LAST_COMMIT_MESSAGE}
 Build URL: ${env.BUILD_URL}
+                    """
+                )
 
-                """
-            )
-      }
-      echo "✅ Jenkins Health Report sent via email."
+                echo "📧 Jenkins Health Report email sent."
+            }
         }
     }
 }
-
-
