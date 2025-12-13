@@ -358,7 +358,7 @@ Please check the build logs for more details about the failure.
             script {
                 echo "📊 Generating Jenkins Health Report..."
 
-                def j = Jenkins.instance
+                def j = Jenkins.get()
 
                 def nodes = j.computers?.size()
                 def plugins = j.pluginManager.plugins?.size()
