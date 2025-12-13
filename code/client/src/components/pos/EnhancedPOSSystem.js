@@ -3,10 +3,11 @@ import { motion } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import apiService from '../../services/api';
+import { getCustomBlocks, saveCustomBlocks } from '../../services/posBlocksService';
 import POSDashboard from './POSDashboard';
 import MenuDisplay from './MenuDisplay';
 import OrderCart from './OrderCart';
-import EnhancedMenuCategories from './EnhancedMenuCategories';
+//import EnhancedMenuCategories from './EnhancedMenuCategories';
 import OrderManagementPanel from './OrderManagementPanel';
 import OrderTypes from './OrderTypes';
 import PaymentModal from './PaymentModal';
@@ -21,7 +22,10 @@ import {
     Home,
     LogOut,
     Printer,
-    Globe
+    Globe,
+    Plus,
+    X,
+    Edit2
 } from 'lucide-react';
 
 const VIEWS = {
@@ -69,6 +73,71 @@ const EnhancedPOSSystem = () => {
     const [showRefundModal, setShowRefundModal] = useState(false);
     const [, setAvailabilityUpdateTime] = useState(Date.now());
     const [selectedPizzaItem, setSelectedPizzaItem] = useState(null);
+
+    // Custom Blocks State - Load from database
+    const [customBlocks, setCustomBlocks] = useState(null);
+    const [blocksLoading, setBlocksLoading] = useState(true);
+
+    // Load custom blocks from database on mount
+    useEffect(() => {
+        const loadBlocks = async () => {
+            try {
+                setBlocksLoading(true);
+                const blocks = await getCustomBlocks();
+                setCustomBlocks(blocks);
+            } catch (error) {
+                console.error('Error loading custom blocks:', error);
+                // Set default blocks on error
+                setCustomBlocks({
+                    proteinTop: Array(3).fill(null),
+                    protein: Array(3).fill(null),
+                    toppings: Array(5).fill(null),
+                    extraProtein: Array(5).fill(null),
+                    snacks: Array(5).fill(null),
+                    drinks: Array(5).fill(null),
+                    categories: Array(9).fill(null)
+                });
+            } finally {
+                setBlocksLoading(false);
+            }
+        };
+
+        loadBlocks();
+    }, []);
+
+    // Sync custom blocks to database whenever they change (only for owners)
+    useEffect(() => {
+        if (currentUser?.userRole === 'owner' && customBlocks && !blocksLoading) {
+            saveCustomBlocks(customBlocks).catch(error => {
+                console.error('Error saving custom blocks:', error);
+            });
+        }
+    }, [customBlocks, currentUser?.userRole, blocksLoading]);
+
+    // Poll for updates from database (every 3 seconds)
+    useEffect(() => {
+        if (blocksLoading) return;
+
+        const interval = setInterval(async () => {
+            try {
+                const current = await getCustomBlocks();
+                const currentStr = JSON.stringify(current);
+                const stateStr = JSON.stringify(customBlocks);
+                if (currentStr !== stateStr) {
+                    setCustomBlocks(current);
+                }
+            } catch (error) {
+                console.error('Error polling for blocks updates:', error);
+            }
+        }, 3000);
+
+        return () => clearInterval(interval);
+    }, [customBlocks, blocksLoading]);
+
+    // Modal state for selecting items
+    const [showItemSelector, setShowItemSelector] = useState(false);
+    const [selectedBlockType, setSelectedBlockType] = useState(null);
+    const [selectedBlockIndex, setSelectedBlockIndex] = useState(null);
 
     // Redirect employees away from dashboard if they try to access it
     useEffect(() => {
@@ -187,15 +256,41 @@ const EnhancedPOSSystem = () => {
     const filteredMenuItems = (selectedCategory === 'all'
         ? menuItems
         : menuItems.filter(item => {
-            const itemCat = (item.category || item.tags?.[0] || '').toLowerCase();
-            if (selectedCategory === 'starters') return itemCat.includes('starter') || itemCat.includes('appetizer');
-            if (selectedCategory === 'main course') return itemCat.includes('main');
-            if (selectedCategory === 'sides') return itemCat.includes('side') || itemCat.includes('extra');
-            if (selectedCategory === 'desserts') return itemCat.includes('dessert');
-            if (selectedCategory === 'beverages') return itemCat.includes('beverage') || itemCat.includes('drink');
-            if (selectedCategory === 'combos') return itemCat.includes('combo') || itemCat.includes('thali');
-            if (selectedCategory === 'add-ons') return itemCat.includes('add') || itemCat.includes('topping');
-            return itemCat === selectedCategory;
+            const itemCat = (item.category || '').toLowerCase();
+            const itemTags = (item.tags || []).map(tag => tag.toLowerCase());
+            const selectedCat = selectedCategory.toLowerCase();
+
+            // Check both primary category and tags (additional categories)
+            const allItemCategories = [itemCat, ...itemTags];
+
+            // Handle hardcoded categories - check both category and tags
+            if (selectedCat === 'starters') {
+                return allItemCategories.some(cat => cat.includes('starter') || cat.includes('appetizer'));
+            }
+            if (selectedCat === 'main course' || selectedCat === 'main menu') {
+                return allItemCategories.some(cat => cat.includes('main'));
+            }
+            if (selectedCat === 'sides') {
+                return allItemCategories.some(cat => cat.includes('side') || cat.includes('extra'));
+            }
+            if (selectedCat === 'desserts') {
+                return allItemCategories.some(cat => cat.includes('dessert'));
+            }
+            if (selectedCat === 'beverages') {
+                return allItemCategories.some(cat => cat.includes('beverage') || cat.includes('drink'));
+            }
+            if (selectedCat === 'combos') {
+                return allItemCategories.some(cat => cat.includes('combo') || cat.includes('thali'));
+            }
+            if (selectedCat === 'add-ons') {
+                return allItemCategories.some(cat => cat.includes('add') || cat.includes('topping'));
+            }
+
+            // Handle custom category values (from custom blocks)
+            // Check if the selected category matches any of the item's categories (primary or tags)
+            return allItemCategories.some(cat =>
+                cat === selectedCat || cat.includes(selectedCat) || selectedCat.includes(cat)
+            );
         })
     ).map(item => {
         const isAvailable = checkItemAvailability(item);
@@ -250,6 +345,84 @@ const EnhancedPOSSystem = () => {
                 price: parseFloat(item.price || 0)
             }]);
         }
+    };
+
+    // Handle block click - open selector if empty, add to order if filled
+    const handleBlockClick = (blockType, blockIndex, isEdit = false) => {
+        if (!customBlocks) return;
+        const block = customBlocks[blockType][blockIndex];
+        if (!block || isEdit) {
+            // Block is empty or edit mode - open selector
+            setSelectedBlockType(blockType);
+            setSelectedBlockIndex(blockIndex);
+            setShowItemSelector(true);
+        } else {
+            // Block has item - check if it's a category block
+            if (blockType === 'categories') {
+                // Category block - set selected category
+                if (block.isCategory) {
+                    setSelectedCategory(block.categoryValue);
+                } else if (block.isModify) {
+                    setSelectedCategory('modify');
+                }
+            } else {
+                // Regular item - add to order
+                addToOrder(block);
+            }
+        }
+    };
+
+    // Clear block item
+    const handleClearBlock = (blockType, blockIndex, e) => {
+        e.stopPropagation(); // Prevent triggering block click
+        setCustomBlocks(prev => {
+            const newBlocks = { ...prev };
+            newBlocks[blockType] = [...newBlocks[blockType]];
+            newBlocks[blockType][blockIndex] = null;
+            return newBlocks;
+        });
+    };
+    console.log('handleClearBlock', handleClearBlock);
+
+    // Handle item selection from modal
+    const handleItemSelect = (item) => {
+        if (selectedBlockType && selectedBlockIndex !== null) {
+            setCustomBlocks(prev => {
+                const newBlocks = { ...prev };
+                newBlocks[selectedBlockType] = [...newBlocks[selectedBlockType]];
+                newBlocks[selectedBlockType][selectedBlockIndex] = item;
+                return newBlocks;
+            });
+        }
+        setShowItemSelector(false);
+        setSelectedBlockType(null);
+        setSelectedBlockIndex(null);
+    };
+
+    // Handle category or modify selection
+    const handleCategoryOrModifySelect = (type, value) => {
+        if (selectedBlockType && selectedBlockIndex !== null) {
+            // Store category/modify as a special item
+            const categoryItem = {
+                id: `category-${value}`,
+                name: type === 'category' ? value : 'Modify',
+                price: 0,
+                isAvailable: true,
+                isCategory: type === 'category',
+                isModify: type === 'modify',
+                categoryValue: value
+            };
+
+            setCustomBlocks(prev => {
+                const newBlocks = { ...prev };
+                newBlocks[selectedBlockType] = [...newBlocks[selectedBlockType]];
+                newBlocks[selectedBlockType][selectedBlockIndex] = categoryItem;
+                return newBlocks;
+            });
+        }
+        setShowItemSelector(false);
+        setSelectedBlockType(null);
+        setSelectedBlockIndex(null);
     };
 
     // Add pizza with selected size
@@ -733,6 +906,7 @@ const EnhancedPOSSystem = () => {
                                 <MenuDisplay
                                     items={filteredMenuItems}
                                     onAddToOrder={addToOrder}
+                                    showSections={selectedCategory === 'all'}
                                 />
                             </div>
                         )}
@@ -763,98 +937,206 @@ const EnhancedPOSSystem = () => {
                             </div>
                         )}
 
-                        {/* Extra Protein Blocks - Below menu items, above snacks */}
-                        <div className="px-4 pb-2 border-t border-gray-200">
-                            <div className="grid grid-cols-5 gap-2 pt-2">
-                                {[
-                                    { name: 'Extra Protein', id: 'extra-protein-1', price: 0 },
-                                    { name: 'Extra Protein', id: 'extra-protein-2', price: 0 },
-                                    { name: 'Extra Protein', id: 'extra-protein-3', price: 0 },
-                                    { name: 'Extra Protein', id: 'extra-protein-4', price: 0 },
-                                    { name: 'Extra Protein', id: 'extra-protein-5', price: 0 }
-                                ].map((protein) => (
-                                    <motion.button
-                                        key={protein.id}
-                                        whileHover={{ scale: 1.02 }}
-                                        whileTap={{ scale: 0.98 }}
-                                        onClick={() => addToOrder({
-                                            id: protein.id,
-                                            name: protein.name,
-                                            price: protein.price,
-                                            isAvailable: true
-                                        })}
-                                        className="p-2 rounded-lg shadow-sm border border-gray-200 bg-white hover:shadow-md cursor-pointer transition-all"
-                                    >
-                                        <h3 className="font-semibold text-sm text-center text-gray-900">
-                                            {protein.name}
-                                        </h3>
-                                    </motion.button>
-                                ))}
-                            </div>
-                        </div>
+                        {/* Constant Blocks - Hide when "all items" is selected */}
+                        {selectedCategory !== 'all' && customBlocks && (
+                            <>
+                                {/* Protein Blocks - Top row (3 blocks) */}
+                                <div className="px-4 pb-1">
+                                    <div className="grid grid-cols-5 gap-2 pt-1">
+                                        <div></div>
+                                        {customBlocks.proteinTop.map((block, index) => (
+                                            <motion.button
+                                                key={`protein-top-${index}`}
+                                                whileHover={{ scale: 1.02 }}
+                                                whileTap={{ scale: 0.98 }}
+                                                onClick={() => handleBlockClick('proteinTop', index)}
+                                                className="p-2 rounded-lg shadow-sm border border-gray-200 bg-white hover:shadow-md cursor-pointer transition-all relative"
+                                            >
+                                                {block ? (
+                                                    <>
+                                                        <h3 className="font-semibold text-sm text-center text-gray-900 pr-5">
+                                                            {block.name}
+                                                        </h3>
+                                                        <button
+                                                            onClick={(e) => handleBlockClick('proteinTop', index, true)}
+                                                            className="absolute top-1 right-1 p-1 rounded hover:bg-gray-200 transition-colors"
+                                                            title="Edit"
+                                                        >
+                                                            <Edit2 className="w-3 h-3 text-gray-600" />
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <Plus className="w-5 h-5 mx-auto text-gray-400" />
+                                                )}
+                                            </motion.button>
+                                        ))}
+                                        <div></div>
+                                    </div>
+                                </div>
 
-                        {/* Snack Blocks - Below menu items, above drinks */}
-                        <div className="px-4 pb-2 border-t border-gray-200">
-                            <div className="grid grid-cols-5 gap-2 pt-2">
-                                {[
-                                    { name: 'Snacks', id: 'snacks-1', price: 0 },
-                                    { name: 'Snacks', id: 'snacks-2', price: 0 },
-                                    { name: 'Snacks', id: 'snacks-3', price: 0 },
-                                    { name: 'Snacks', id: 'snacks-4', price: 0 },
-                                    { name: 'Snacks', id: 'snacks-5', price: 0 }
-                                ].map((snack) => (
-                                    <motion.button
-                                        key={snack.id}
-                                        whileHover={{ scale: 1.02 }}
-                                        whileTap={{ scale: 0.98 }}
-                                        onClick={() => addToOrder({
-                                            id: snack.id,
-                                            name: snack.name,
-                                            price: snack.price,
-                                            isAvailable: true
-                                        })}
-                                        className="p-2 rounded-lg shadow-sm border border-gray-200 bg-white hover:shadow-md cursor-pointer transition-all"
-                                    >
-                                        <h3 className="font-semibold text-sm text-center text-gray-900">
-                                            {snack.name}
-                                        </h3>
-                                    </motion.button>
-                                ))}
-                            </div>
-                        </div>
+                                {/* Protein Blocks - Above Toppings blocks, centered (3 blocks) */}
+                                <div className="px-4 pb-1">
+                                    <div className="grid grid-cols-5 gap-2 pt-1">
+                                        <div></div>
+                                        {customBlocks.protein.map((block, index) => (
+                                            <motion.button
+                                                key={`protein-${index}`}
+                                                whileHover={{ scale: 1.02 }}
+                                                whileTap={{ scale: 0.98 }}
+                                                onClick={() => handleBlockClick('protein', index)}
+                                                className="p-2 rounded-lg shadow-sm border border-gray-200 bg-white hover:shadow-md cursor-pointer transition-all relative"
+                                            >
+                                                {block ? (
+                                                    <>
+                                                        <h3 className="font-semibold text-sm text-center text-gray-900 pr-5">
+                                                            {block.name}
+                                                        </h3>
+                                                        <button
+                                                            onClick={(e) => handleBlockClick('protein', index, true)}
+                                                            className="absolute top-1 right-1 p-1 rounded hover:bg-gray-200 transition-colors"
+                                                            title="Edit"
+                                                        >
+                                                            <Edit2 className="w-3 h-3 text-gray-600" />
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <Plus className="w-5 h-5 mx-auto text-gray-400" />
+                                                )}
+                                            </motion.button>
+                                        ))}
+                                        <div></div>
+                                    </div>
+                                </div>
 
-                        {/* Drink Blocks - Below menu items */}
-                        <div className="px-4 pb-2 border-t border-gray-200">
-                            <div className="grid grid-cols-5 gap-2 pt-2">
-                                {[
-                                    { name: 'Regular Drink', id: 'regular-drink', price: 0 },
-                                    { name: 'Large Drink', id: 'large-drink', price: 0 },
-                                    { name: 'Bottled Coke', id: 'bottled-coke', price: 0 },
-                                    { name: '', id: 'placeholder-1', price: 0, isPlaceholder: true },
-                                    { name: '', id: 'placeholder-2', price: 0, isPlaceholder: true }
-                                ].map((drink) => (
-                                    <motion.button
-                                        key={drink.id}
-                                        whileHover={drink.isPlaceholder ? {} : { scale: 1.02 }}
-                                        whileTap={drink.isPlaceholder ? {} : { scale: 0.98 }}
-                                        onClick={() => !drink.isPlaceholder && addToOrder({
-                                            id: drink.id,
-                                            name: drink.name,
-                                            price: drink.price,
-                                            isAvailable: true
-                                        })}
-                                        className={`p-2 rounded-lg shadow-sm border border-gray-200 transition-all ${drink.isPlaceholder
-                                            ? 'bg-gray-50 border-gray-200 cursor-default'
-                                            : 'bg-white hover:shadow-md cursor-pointer'
-                                            }`}
-                                    >
-                                        <h3 className="font-semibold text-sm text-center text-gray-900">
-                                            {drink.name || ''}
-                                        </h3>
-                                    </motion.button>
-                                ))}
-                            </div>
-                        </div>
+                                {/* Toppings Blocks - Above Extra Protein blocks */}
+                                <div className="px-4 pb-1">
+                                    <div className="grid grid-cols-5 gap-2 pt-1">
+                                        {customBlocks.toppings.map((block, index) => (
+                                            <motion.button
+                                                key={`toppings-${index}`}
+                                                whileHover={{ scale: 1.02 }}
+                                                whileTap={{ scale: 0.98 }}
+                                                onClick={() => handleBlockClick('toppings', index)}
+                                                className="p-2 rounded-lg shadow-sm border border-gray-200 bg-white hover:shadow-md cursor-pointer transition-all relative"
+                                            >
+                                                {block ? (
+                                                    <>
+                                                        <h3 className="font-semibold text-sm text-center text-gray-900 pr-5">
+                                                            {block.name}
+                                                        </h3>
+                                                        <button
+                                                            onClick={(e) => handleBlockClick('toppings', index, true)}
+                                                            className="absolute top-1 right-1 p-1 rounded hover:bg-gray-200 transition-colors"
+                                                            title="Edit"
+                                                        >
+                                                            <Edit2 className="w-3 h-3 text-gray-600" />
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <Plus className="w-5 h-5 mx-auto text-gray-400" />
+                                                )}
+                                            </motion.button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Extra Protein Blocks - Below menu items, above snacks */}
+                                <div className="px-4 pb-1">
+                                    <div className="grid grid-cols-5 gap-2 pt-1">
+                                        {customBlocks.extraProtein.map((block, index) => (
+                                            <motion.button
+                                                key={`extra-protein-${index}`}
+                                                whileHover={{ scale: 1.02 }}
+                                                whileTap={{ scale: 0.98 }}
+                                                onClick={() => handleBlockClick('extraProtein', index)}
+                                                className="p-2 rounded-lg shadow-sm border border-gray-200 bg-white hover:shadow-md cursor-pointer transition-all relative"
+                                            >
+                                                {block ? (
+                                                    <>
+                                                        <h3 className="font-semibold text-sm text-center text-gray-900 pr-5">
+                                                            {block.name}
+                                                        </h3>
+                                                        <button
+                                                            onClick={(e) => handleBlockClick('extraProtein', index, true)}
+                                                            className="absolute top-1 right-1 p-1 rounded hover:bg-gray-200 transition-colors"
+                                                            title="Edit"
+                                                        >
+                                                            <Edit2 className="w-3 h-3 text-gray-600" />
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <Plus className="w-5 h-5 mx-auto text-gray-400" />
+                                                )}
+                                            </motion.button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Snack Blocks - Below menu items, above drinks */}
+                                <div className="px-4 pb-1">
+                                    <div className="grid grid-cols-5 gap-2 pt-1">
+                                        {customBlocks.snacks.map((block, index) => (
+                                            <motion.button
+                                                key={`snacks-${index}`}
+                                                whileHover={{ scale: 1.02 }}
+                                                whileTap={{ scale: 0.98 }}
+                                                onClick={() => handleBlockClick('snacks', index)}
+                                                className="p-2 rounded-lg shadow-sm border border-gray-200 bg-white hover:shadow-md cursor-pointer transition-all relative"
+                                            >
+                                                {block ? (
+                                                    <>
+                                                        <h3 className="font-semibold text-sm text-center text-gray-900 pr-5">
+                                                            {block.name}
+                                                        </h3>
+                                                        <button
+                                                            onClick={(e) => handleBlockClick('snacks', index, true)}
+                                                            className="absolute top-1 right-1 p-1 rounded hover:bg-gray-200 transition-colors"
+                                                            title="Edit"
+                                                        >
+                                                            <Edit2 className="w-3 h-3 text-gray-600" />
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <Plus className="w-5 h-5 mx-auto text-gray-400" />
+                                                )}
+                                            </motion.button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Drink Blocks - Below menu items */}
+                                <div className="px-4 pb-1">
+                                    <div className="grid grid-cols-5 gap-2 pt-1">
+                                        {customBlocks.drinks.map((block, index) => (
+                                            <motion.button
+                                                key={`drinks-${index}`}
+                                                whileHover={{ scale: 1.02 }}
+                                                whileTap={{ scale: 0.98 }}
+                                                onClick={() => handleBlockClick('drinks', index)}
+                                                className="p-2 rounded-lg shadow-sm border border-gray-200 bg-white hover:shadow-md cursor-pointer transition-all relative"
+                                            >
+                                                {block ? (
+                                                    <>
+                                                        <h3 className="font-semibold text-sm text-center text-gray-900 pr-5">
+                                                            {block.name}
+                                                        </h3>
+                                                        <button
+                                                            onClick={(e) => handleBlockClick('drinks', index, true)}
+                                                            className="absolute top-1 right-1 p-1 rounded hover:bg-gray-200 transition-colors"
+                                                            title="Edit"
+                                                        >
+                                                            <Edit2 className="w-3 h-3 text-gray-600" />
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <Plus className="w-5 h-5 mx-auto text-gray-400" />
+                                                )}
+                                            </motion.button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </>
+                        )}
 
                         {/* Order Type Selection - At the bottom */}
                         <OrderTypes
@@ -870,14 +1152,56 @@ const EnhancedPOSSystem = () => {
                     </div>
 
                     {/* Middle - Category Sidebar - Vertical blocks between menu and order */}
-                    <EnhancedMenuCategories
-                        categories={categories}
-                        selectedCategory={selectedCategory}
-                        onSelectCategory={setSelectedCategory}
-                    />
+                    <div className="w-40 bg-white border-l border-r border-gray-200 flex flex-col overflow-y-auto p-2 gap-2">
+                        {customBlocks && customBlocks.categories ? customBlocks.categories.map((block, index) => {
+                            const isSelected = block && (
+                                (block.isCategory && selectedCategory === block.categoryValue) ||
+                                (block.isModify && selectedCategory === 'modify')
+                            );
+
+                            return (
+                                <motion.button
+                                    key={`category-${index}`}
+                                    onClick={() => handleBlockClick('categories', index)}
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.98 }}
+                                    className={`w-full px-4 py-4 text-left font-bold text-sm uppercase tracking-wide transition-all relative rounded-lg border-2 ${isSelected
+                                        ? 'bg-blue-500 text-white border-blue-600 shadow-md'
+                                        : 'bg-white text-black border-gray-300 hover:bg-gray-100 hover:border-gray-400'
+                                        }`}
+                                >
+                                    {block ? (
+                                        <>
+                                            <span className="relative z-10 pr-5">{block.name}</span>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleBlockClick('categories', index, true);
+                                                }}
+                                                className="absolute top-1 right-1 p-1 rounded hover:bg-gray-200 transition-colors z-20"
+                                                title="Edit"
+                                            >
+                                                <Edit2 className="w-3 h-3 text-gray-600" />
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <Plus className="w-5 h-5 mx-auto text-gray-400" />
+                                    )}
+                                </motion.button>
+                            );
+                        }) : Array(9).fill(null).map((_, index) => (
+                            <motion.button
+                                key={`category-placeholder-${index}`}
+                                className="w-full px-4 py-4 text-left font-bold text-sm uppercase tracking-wide transition-all relative rounded-lg border-2 bg-white text-black border-gray-300"
+                                disabled
+                            >
+                                <Plus className="w-5 h-5 mx-auto text-gray-400" />
+                            </motion.button>
+                        ))}
+                    </div>
 
                     {/* Right Side - Order Cart */}
-                    <div className="w-1/3 bg-gray-50 flex flex-col">
+                    <div className="w-1/4 bg-gray-50 flex flex-col">
                         <div className="flex-1 overflow-y-auto">
                             <OrderCart
                                 order={currentOrder}
@@ -938,6 +1262,119 @@ const EnhancedPOSSystem = () => {
                     onClose={() => setOrderConfirmation(null)}
                     onPrint={handlePrintBill}
                 />
+            )}
+
+            {/* Item Selector Modal */}
+            {showItemSelector && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col"
+                    >
+                        <div className="p-4 border-b flex items-center justify-between">
+                            <h2 className="text-xl font-bold text-gray-900">Select Item</h2>
+                            <button
+                                onClick={() => {
+                                    setShowItemSelector(false);
+                                    setSelectedBlockType(null);
+                                    setSelectedBlockIndex(null);
+                                }}
+                                className="text-gray-500 hover:text-gray-700"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-4">
+                            <div className="space-y-4">
+                                {/* Modify Option - Only show for category blocks */}
+                                {selectedBlockType === 'categories' && (
+                                    <div>
+                                        <h3 className="font-semibold text-gray-700 mb-2">Options</h3>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <motion.button
+                                                whileHover={{ scale: 1.02 }}
+                                                whileTap={{ scale: 0.98 }}
+                                                onClick={() => handleCategoryOrModifySelect('modify', 'modify')}
+                                                className="p-3 text-left border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all flex items-center justify-between"
+                                            >
+                                                <div>
+                                                    <div className="font-medium text-sm text-gray-900">Modify</div>
+                                                    <div className="text-xs text-gray-500">Modify order options</div>
+                                                </div>
+                                                <Plus className="w-5 h-5 text-gray-400" />
+                                            </motion.button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Categories Section - Only show for category blocks */}
+                                {selectedBlockType === 'categories' && (
+                                    <div>
+                                        <h3 className="font-semibold text-gray-700 mb-2">Categories</h3>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {categories.map((category) => (
+                                                <motion.button
+                                                    key={category}
+                                                    whileHover={{ scale: 1.02 }}
+                                                    whileTap={{ scale: 0.98 }}
+                                                    onClick={() => handleCategoryOrModifySelect('category', category)}
+                                                    className="p-3 text-left border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all flex items-center justify-between"
+                                                >
+                                                    <div className="font-medium text-sm text-gray-900">{category}</div>
+                                                    <Plus className="w-5 h-5 text-gray-400" />
+                                                </motion.button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Menu Items Grouped by Category - Show for non-category blocks */}
+                                {selectedBlockType !== 'categories' && (
+                                    <div>
+                                        <h3 className="font-semibold text-gray-700 mb-2">Menu Items</h3>
+                                        {Object.entries(
+                                            menuItems.reduce((acc, item) => {
+                                                const category = item.category || 'Uncategorized';
+                                                if (!acc[category]) {
+                                                    acc[category] = [];
+                                                }
+                                                acc[category].push(item);
+                                                return acc;
+                                            }, {})
+                                        ).map(([category, items]) => (
+                                            <div key={category} className="mb-4">
+                                                <h4 className="text-sm font-medium text-gray-600 mb-2">{category}</h4>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    {items.map((item) => (
+                                                        <motion.button
+                                                            key={item.id || item.itemId}
+                                                            whileHover={{ scale: 1.02 }}
+                                                            whileTap={{ scale: 0.98 }}
+                                                            onClick={() => handleItemSelect({
+                                                                id: item.id || item.itemId,
+                                                                name: item.name,
+                                                                price: parseFloat(item.price || 0),
+                                                                isAvailable: item.isAvailable !== false
+                                                            })}
+                                                            className="p-3 text-left border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-blue-500 transition-all flex items-center justify-between"
+                                                        >
+                                                            <div>
+                                                                <div className="font-medium text-sm text-gray-900">{item.name}</div>
+                                                                <div className="text-xs text-gray-500">${parseFloat(item.price || 0).toFixed(2)}</div>
+                                                            </div>
+                                                            <Plus className="w-5 h-5 text-gray-400" />
+                                                        </motion.button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </motion.div>
+                </div>
             )}
 
             {/* Refund Modal */}

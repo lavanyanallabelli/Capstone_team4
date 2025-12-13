@@ -9,6 +9,7 @@ const Payment = require('./Payment');
 const Setting = require('./Setting');
 const Schedule = require('./Schedule');
 const BusinessType = require('./BusinessType');
+const POSBlocks = require('./POSBlocks');
 
 // Define associations
 Owner.hasMany(Employee, { foreignKey: 'ownerId', as: 'employees' });
@@ -35,6 +36,9 @@ Schedule.belongsTo(Owner, { foreignKey: 'ownerId', as: 'owner' });
 Order.hasMany(Payment, { foreignKey: 'orderId', as: 'payments' });
 Payment.belongsTo(Order, { foreignKey: 'orderId', as: 'order' });
 
+Owner.hasOne(POSBlocks, { foreignKey: 'ownerId', as: 'posBlocks' });
+POSBlocks.belongsTo(Owner, { foreignKey: 'ownerId', as: 'owner' });
+
 module.exports = {
     sequelize,
     Owner,
@@ -44,5 +48,6 @@ module.exports = {
     Payment,
     Setting,
     Schedule,
-    BusinessType
+    BusinessType,
+    POSBlocks
 };

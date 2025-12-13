@@ -10,6 +10,7 @@ const POSDashboard = ({ onNewOrder, onViewReports, onViewOrders, onRefund }) => 
     });
     const [openOrders, setOpenOrders] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
     useEffect(() => {
         loadDashboardData();
@@ -26,7 +27,15 @@ const POSDashboard = ({ onNewOrder, onViewReports, onViewOrders, onRefund }) => 
             today.setHours(0, 0, 0, 0);
 
             // Fetch all orders (increase limit to get more data)
+            console.log('📊 Loading POS Dashboard data...');
             const ordersResponse = await apiService.getOrders({ limit: 1000 });
+            console.log('📊 Orders API Response:', {
+                success: ordersResponse.success,
+                dataLength: ordersResponse.data?.length || 0,
+                error: ordersResponse.error,
+                message: ordersResponse.message
+            });
+
             if (ordersResponse.success) {
                 const orders = ordersResponse.data || [];
 
@@ -95,9 +104,32 @@ const POSDashboard = ({ onNewOrder, onViewReports, onViewOrders, onRefund }) => 
                     new Date(b.orderDate || b.createdAt) - new Date(a.orderDate || a.createdAt)
                 );
                 setOpenOrders(open.slice(0, 5));
+
+                console.log('📊 Dashboard data loaded:', {
+                    todayOrders: todayOrders.length,
+                    todayRevenue: todayRevenue,
+                    weekOrders: weekOrders.length,
+                    weekRevenue: weekRevenue,
+                    openOrders: open.length
+                });
+            } else {
+                const errorMsg = ordersResponse.error || ordersResponse.message || 'Failed to load orders';
+                console.error('❌ Failed to load orders:', errorMsg);
+                setError(errorMsg);
+                // Set default values on error
+                setSalesOverview({
+                    today: { revenue: 0, orders: 0, completed: 0, averageOrder: 0 },
+                    week: { revenue: 0, orders: 0, completed: 0, averageOrder: 0 }
+                });
+                setOpenOrders([]);
             }
         } catch (error) {
-            console.error('Error loading dashboard data:', error);
+            console.error('❌ Error loading dashboard data:', error);
+            console.error('Error details:', {
+                message: error.message,
+                stack: error.stack
+            });
+            setError(error.message || 'Failed to load dashboard data');
             // Set default values on error
             setSalesOverview({
                 today: { revenue: 0, orders: 0, completed: 0, averageOrder: 0 },
@@ -122,6 +154,11 @@ const POSDashboard = ({ onNewOrder, onViewReports, onViewOrders, onRefund }) => 
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900 mb-2">POS Dashboard</h1>
                     <p className="text-gray-600">Welcome back! Here's your sales overview.</p>
+                    {error && (
+                        <p className="text-sm text-red-600 mt-2">
+                            ⚠️ {error} - Check browser console for details
+                        </p>
+                    )}
                 </div>
                 <button
                     onClick={loadDashboardData}

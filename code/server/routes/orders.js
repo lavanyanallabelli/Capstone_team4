@@ -7,11 +7,33 @@ const { sendRefundNotification } = require('../services/emailService');
 const router = express.Router();
 
 // Helper to get ownerId from request
-const getOwnerId = (req) => {
+const getOwnerId = async (req) => {
     // ONLY use ownerId from cognitoSync middleware - it's the PostgreSQL UUID
     if (req.user?.ownerId) {
         return req.user.ownerId;
     }
+
+    // If ownerId is not set, try to get it from the Owner table using email
+    // This is a fallback in case cognitoSync middleware failed
+    if (req.user?.email) {
+        console.log('⚠️ ownerId not set, attempting fallback lookup by email:', req.user.email);
+        try {
+            const { Owner } = require('../models');
+            const owner = await Owner.findOne({
+                where: { email: req.user.email }
+            });
+            if (owner && owner.id) {
+                console.log('✅ Fallback: Found ownerId by email:', owner.id);
+                req.user.ownerId = owner.id; // Set it for future use
+                return owner.id;
+            } else {
+                console.warn('⚠️ Fallback: No Owner record found for email:', req.user.email);
+            }
+        } catch (error) {
+            console.error('❌ Fallback ownerId lookup failed:', error.message);
+        }
+    }
+
     console.warn('⚠️ ownerId not set - cognitoSync middleware may have failed');
     return null;
 };
@@ -34,9 +56,32 @@ router.post('/', authenticateToken, async (req, res) => {
             status = 'pending'
         } = req.body;
 
-        const ownerId = getOwnerId(req);
+        const ownerId = await getOwnerId(req);
         const employeeId = req.user.sub;
         const orderNumber = `ORD-${Date.now().toString().slice(-6)}`;
+
+        console.log('📝 Creating order - Owner/Employee details:', {
+            ownerId: ownerId,
+            ownerIdType: typeof ownerId,
+            employeeId: employeeId,
+            employeeIdType: typeof employeeId,
+            reqUser: req.user ? {
+                email: req.user.email,
+                sub: req.user.sub,
+                userRole: req.user.userRole,
+                hasOwnerId: !!req.user.ownerId,
+                ownerIdFromReq: req.user.ownerId
+            } : 'No req.user'
+        });
+
+        if (!ownerId) {
+            console.error('❌ Cannot create order: ownerId is null');
+            return res.status(400).json({
+                success: false,
+                error: 'Owner ID is required',
+                message: 'Unable to identify business owner. Please try logging out and back in.'
+            });
+        }
 
         // Validate required fields
         if (!items || !Array.isArray(items) || items.length === 0) {
@@ -111,8 +156,29 @@ router.post('/', authenticateToken, async (req, res) => {
 // Get all orders for a business
 router.get('/', authenticateToken, async (req, res) => {
     try {
-        const ownerId = getOwnerId(req);
+        const ownerId = await getOwnerId(req);
         const { status, limit = 50, offset = 0 } = req.query;
+
+        console.log('📊 GET /orders - Request details:', {
+            ownerId: ownerId,
+            ownerIdType: typeof ownerId,
+            status: status,
+            limit: limit,
+            reqUser: req.user ? {
+                email: req.user.email,
+                sub: req.user.sub,
+                hasOwnerId: !!req.user.ownerId
+            } : 'No req.user'
+        });
+
+        if (!ownerId) {
+            console.error('❌ No ownerId found in request');
+            return res.status(400).json({
+                success: false,
+                error: 'Owner ID is required',
+                message: 'Unable to identify business owner. Please try logging out and back in.'
+            });
+        }
 
         const where = { ownerId };
 
@@ -129,6 +195,25 @@ router.get('/', authenticateToken, async (req, res) => {
                 { model: Employee, as: 'employee', attributes: ['id', 'firstName', 'lastName', 'email'] },
                 { model: Payment, as: 'payments', attributes: ['id', 'amount', 'method', 'status', 'transactionId', 'createdAt'] }
             ]
+        });
+
+        // Debug: Check if there are orders with different ownerIds
+        const allOrdersSample = await Order.findAll({
+            limit: 10,
+            attributes: ['id', 'orderNumber', 'ownerId', 'orderDate', 'status'],
+            order: [['orderDate', 'DESC']]
+        });
+
+        console.log('📊 GET /orders - Query result:', {
+            ownerId: ownerId,
+            ordersFound: orders.length,
+            orderIds: orders.map(o => o.id).slice(0, 5),
+            orderNumbers: orders.map(o => o.orderNumber).slice(0, 5),
+            sampleAllOrders: allOrdersSample.map(o => ({
+                orderNumber: o.orderNumber,
+                ownerId: o.ownerId,
+                matches: o.ownerId === ownerId
+            }))
         });
 
         res.json({
@@ -151,7 +236,7 @@ router.get('/', authenticateToken, async (req, res) => {
 router.get('/:orderId', authenticateToken, async (req, res) => {
     try {
         const { orderId } = req.params;
-        const ownerId = getOwnerId(req);
+        const ownerId = await getOwnerId(req);
 
         const order = await Order.findOne({
             where: {
@@ -191,7 +276,7 @@ router.patch('/:orderId/status', authenticateToken, async (req, res) => {
     try {
         const { orderId } = req.params;
         const { status } = req.body;
-        const ownerId = getOwnerId(req);
+        const ownerId = await getOwnerId(req);
 
         const validStatuses = ['pending', 'preparing', 'ready', 'completed', 'cancelled'];
         if (!validStatuses.includes(status)) {
@@ -245,7 +330,7 @@ router.patch('/:orderId/status', authenticateToken, async (req, res) => {
 router.put('/:orderId', authenticateToken, async (req, res) => {
     try {
         const { orderId } = req.params;
-        const ownerId = getOwnerId(req);
+        const ownerId = await getOwnerId(req);
         const updates = req.body;
 
         // Remove fields that shouldn't be updated
@@ -295,7 +380,7 @@ router.put('/:orderId', authenticateToken, async (req, res) => {
 router.delete('/:orderId', authenticateToken, async (req, res) => {
     try {
         const { orderId } = req.params;
-        const ownerId = getOwnerId(req);
+        const ownerId = await getOwnerId(req);
 
         const order = await Order.findOne({
             where: {
@@ -336,7 +421,7 @@ router.delete('/:orderId', authenticateToken, async (req, res) => {
 // Get order statistics
 router.get('/stats/overview', authenticateToken, async (req, res) => {
     try {
-        const ownerId = getOwnerId(req);
+        const ownerId = await getOwnerId(req);
         const { period = 'today' } = req.query;
 
         // Calculate date range based on period
@@ -415,7 +500,7 @@ router.post('/:orderId/payment', authenticateToken, async (req, res) => {
     try {
         const { orderId } = req.params;
         const { method, amount } = req.body;
-        const ownerId = getOwnerId(req);
+        const ownerId = await getOwnerId(req);
 
         // Validate payment method
         const validMethods = ['cash', 'card', 'online', 'digital_wallet'];
@@ -486,7 +571,7 @@ router.patch('/:orderId/payment/:paymentId/refund', authenticateToken, async (re
     try {
         const { orderId, paymentId } = req.params;
         const { amount, reason } = req.body;
-        const ownerId = getOwnerId(req);
+        const ownerId = await getOwnerId(req);
 
         // Find order
         const order = await Order.findOne({
@@ -565,7 +650,7 @@ router.patch('/:orderId/payment/:paymentId/refund', authenticateToken, async (re
                     attributes: ['role']
                 });
                 if (employee && employee.role) {
-                 //   console.log('🔍 Employee role from database:', employee.role);
+                    //   console.log('🔍 Employee role from database:', employee.role);
                     userRole = employee.role;
                 }
             } catch (dbError) {

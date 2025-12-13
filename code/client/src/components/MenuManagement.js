@@ -13,7 +13,9 @@ import {
     Search,
     DollarSign,
     Clock,
-    Tag
+    Tag,
+    Check,
+    X
 } from 'lucide-react';
 
 const MenuManagement = () => {
@@ -25,6 +27,8 @@ const MenuManagement = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('All');
     const [showCreateCategory, setShowCreateCategory] = useState(false);
+    const [editingCategory, setEditingCategory] = useState(null);
+    const [newCategoryName, setNewCategoryName] = useState('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
@@ -180,6 +184,85 @@ const MenuManagement = () => {
         setShowCreateCategory(false);
     };
 
+    const handleEditCategory = async (oldCategoryName, newCategoryName) => {
+        if (!newCategoryName || newCategoryName.trim() === '') {
+            alert('Category name cannot be empty');
+            return;
+        }
+        if (newCategoryName === oldCategoryName) {
+            return; // No change
+        }
+
+        try {
+            // Update all items in this category to the new category name
+            const itemsToUpdate = menuItems.filter(item => item.category === oldCategoryName);
+            const updatePromises = itemsToUpdate.map(item =>
+                apiService.updateMenuItem(item.itemId || item.id, {
+                    ...item,
+                    category: newCategoryName
+                })
+            );
+
+            await Promise.all(updatePromises);
+            await loadMenuData(); // Reload menu data
+            alert(`Category "${oldCategoryName}" renamed to "${newCategoryName}" successfully!`);
+        } catch (error) {
+            console.error('Error editing category:', error);
+            alert('Failed to edit category. Please try again.');
+        }
+    };
+
+    const handleDeleteCategory = async (categoryName) => {
+        const itemsInCategory = menuItems.filter(item => item.category === categoryName);
+        if (itemsInCategory.length === 0) {
+            return;
+        }
+
+        const confirmMessage = `Are you sure you want to delete the category "${categoryName}"?\n\nThis will delete ${itemsInCategory.length} item(s) in this category.`;
+        if (!window.confirm(confirmMessage)) {
+            return;
+        }
+
+        try {
+            // Delete all items in this category
+            const deletePromises = itemsInCategory.map(item =>
+                apiService.deleteMenuItem(item.itemId || item.id)
+            );
+
+            await Promise.all(deletePromises);
+            await loadMenuData(); // Reload menu data
+            alert(`Category "${categoryName}" and all its items deleted successfully!`);
+        } catch (error) {
+            console.error('Error deleting category:', error);
+            alert('Failed to delete category. Please try again.');
+        }
+    };
+
+    const handleToggleCategoryAvailability = async (categoryName) => {
+        try {
+            const itemsInCategory = menuItems.filter(item => item.category === categoryName);
+            if (itemsInCategory.length === 0) {
+                return;
+            }
+
+            // Check current availability status - if all are unavailable, make all available, otherwise make all unavailable
+            const allUnavailable = itemsInCategory.every(item => !item.availability);
+            const newAvailability = allUnavailable; // If all unavailable, make available (true), otherwise make unavailable (false)
+
+            // Update all items in this category
+            const updatePromises = itemsInCategory.map(item =>
+                apiService.toggleItemAvailability(item.itemId || item.id, newAvailability)
+            );
+
+            await Promise.all(updatePromises);
+            await loadMenuData(); // Reload menu data
+            alert(`Category "${categoryName}" ${newAvailability ? 'marked as available' : 'marked as unavailable'} successfully!`);
+        } catch (error) {
+            console.error('Error toggling category availability:', error);
+            alert('Failed to update category availability. Please try again.');
+        }
+    };
+
     return (
         <div className="min-h-screen bg-gray-50 p-6">
             <div className="max-w-7xl mx-auto">
@@ -315,82 +398,191 @@ const MenuManagement = () => {
                     </div>
                 )}
 
-                {/* Menu Items Grid */}
-                {!loading && !error && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-                    >
-                        {menuItems && menuItems.map((item) => (
-                            <div key={item.itemId} className="bg-white rounded-lg shadow-md overflow-hidden">
-                                <div className="p-6">
-                                    <div className="flex items-start justify-between mb-4">
-                                        <div className="flex-1">
-                                            <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                                                {item.name}
-                                            </h3>
-                                            <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full mb-2">
-                                                {item.category}
-                                            </span>
-                                            <p className="text-gray-600 text-sm mb-3">
-                                                {item.description}
-                                            </p>
-                                        </div>
-                                        <div className="flex items-center space-x-2">
-                                            {canToggleAvailability && (
-                                                <button
-                                                    onClick={() => handleToggleAvailability(item.itemId)}
-                                                    className={`p-2 rounded-lg transition-colors ${item.availability
-                                                        ? 'bg-green-100 text-green-600 hover:bg-green-200'
-                                                        : 'bg-red-100 text-red-600 hover:bg-red-200'
-                                                        }`}
-                                                >
-                                                    {item.availability ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                                                </button>
-                                            )}
-                                            {canManageMenuItems && (
+                {/* Menu Items Grouped by Category */}
+                {!loading && !error && (() => {
+                    // Group items by category
+                    const groupedItems = {};
+                    menuItems.forEach(item => {
+                        const category = item.category || 'Uncategorized';
+                        if (!groupedItems[category]) {
+                            groupedItems[category] = [];
+                        }
+                        groupedItems[category].push(item);
+                    });
+
+                    return (
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="space-y-8"
+                        >
+                            {Object.entries(groupedItems).map(([category, items]) => {
+                                const isCategoryUnavailable = items.every(item => !item.availability);
+                                const categoryItemCount = items.length;
+
+                                return (
+                                    <div key={category} className="bg-white rounded-lg shadow-md p-6">
+                                        <div className="flex items-center justify-between mb-6 border-b pb-3">
+                                            {editingCategory === category ? (
+                                                <div className="flex items-center space-x-2 flex-1">
+                                                    <input
+                                                        type="text"
+                                                        value={newCategoryName}
+                                                        onChange={(e) => setNewCategoryName(e.target.value)}
+                                                        className="text-2xl font-bold text-gray-900 capitalize border border-gray-300 rounded-lg px-3 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        placeholder="Category name"
+                                                        autoFocus
+                                                    />
+                                                    <button
+                                                        onClick={() => {
+                                                            handleEditCategory(category, newCategoryName);
+                                                            setEditingCategory(null);
+                                                            setNewCategoryName('');
+                                                        }}
+                                                        className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
+                                                        title="Save"
+                                                    >
+                                                        <Check className="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            setEditingCategory(null);
+                                                            setNewCategoryName('');
+                                                        }}
+                                                        className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
+                                                        title="Cancel"
+                                                    >
+                                                        <X className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            ) : (
                                                 <>
-                                                    <button
-                                                        onClick={() => setEditingItem(item)}
-                                                        className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
-                                                    >
-                                                        <Edit className="w-4 h-4" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDeleteItem(item.itemId)}
-                                                        className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
+                                                    <h2 className="text-2xl font-bold text-gray-900 capitalize">
+                                                        {category} <span className="text-sm font-normal text-gray-500">({categoryItemCount} items)</span>
+                                                    </h2>
+                                                    <div className="flex items-center space-x-2">
+                                                        {canToggleAvailability && (
+                                                            <button
+                                                                onClick={() => handleToggleCategoryAvailability(category)}
+                                                                className={`p-2 rounded-lg transition-colors ${isCategoryUnavailable
+                                                                    ? 'bg-red-100 text-red-600 hover:bg-red-200'
+                                                                    : 'bg-green-100 text-green-600 hover:bg-green-200'
+                                                                    }`}
+                                                                title={isCategoryUnavailable ? 'Mark Category as Available' : 'Mark Category as Unavailable'}
+                                                            >
+                                                                {isCategoryUnavailable ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                                            </button>
+                                                        )}
+                                                        {canManageCategories && (
+                                                            <>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setEditingCategory(category);
+                                                                        setNewCategoryName(category);
+                                                                    }}
+                                                                    className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
+                                                                    title="Edit Category Name"
+                                                                >
+                                                                    <Edit className="w-4 h-4" />
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleDeleteCategory(category)}
+                                                                    className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
+                                                                    title="Delete Category"
+                                                                >
+                                                                    <Trash2 className="w-4 h-4" />
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                    </div>
                                                 </>
                                             )}
                                         </div>
-                                    </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                            {items.map((item) => (
+                                                <div key={item.itemId} className="bg-gray-50 rounded-lg shadow-sm overflow-hidden border border-gray-200">
+                                                    <div className="p-4">
+                                                        <div className="flex items-start justify-between mb-3">
+                                                            <div className="flex-1">
+                                                                <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                                                                    {item.name}
+                                                                </h3>
+                                                                <p className="text-gray-600 text-sm mb-2">
+                                                                    {item.description}
+                                                                </p>
+                                                            </div>
+                                                            <div className="flex items-center space-x-2 ml-2">
+                                                                {canToggleAvailability && (
+                                                                    <button
+                                                                        onClick={() => handleToggleAvailability(item.itemId)}
+                                                                        className={`p-2 rounded-lg transition-colors ${item.availability
+                                                                            ? 'bg-green-100 text-green-600 hover:bg-green-200'
+                                                                            : 'bg-red-100 text-red-600 hover:bg-red-200'
+                                                                            }`}
+                                                                        title={item.availability ? 'Mark as Unavailable' : 'Mark as Available'}
+                                                                    >
+                                                                        {item.availability ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                                                                    </button>
+                                                                )}
+                                                                {canManageMenuItems && (
+                                                                    <>
+                                                                        <button
+                                                                            onClick={() => setEditingItem(item)}
+                                                                            className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
+                                                                            title="Edit Item"
+                                                                        >
+                                                                            <Edit className="w-4 h-4" />
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => handleDeleteItem(item.itemId)}
+                                                                            className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
+                                                                            title="Delete Item"
+                                                                        >
+                                                                            <Trash2 className="w-4 h-4" />
+                                                                        </button>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                        </div>
 
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center text-green-600 font-semibold">
-                                            <DollarSign className="w-4 h-4 mr-1" />
-                                            {item.price}
-                                        </div>
-                                        <div className="flex items-center text-gray-500 text-sm">
-                                            <Clock className="w-4 h-4 mr-1" />
-                                            {item.prepTime}
-                                        </div>
-                                    </div>
+                                                        <div className="flex items-center justify-between mb-2">
+                                                            <div className="flex items-center text-green-600 font-semibold">
+                                                                <DollarSign className="w-4 h-4 mr-1" />
+                                                                ${typeof item.price === 'number' ? item.price.toFixed(2) : item.price}
+                                                            </div>
+                                                            <div className="flex items-center text-gray-500 text-sm">
+                                                                <Clock className="w-4 h-4 mr-1" />
+                                                                {item.prepTime || 'N/A'}
+                                                            </div>
+                                                        </div>
 
-                                    <div className="mt-3 flex flex-wrap gap-1">
-                                        {item.tags && item.tags.map((tag, index) => (
-                                            <span key={index} className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded">
-                                                {tag}
-                                            </span>
-                                        ))}
+                                                        {item.tags && item.tags.length > 0 && (
+                                                            <div className="mt-2 flex flex-wrap gap-1">
+                                                                {item.tags.map((tag, index) => (
+                                                                    <span key={index} className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded">
+                                                                        {tag}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        )}
+
+                                                        {!item.availability && (
+                                                            <div className="mt-2">
+                                                                <span className="inline-block bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full">
+                                                                    Unavailable
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
-                                </div>
-                            </div>
-                        ))}
-                    </motion.div>
-                )}
+                                );
+                            })}
+                        </motion.div>
+                    );
+                })()}
 
                 {/* Create Menu Item Form Modal */}
                 {showCreateForm && (
@@ -428,6 +620,7 @@ const CreateMenuItemForm = ({ categories, onSubmit, onCancel }) => {
     const [formData, setFormData] = useState({
         name: '',
         category: categories && categories.length > 0 ? categories[0] : '',
+        selectedCategories: [], // For additional categories
         description: '',
         price: '',
         prepTime: '',
@@ -436,11 +629,15 @@ const CreateMenuItemForm = ({ categories, onSubmit, onCancel }) => {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        const tags = formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
+        const customTags = formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
+        // Combine additional categories with custom tags
+        const allTags = [...(formData.selectedCategories || []), ...customTags];
         onSubmit({
             ...formData,
             price: parseFloat(formData.price),
-            tags
+            tags: allTags,
+            // Remove selectedCategories from the final data as it's now in tags
+            selectedCategories: undefined
         });
     };
 
@@ -467,7 +664,7 @@ const CreateMenuItemForm = ({ categories, onSubmit, onCancel }) => {
                     </div>
                     <div className="mb-4">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Category
+                            Primary Category <span className="text-gray-500 text-xs">(Required)</span>
                         </label>
                         <select
                             required
@@ -483,6 +680,49 @@ const CreateMenuItemForm = ({ categories, onSubmit, onCancel }) => {
                                 <option value="">No categories available</option>
                             )}
                         </select>
+                    </div>
+                    <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Additional Categories <span className="text-gray-500 text-xs">(Optional - select multiple)</span>
+                        </label>
+                        <div className="border border-gray-300 rounded-md p-2 max-h-40 overflow-y-auto">
+                            {categories && categories.length > 0 ? (
+                                categories.map(category => {
+                                    const isSelected = formData.selectedCategories?.includes(category);
+                                    return (
+                                        <label key={category} className="flex items-center space-x-2 py-1 hover:bg-gray-50 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={isSelected || false}
+                                                onChange={(e) => {
+                                                    const current = formData.selectedCategories || [];
+                                                    if (e.target.checked) {
+                                                        setFormData({
+                                                            ...formData,
+                                                            selectedCategories: [...current, category]
+                                                        });
+                                                    } else {
+                                                        setFormData({
+                                                            ...formData,
+                                                            selectedCategories: current.filter(c => c !== category)
+                                                        });
+                                                    }
+                                                }}
+                                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                            />
+                                            <span className="text-sm text-gray-700">{category}</span>
+                                        </label>
+                                    );
+                                })
+                            ) : (
+                                <p className="text-sm text-gray-500">No categories available</p>
+                            )}
+                        </div>
+                        {formData.selectedCategories && formData.selectedCategories.length > 0 && (
+                            <p className="mt-2 text-xs text-gray-500">
+                                Selected: {formData.selectedCategories.join(', ')}
+                            </p>
+                        )}
                     </div>
                     <div className="mb-4">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -559,23 +799,32 @@ const EditMenuItemForm = ({ item, categories, onSubmit, onCancel }) => {
     // Extract itemId for logging (if needed for debugging)
     const itemId = item?.id || item?.itemId;
     console.log('EditMenuItemForm - itemId:', itemId, 'item:', item);
-    
+
+    // Separate category tags from other tags
+    const categoryTags = (item.tags || []).filter(tag => categories && categories.includes(tag));
+    const otherTags = (item.tags || []).filter(tag => !categories || !categories.includes(tag));
+
     const [formData, setFormData] = useState({
         name: item.name,
         category: item.category,
+        selectedCategories: categoryTags, // Load existing category tags as additional categories
         description: item.description,
         price: item.price.toString(),
         prepTime: item.prepTime,
-        tags: item.tags.join(', ')
+        tags: otherTags.join(', ') // Only non-category tags in the tags field
     });
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        const tags = formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
+        const customTags = formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
+        // Combine additional categories with custom tags
+        const allTags = [...(formData.selectedCategories || []), ...customTags];
         onSubmit({
             ...formData,
             price: parseFloat(formData.price),
-            tags
+            tags: allTags,
+            // Remove selectedCategories from the final data as it's now in tags
+            selectedCategories: undefined
         });
     };
 
@@ -602,7 +851,7 @@ const EditMenuItemForm = ({ item, categories, onSubmit, onCancel }) => {
                     </div>
                     <div className="mb-4">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Category
+                            Primary Category <span className="text-gray-500 text-xs">(Required)</span>
                         </label>
                         <select
                             required
@@ -618,6 +867,49 @@ const EditMenuItemForm = ({ item, categories, onSubmit, onCancel }) => {
                                 <option value="">No categories available</option>
                             )}
                         </select>
+                    </div>
+                    <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Additional Categories <span className="text-gray-500 text-xs">(Optional - select multiple)</span>
+                        </label>
+                        <div className="border border-gray-300 rounded-md p-2 max-h-40 overflow-y-auto">
+                            {categories && categories.length > 0 ? (
+                                categories.map(category => {
+                                    const isSelected = formData.selectedCategories?.includes(category);
+                                    return (
+                                        <label key={category} className="flex items-center space-x-2 py-1 hover:bg-gray-50 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={isSelected || false}
+                                                onChange={(e) => {
+                                                    const current = formData.selectedCategories || [];
+                                                    if (e.target.checked) {
+                                                        setFormData({
+                                                            ...formData,
+                                                            selectedCategories: [...current, category]
+                                                        });
+                                                    } else {
+                                                        setFormData({
+                                                            ...formData,
+                                                            selectedCategories: current.filter(c => c !== category)
+                                                        });
+                                                    }
+                                                }}
+                                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                            />
+                                            <span className="text-sm text-gray-700">{category}</span>
+                                        </label>
+                                    );
+                                })
+                            ) : (
+                                <p className="text-sm text-gray-500">No categories available</p>
+                            )}
+                        </div>
+                        {formData.selectedCategories && formData.selectedCategories.length > 0 && (
+                            <p className="mt-2 text-xs text-gray-500">
+                                Selected: {formData.selectedCategories.join(', ')}
+                            </p>
+                        )}
                     </div>
                     <div className="mb-4">
                         <label className="block text-sm font-medium text-gray-700 mb-2">

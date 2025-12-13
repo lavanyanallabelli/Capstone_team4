@@ -299,6 +299,15 @@ class ApiService {
         return this.patch(`/menu/${itemId}/availability`, { availability });
     }
 
+    // POS Blocks API methods
+    async getPOSBlocks() {
+        return this.get('/pos-blocks');
+    }
+
+    async savePOSBlocks(blocks) {
+        return this.post('/pos-blocks', { blocks });
+    }
+
     async getMenuItemAvailabilitySchedule(itemId) {
         return this.get(`/menu/${itemId}/availability-schedule`);
     }

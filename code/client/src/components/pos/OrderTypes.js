@@ -16,19 +16,19 @@ const OrderTypes = ({
 }) => {
     const orderTypes = [
         {
+            id: 'to-go',
+            name: 'To Go',
+            icon: ShoppingBag,
+            color: 'bg-green-500',
+        },
+        {
             id: 'dine-in',
             name: 'Dine In',
             icon: Utensils,
             color: 'bg-blue-500',
 
         },
-        {
-            id: 'to-go',
-            name: 'To Go',
-            icon: ShoppingBag,
-            color: 'bg-green-500',
 
-        },
         {
             id: 'pickup',
             name: 'Pickup',
@@ -53,7 +53,7 @@ const OrderTypes = ({
     ];
 
     return (
-        <div className="px-4 pt-4 pb-2 bg-white border-t shadow-lg">
+        <div className="px-4 pt-1 pb-2 bg-white shadow-lg">
             {/* <h3 className="text-lg font-semibold text-gray-900 mb-4">Order Type</h3> */}
 
             {/* Order Type Buttons */}

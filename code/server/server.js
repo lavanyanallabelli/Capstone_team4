@@ -19,6 +19,7 @@ const ownerRoutes = require('./routes/owner');
 const scheduleRoutes = require('./routes/schedules');
 const subscriptionRoutes = require('./routes/subscription');
 const doordashRoutes = require('./routes/doordash');
+const posBlocksRoutes = require('./routes/posBlocks');
 
 // Import middleware
 const { authenticateToken } = require('./middleware/auth');
@@ -88,6 +89,7 @@ app.use('/api/settings', authenticateToken, syncCognitoUserToOwner, settingsRout
 app.use('/api/orders', authenticateToken, syncCognitoUserToOwner, orderRoutes);
 app.use('/api/owner', authenticateToken, syncCognitoUserToOwner, ownerRoutes);
 app.use('/api/schedules', authenticateToken, syncCognitoUserToOwner, scheduleRoutes);
+app.use('/api/pos-blocks', authenticateToken, syncCognitoUserToOwner, posBlocksRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/doordash', doordashRoutes); // No auth required - webhook endpoint
 

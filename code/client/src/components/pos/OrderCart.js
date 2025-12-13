@@ -1,11 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-    Plus,
-    Minus,
     ShoppingCart,
     CheckCircle,
-    X,
+    //X,
     User
 } from 'lucide-react';
 
@@ -25,6 +23,8 @@ const OrderCart = ({
     onClearOrder,
     onSubmitOrder
 }) => {
+    const [selectedItemId, setSelectedItemId] = useState(null);
+
     // Use provided values or calculate defaults
     const displayTotal = total || 0;
     const displayDiscount = discount || 0;
@@ -32,6 +32,18 @@ const OrderCart = ({
     const displayTax = tax || 0;
     const displayTip = tip || 0;
     const displayFinalTotal = finalTotal || (displayTotal + displayTax);
+
+    const handleItemClick = (itemId) => {
+        setSelectedItemId(selectedItemId === itemId ? null : itemId);
+    };
+
+    const handleCancelItem = () => {
+        if (selectedItemId) {
+            onRemoveItem(selectedItemId);
+            setSelectedItemId(null);
+        }
+    };
+    console.log('handleCancelItem', handleCancelItem);
 
     return (
         <div className="h-full flex flex-col bg-white">
@@ -86,44 +98,17 @@ const OrderCart = ({
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -20 }}
-                                className="bg-gray-50 rounded-lg p-3"
+                                onClick={() => handleItemClick(item.id)}
+                                className={`bg-gray-50 rounded-lg p-3 cursor-pointer transition-colors ${selectedItemId === item.id ? 'bg-blue-100 border-2 border-blue-500' : 'hover:bg-gray-100'
+                                    }`}
                             >
-                                <div className="flex items-start justify-between mb-2">
-                                    <div className="flex-1">
-                                        <h4 className="font-medium text-gray-900 text-sm">
-                                            {item.name}
-                                        </h4>
-                                        <p className="text-xs text-gray-500">
-                                            {item.category}
-                                        </p>
-                                    </div>
-                                    <button
-                                        onClick={() => onRemoveItem(item.id)}
-                                        className="text-red-500 hover:text-red-700 p-1"
-                                    >
-                                        <X className="w-4 h-4" />
-                                    </button>
-                                </div>
-
                                 <div className="flex items-center justify-between">
-                                    <div className="flex items-center space-x-2">
-                                        <button
-                                            onClick={() => onUpdateQuantity(item.id, item.quantity - 1)}
-                                            className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center hover:bg-gray-300"
-                                        >
-                                            <Minus className="w-3 h-3" />
-                                        </button>
-                                        <span className="w-8 text-center font-medium">
-                                            {item.quantity}
-                                        </span>
-                                        <button
-                                            onClick={() => onUpdateQuantity(item.id, item.quantity + 1)}
-                                            className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center hover:bg-gray-300"
-                                        >
-                                            <Plus className="w-3 h-3" />
-                                        </button>
-                                    </div>
-                                    <span className="font-semibold text-gray-900">
+                                    <h4 className={`font-medium text-sm flex-1 ${selectedItemId === item.id ? 'text-blue-900' : 'text-gray-900'
+                                        }`}>
+                                        {item.name}
+                                    </h4>
+                                    <span className={`font-semibold text-sm ${selectedItemId === item.id ? 'text-blue-900' : 'text-gray-900'
+                                        }`}>
                                         ${(parseFloat(item.price || 0) * item.quantity).toFixed(2)}
                                     </span>
                                 </div>
@@ -135,12 +120,8 @@ const OrderCart = ({
 
             {/* Order Summary */}
             {order.length > 0 && (
-                <div className="border-t bg-gray-50 p-4">
+                <div className="border-t bg-gray-50 p-4 pb-4">
                     <div className="space-y-2 mb-4">
-                        <div className="flex justify-between text-sm">
-                            <span className="text-gray-600">Subtotal:</span>
-                            <span className="font-medium">${displayTotal.toFixed(2)}</span>
-                        </div>
                         {displayDiscount > 0 && (
                             <div className="flex justify-between text-sm text-green-600">
                                 <span>Discount:</span>
@@ -172,7 +153,7 @@ const OrderCart = ({
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="space-y-2">
+                    <div>
                         <motion.button
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}

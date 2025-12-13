@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 // Category name configuration - simple black and white design
 const categoryStyles = {
     'all': { name: 'MAIN MENU' },
-    'main menu': { name: 'MAIN MENU' },
+    'main menu': { name: 'ALL ITEMS' },
     'main course': { name: 'MAIN MENU' },
     'mains': { name: 'MAIN MENU' },
     'signature': { name: 'SIGNATURE EATS' },
