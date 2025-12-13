@@ -358,24 +358,16 @@ Please check the build logs for more details about the failure.
             script {
                 echo "📊 Generating Jenkins Health Report..."
 
-                def j = Jenkins.get()
-
-                def nodes = j.computers?.size()
-                def plugins = j.pluginManager.plugins?.size()
-                def queueSize = j.queue.items?.size()
-
-                def diskMonitor = j.monitorData.get('hudson.node_monitors.DiskSpaceMonitor')
-                def rootDisk = diskMonitor ? diskMonitor : "N/A"
-
+                // Simplified report without accessing Jenkins.instance
                 def report = """
 🩺 *Jenkins Health Report*
 
-*Disk Usage:* ${rootDisk}
-*Total Nodes:* ${nodes}
-*Total Plugins:* ${plugins}
-*Queue Size:* ${queueSize}
+*Build Information:*
+• Build Number: ${env.BUILD_NUMBER}
+• Branch: ${params.BRANCH}
+• Project: POS System
 
-For detailed graphs:
+For detailed Jenkins health metrics:
 Manage Jenkins → Monitoring
 """
 
