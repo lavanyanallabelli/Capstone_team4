@@ -58,6 +58,17 @@ const MenuItem = sequelize.define('MenuItem', {
         type: DataTypes.STRING(500),
         allowNull: true
     },
+    hasSizes: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        allowNull: false
+    },
+    sizes: {
+        type: DataTypes.JSONB,
+        allowNull: true,
+        defaultValue: null,
+        comment: 'Size configuration: { "small": { "name": "Small", "price": 10.00 }, "medium": { "name": "Medium", "price": 12.00 }, "large": { "name": "Large", "price": 15.00 } }'
+    },
     createdAt: {
         type: DataTypes.DATE,
         allowNull: false,

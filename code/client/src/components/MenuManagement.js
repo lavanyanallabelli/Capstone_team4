@@ -116,16 +116,44 @@ const MenuManagement = () => {
 
     const handleCreateItem = async (itemData) => {
         try {
+            console.log('📝 Creating menu item with data:', JSON.stringify(itemData, null, 2));
+
+            // Validate required fields on client side first
+            if (!itemData.name || itemData.name.trim() === '') {
+                alert('Please enter an item name.');
+                return;
+            }
+            if (!itemData.category || itemData.category.trim() === '') {
+                alert('Please select a category.');
+                return;
+            }
+            if (!itemData.description || itemData.description.trim() === '') {
+                alert('Please enter a description.');
+                return;
+            }
+            if (!itemData.price || isNaN(itemData.price) || itemData.price <= 0) {
+                alert('Please enter a valid price.');
+                return;
+            }
+
             const response = await apiService.createMenuItem(itemData);
             if (response.success) {
                 setMenuItems([...menuItems, response.data]);
                 setShowCreateForm(false);
                 // Show success message
                 alert('Menu item created successfully!');
+            } else {
+                console.error('❌ Create failed:', response);
+                const errorMsg = response.message || response.error || 'Unknown error';
+                alert(`Failed to create menu item: ${errorMsg}`);
             }
         } catch (error) {
             console.error('Error creating menu item:', error);
-            alert('Failed to create menu item. Please try again.');
+            const errorDetails = error.response?.data?.details || [];
+            const errorMessage = error.response?.data?.message ||
+                (errorDetails.length > 0 ? errorDetails.map(d => d.message).join(', ') : error.message) ||
+                'Please try again.';
+            alert(`Failed to create menu item: ${errorMessage}`);
         }
     };
 
@@ -133,9 +161,8 @@ const MenuManagement = () => {
         try {
             const response = await apiService.updateMenuItem(itemId, updatedData);
             if (response.success) {
-                setMenuItems(menuItems.map(item =>
-                    item.itemId === itemId ? response.data : item
-                ));
+                // Reload menu data to get fresh data from database
+                await loadMenuData();
                 setEditingItem(null);
                 alert('Menu item updated successfully!');
             }
@@ -624,7 +651,13 @@ const CreateMenuItemForm = ({ categories, onSubmit, onCancel }) => {
         description: '',
         price: '',
         prepTime: '',
-        tags: ''
+        tags: '',
+        hasSizes: false,
+        sizes: {
+            small: { name: 'Small', price: '' },
+            medium: { name: 'Medium', price: '' },
+            large: { name: 'Large', price: '' }
+        }
     });
 
     const handleSubmit = (e) => {
@@ -632,13 +665,49 @@ const CreateMenuItemForm = ({ categories, onSubmit, onCancel }) => {
         const customTags = formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
         // Combine additional categories with custom tags
         const allTags = [...(formData.selectedCategories || []), ...customTags];
-        onSubmit({
-            ...formData,
+
+        // Process sizes - only include sizes that have prices set
+        let sizesData = null;
+        let hasSizesValue = Boolean(formData.hasSizes) || false;
+
+        if (formData.hasSizes) {
+            sizesData = {};
+            Object.keys(formData.sizes).forEach(sizeKey => {
+                const size = formData.sizes[sizeKey];
+                if (size.price && size.price !== '') {
+                    sizesData[sizeKey] = {
+                        name: size.name || sizeKey.charAt(0).toUpperCase() + sizeKey.slice(1),
+                        price: parseFloat(size.price)
+                    };
+                }
+            });
+            // Only set sizes if at least one size has a price
+            if (Object.keys(sizesData).length === 0) {
+                sizesData = null;
+                hasSizesValue = false; // If no sizes configured, set hasSizes to false
+            }
+        }
+
+        const submitData = {
+            name: formData.name?.trim() || '',
+            category: formData.category?.trim() || '',
+            description: formData.description?.trim() || '',
             price: parseFloat(formData.price),
-            tags: allTags,
-            // Remove selectedCategories from the final data as it's now in tags
-            selectedCategories: undefined
+            prepTime: formData.prepTime?.trim() || undefined,
+            tags: allTags.length > 0 ? allTags : undefined,
+            hasSizes: hasSizesValue,
+            sizes: sizesData,
+            availability: true
+        };
+
+        // Remove undefined values to avoid sending them
+        Object.keys(submitData).forEach(key => {
+            if (submitData[key] === undefined || submitData[key] === null) {
+                delete submitData[key];
+            }
         });
+
+        onSubmit(submitData);
     };
 
     return (
@@ -761,7 +830,7 @@ const CreateMenuItemForm = ({ categories, onSubmit, onCancel }) => {
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                     </div>
-                    <div className="mb-6">
+                    <div className="mb-4">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                             Tags (comma-separated)
                         </label>
@@ -773,6 +842,75 @@ const CreateMenuItemForm = ({ categories, onSubmit, onCancel }) => {
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                     </div>
+                    <div className="mb-4">
+                        <label className="flex items-center space-x-2 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={formData.hasSizes || false}
+                                onChange={(e) => setFormData({ ...formData, hasSizes: e.target.checked })}
+                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="text-sm font-medium text-gray-700">
+                                Enable Size Options
+                            </span>
+                        </label>
+                        <p className="text-xs text-gray-500 mt-1 ml-6">
+                            Allow customers to select different sizes for this item
+                        </p>
+                    </div>
+                    {formData.hasSizes && (
+                        <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                            <label className="block text-sm font-medium text-gray-700 mb-3">
+                                Size Configuration
+                            </label>
+                            {['small', 'medium', 'large'].map((sizeKey) => (
+                                <div key={sizeKey} className="mb-3">
+                                    <div className="flex items-center gap-2">
+                                        <div className="flex-1">
+                                            <input
+                                                type="text"
+                                                placeholder={`${sizeKey.charAt(0).toUpperCase() + sizeKey.slice(1)} Name`}
+                                                value={formData.sizes[sizeKey]?.name || ''}
+                                                onChange={(e) => setFormData({
+                                                    ...formData,
+                                                    sizes: {
+                                                        ...formData.sizes,
+                                                        [sizeKey]: {
+                                                            ...formData.sizes[sizeKey],
+                                                            name: e.target.value
+                                                        }
+                                                    }
+                                                })}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                                            />
+                                        </div>
+                                        <div className="w-24">
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                placeholder="Price"
+                                                value={formData.sizes[sizeKey]?.price || ''}
+                                                onChange={(e) => setFormData({
+                                                    ...formData,
+                                                    sizes: {
+                                                        ...formData.sizes,
+                                                        [sizeKey]: {
+                                                            ...formData.sizes[sizeKey],
+                                                            price: e.target.value
+                                                        }
+                                                    }
+                                                })}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                            <p className="text-xs text-gray-500 mt-2">
+                                Leave price empty to exclude a size option
+                            </p>
+                        </div>
+                    )}
                     <div className="flex justify-end space-x-3">
                         <button
                             type="button"
@@ -796,36 +934,169 @@ const CreateMenuItemForm = ({ categories, onSubmit, onCancel }) => {
 
 // Edit Menu Item Form Component
 const EditMenuItemForm = ({ item, categories, onSubmit, onCancel }) => {
+    const [loading, setLoading] = useState(false);
+    const [itemData, setItemData] = useState(item);
+
     // Extract itemId for logging (if needed for debugging)
-    const itemId = item?.id || item?.itemId;
-    console.log('EditMenuItemForm - itemId:', itemId, 'item:', item);
+    const itemId = itemData?.id || itemData?.itemId;
+
+    // Reload item data when component mounts to ensure we have latest data
+    useEffect(() => {
+        const loadItemData = async () => {
+            if (itemId) {
+                try {
+                    setLoading(true);
+                    const response = await apiService.getMenuItem(itemId);
+                    if (response.success && response.data) {
+                        console.log('✅ Loaded item data for editing:', response.data);
+                        setItemData(response.data);
+                    }
+                } catch (error) {
+                    console.error('Error loading item data:', error);
+                    // Use the item passed as prop if API call fails
+                } finally {
+                    setLoading(false);
+                }
+            }
+        };
+        loadItemData();
+    }, [itemId]);
 
     // Separate category tags from other tags
-    const categoryTags = (item.tags || []).filter(tag => categories && categories.includes(tag));
-    const otherTags = (item.tags || []).filter(tag => !categories || !categories.includes(tag));
+    const categoryTags = (itemData.tags || []).filter(tag => categories && categories.includes(tag));
+    const otherTags = (itemData.tags || []).filter(tag => !categories || !categories.includes(tag));
+
+    // Initialize sizes from item or use defaults
+    const initializeSizes = () => {
+        console.log('Initializing sizes from itemData:', itemData);
+        if (itemData.sizes && typeof itemData.sizes === 'object' && Object.keys(itemData.sizes).length > 0) {
+            console.log('Item has sizes:', itemData.sizes);
+            return {
+                small: itemData.sizes.small ? {
+                    name: itemData.sizes.small.name || 'Small',
+                    price: itemData.sizes.small.price !== undefined ? itemData.sizes.small.price.toString() : ''
+                } : { name: 'Small', price: '' },
+                medium: itemData.sizes.medium ? {
+                    name: itemData.sizes.medium.name || 'Medium',
+                    price: itemData.sizes.medium.price !== undefined ? itemData.sizes.medium.price.toString() : ''
+                } : { name: 'Medium', price: '' },
+                large: itemData.sizes.large ? {
+                    name: itemData.sizes.large.name || 'Large',
+                    price: itemData.sizes.large.price !== undefined ? itemData.sizes.large.price.toString() : ''
+                } : { name: 'Large', price: '' }
+            };
+        }
+        console.log('No sizes found, using defaults');
+        return {
+            small: { name: 'Small', price: '' },
+            medium: { name: 'Medium', price: '' },
+            large: { name: 'Large', price: '' }
+        };
+    };
 
     const [formData, setFormData] = useState({
-        name: item.name,
-        category: item.category,
+        name: itemData.name || '',
+        category: itemData.category || '',
         selectedCategories: categoryTags, // Load existing category tags as additional categories
-        description: item.description,
-        price: item.price.toString(),
-        prepTime: item.prepTime,
-        tags: otherTags.join(', ') // Only non-category tags in the tags field
+        description: itemData.description || '',
+        price: itemData.price ? itemData.price.toString() : '',
+        prepTime: itemData.prepTime || '',
+        tags: otherTags.join(', '), // Only non-category tags in the tags field
+        hasSizes: itemData.hasSizes || false,
+        sizes: initializeSizes()
     });
+
+    // Update form data when itemData changes (after reload)
+    useEffect(() => {
+        if (itemData && !loading) {
+            const newCategoryTags = (itemData.tags || []).filter(tag => categories && categories.includes(tag));
+            const newOtherTags = (itemData.tags || []).filter(tag => !categories || !categories.includes(tag));
+
+            // Initialize sizes from current itemData
+            let sizesData = {
+                small: { name: 'Small', price: '' },
+                medium: { name: 'Medium', price: '' },
+                large: { name: 'Large', price: '' }
+            };
+
+            if (itemData.sizes && typeof itemData.sizes === 'object' && Object.keys(itemData.sizes).length > 0) {
+                sizesData = {
+                    small: itemData.sizes.small ? {
+                        name: itemData.sizes.small.name || 'Small',
+                        price: itemData.sizes.small.price !== undefined ? itemData.sizes.small.price.toString() : ''
+                    } : { name: 'Small', price: '' },
+                    medium: itemData.sizes.medium ? {
+                        name: itemData.sizes.medium.name || 'Medium',
+                        price: itemData.sizes.medium.price !== undefined ? itemData.sizes.medium.price.toString() : ''
+                    } : { name: 'Medium', price: '' },
+                    large: itemData.sizes.large ? {
+                        name: itemData.sizes.large.name || 'Large',
+                        price: itemData.sizes.large.price !== undefined ? itemData.sizes.large.price.toString() : ''
+                    } : { name: 'Large', price: '' }
+                };
+            }
+
+            setFormData({
+                name: itemData.name || '',
+                category: itemData.category || '',
+                selectedCategories: newCategoryTags,
+                description: itemData.description || '',
+                price: itemData.price ? itemData.price.toString() : '',
+                prepTime: itemData.prepTime || '',
+                tags: newOtherTags.join(', '),
+                hasSizes: itemData.hasSizes || false,
+                sizes: sizesData
+            });
+        }
+    }, [itemData, loading, categories]);
 
     const handleSubmit = (e) => {
         e.preventDefault();
         const customTags = formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
         // Combine additional categories with custom tags
         const allTags = [...(formData.selectedCategories || []), ...customTags];
-        onSubmit({
-            ...formData,
+
+        // Process sizes - only include sizes that have prices set
+        let sizesData = null;
+        let hasSizesValue = Boolean(formData.hasSizes) || false;
+
+        if (formData.hasSizes) {
+            sizesData = {};
+            Object.keys(formData.sizes).forEach(sizeKey => {
+                const size = formData.sizes[sizeKey];
+                if (size.price && size.price !== '') {
+                    sizesData[sizeKey] = {
+                        name: size.name || sizeKey.charAt(0).toUpperCase() + sizeKey.slice(1),
+                        price: parseFloat(size.price)
+                    };
+                }
+            });
+            // Only set sizes if at least one size has a price
+            if (Object.keys(sizesData).length === 0) {
+                sizesData = null;
+                hasSizesValue = false; // If no sizes configured, set hasSizes to false
+            }
+        }
+
+        const submitData = {
+            name: formData.name?.trim() || '',
+            category: formData.category?.trim() || '',
+            description: formData.description?.trim() || '',
             price: parseFloat(formData.price),
-            tags: allTags,
-            // Remove selectedCategories from the final data as it's now in tags
-            selectedCategories: undefined
+            prepTime: formData.prepTime?.trim() || undefined,
+            tags: allTags.length > 0 ? allTags : undefined,
+            hasSizes: hasSizesValue,
+            sizes: sizesData
+        };
+
+        // Remove undefined values to avoid sending them
+        Object.keys(submitData).forEach(key => {
+            if (submitData[key] === undefined || submitData[key] === null) {
+                delete submitData[key];
+            }
         });
+
+        onSubmit(submitData);
     };
 
     return (
@@ -948,7 +1219,7 @@ const EditMenuItemForm = ({ item, categories, onSubmit, onCancel }) => {
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                     </div>
-                    <div className="mb-6">
+                    <div className="mb-4">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                             Tags (comma-separated)
                         </label>
@@ -960,6 +1231,75 @@ const EditMenuItemForm = ({ item, categories, onSubmit, onCancel }) => {
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                     </div>
+                    <div className="mb-4">
+                        <label className="flex items-center space-x-2 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={formData.hasSizes || false}
+                                onChange={(e) => setFormData({ ...formData, hasSizes: e.target.checked })}
+                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="text-sm font-medium text-gray-700">
+                                Enable Size Options
+                            </span>
+                        </label>
+                        <p className="text-xs text-gray-500 mt-1 ml-6">
+                            Allow customers to select different sizes for this item
+                        </p>
+                    </div>
+                    {formData.hasSizes && (
+                        <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                            <label className="block text-sm font-medium text-gray-700 mb-3">
+                                Size Configuration
+                            </label>
+                            {['small', 'medium', 'large'].map((sizeKey) => (
+                                <div key={sizeKey} className="mb-3">
+                                    <div className="flex items-center gap-2">
+                                        <div className="flex-1">
+                                            <input
+                                                type="text"
+                                                placeholder={`${sizeKey.charAt(0).toUpperCase() + sizeKey.slice(1)} Name`}
+                                                value={formData.sizes[sizeKey]?.name || ''}
+                                                onChange={(e) => setFormData({
+                                                    ...formData,
+                                                    sizes: {
+                                                        ...formData.sizes,
+                                                        [sizeKey]: {
+                                                            ...formData.sizes[sizeKey],
+                                                            name: e.target.value
+                                                        }
+                                                    }
+                                                })}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                                            />
+                                        </div>
+                                        <div className="w-24">
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                placeholder="Price"
+                                                value={formData.sizes[sizeKey]?.price || (formData.sizes[sizeKey]?.price === 0 ? '0' : '')}
+                                                onChange={(e) => setFormData({
+                                                    ...formData,
+                                                    sizes: {
+                                                        ...formData.sizes,
+                                                        [sizeKey]: {
+                                                            ...formData.sizes[sizeKey],
+                                                            price: e.target.value
+                                                        }
+                                                    }
+                                                })}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                            <p className="text-xs text-gray-500 mt-2">
+                                Leave price empty to exclude a size option
+                            </p>
+                        </div>
+                    )}
                     <div className="flex justify-end space-x-3">
                         <button
                             type="button"

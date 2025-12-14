@@ -11,7 +11,15 @@ const getDefaultBlocks = () => ({
     extraProtein: Array(5).fill(null),
     snacks: Array(5).fill(null),
     drinks: Array(5).fill(null),
-    categories: Array(9).fill(null)
+    categories: Array(9).fill(null),
+    modifyTop: Array(12).fill(null),
+    modifySizes: [
+        { id: 'size-small', name: 'Small', price: 0, isSize: true },
+        { id: 'size-medium', name: 'Medium', price: 0, isSize: true },
+        { id: 'size-large', name: 'Large', price: 0, isSize: true }
+    ],
+    modifyMiddle: Array(12).fill(null),
+    modifyBottom: Array(18).fill(null)
 });
 
 // Cache for blocks to avoid repeated API calls
@@ -30,9 +38,19 @@ export const getCustomBlocks = async () => {
 
         const response = await apiService.getPOSBlocks();
         if (response.success && response.data) {
-            blocksCache = response.data;
+            // Ensure modify blocks exist (for backward compatibility)
+            const defaultBlocks = getDefaultBlocks();
+            const blocks = {
+                ...defaultBlocks,
+                ...response.data,
+                modifyTop: response.data.modifyTop || Array(12).fill(null),
+                modifySizes: response.data.modifySizes || defaultBlocks.modifySizes,
+                modifyMiddle: response.data.modifyMiddle || Array(12).fill(null),
+                modifyBottom: response.data.modifyBottom || Array(18).fill(null)
+            };
+            blocksCache = blocks;
             lastFetchTime = now;
-            return response.data;
+            return blocks;
         }
     } catch (error) {
         console.error('Error loading custom blocks from API:', error);

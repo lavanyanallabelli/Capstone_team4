@@ -52,7 +52,7 @@ const EnhancedPOSSystem = () => {
     const [currentOrder, setCurrentOrder] = useState([]);
 
     // Order Configuration
-    const [orderType, setOrderType] = useState('dine-in');
+    const [orderType, setOrderType] = useState('to-go');
     const [tableNumber, setTableNumber] = useState('');
     const [customerName, setCustomerName] = useState('');
     const [customerPhone, setCustomerPhone] = useState('');
@@ -73,10 +73,14 @@ const EnhancedPOSSystem = () => {
     const [showRefundModal, setShowRefundModal] = useState(false);
     const [, setAvailabilityUpdateTime] = useState(Date.now());
     const [selectedPizzaItem, setSelectedPizzaItem] = useState(null);
+    const [selectedOrderItemIds, setSelectedOrderItemIds] = useState(new Set());
 
     // Custom Blocks State - Load from database
     const [customBlocks, setCustomBlocks] = useState(null);
     const [blocksLoading, setBlocksLoading] = useState(true);
+    
+    // Selected modify items state (for modify category only)
+    const [selectedModifyItems, setSelectedModifyItems] = useState(new Set());
 
     // Load custom blocks from database on mount
     useEffect(() => {
@@ -95,7 +99,15 @@ const EnhancedPOSSystem = () => {
                     extraProtein: Array(5).fill(null),
                     snacks: Array(5).fill(null),
                     drinks: Array(5).fill(null),
-                    categories: Array(9).fill(null)
+                    categories: Array(9).fill(null),
+                    modifyTop: Array(12).fill(null),
+                    modifySizes: [
+                        { id: 'size-small', name: 'Small', price: 0, isSize: true },
+                        { id: 'size-medium', name: 'Medium', price: 0, isSize: true },
+                        { id: 'size-large', name: 'Large', price: 0, isSize: true }
+                    ],
+                    modifyMiddle: Array(12).fill(null),
+                    modifyBottom: Array(18).fill(null)
                 });
             } finally {
                 setBlocksLoading(false);
@@ -133,6 +145,13 @@ const EnhancedPOSSystem = () => {
 
         return () => clearInterval(interval);
     }, [customBlocks, blocksLoading]);
+
+    // Clear selected modify items when switching away from modify category
+    useEffect(() => {
+        if (selectedCategory !== 'modify') {
+            setSelectedModifyItems(new Set());
+        }
+    }, [selectedCategory]);
 
     // Modal state for selecting items
     const [showItemSelector, setShowItemSelector] = useState(false);
@@ -309,12 +328,6 @@ const EnhancedPOSSystem = () => {
         };
     });
 
-    // Check if item is a pizza
-    const isPizzaItem = (item) => {
-        const name = (item.name || '').toLowerCase();
-        return name.includes('pizza');
-    };
-
     // Add item to order
     const addToOrder = (item) => {
         // Check if item is available before adding to cart
@@ -323,8 +336,8 @@ const EnhancedPOSSystem = () => {
             return; // Prevent adding unavailable items
         }
 
-        // If it's a pizza item, show size selection instead of adding directly
-        if (isPizzaItem(item)) {
+        // If item has sizes enabled, show size selection instead of adding directly
+        if (item.hasSizes && item.sizes && Object.keys(item.sizes).length > 0) {
             setSelectedPizzaItem(item);
             return;
         }
@@ -347,6 +360,33 @@ const EnhancedPOSSystem = () => {
         }
     };
 
+    // Add all selected modify items to order
+    const addSelectedModifyItemsToOrder = () => {
+        if (!customBlocks || selectedModifyItems.size === 0) {
+            alert('Please select items from modify sections');
+            return;
+        }
+
+        const modifySections = ['modifyTop', 'modifySizes', 'modifyMiddle', 'modifyBottom'];
+        let addedCount = 0;
+
+        selectedModifyItems.forEach(itemKey => {
+            const [blockType, blockIndexStr] = itemKey.split('-');
+            const blockIndex = parseInt(blockIndexStr, 10);
+            
+            if (modifySections.includes(blockType) && customBlocks[blockType] && customBlocks[blockType][blockIndex]) {
+                const item = customBlocks[blockType][blockIndex];
+                addToOrder(item);
+                addedCount++;
+            }
+        });
+
+        if (addedCount > 0) {
+            // Clear selections after adding
+            setSelectedModifyItems(new Set());
+        }
+    };
+
     // Handle block click - open selector if empty, add to order if filled
     const handleBlockClick = (blockType, blockIndex, isEdit = false) => {
         if (!customBlocks) return;
@@ -365,6 +405,18 @@ const EnhancedPOSSystem = () => {
                 } else if (block.isModify) {
                     setSelectedCategory('modify');
                 }
+            } else if (selectedCategory === 'modify' && (blockType === 'modifyTop' || blockType === 'modifyMiddle' || blockType === 'modifyBottom' || blockType === 'modifySizes')) {
+                // In modify category - toggle selection instead of immediately adding
+                const itemKey = `${blockType}-${blockIndex}`;
+                setSelectedModifyItems(prev => {
+                    const newSet = new Set(prev);
+                    if (newSet.has(itemKey)) {
+                        newSet.delete(itemKey);
+                    } else {
+                        newSet.add(itemKey);
+                    }
+                    return newSet;
+                });
             } else {
                 // Regular item - add to order
                 addToOrder(block);
@@ -425,36 +477,47 @@ const EnhancedPOSSystem = () => {
         setSelectedBlockIndex(null);
     };
 
-    // Add pizza with selected size
+    // Add item with selected size
     const addPizzaWithSize = (size) => {
         if (!selectedPizzaItem) return;
 
-        const sizePrices = {
-            'small': selectedPizzaItem.price * 0.8, // 80% of base price
-            'medium': selectedPizzaItem.price, // 100% of base price
-            'large': selectedPizzaItem.price * 1.2 // 120% of base price
-        };
+        // Get size configuration from item or use default pricing
+        let sizePrice = selectedPizzaItem.price;
+        let sizeName = size.charAt(0).toUpperCase() + size.slice(1);
 
-        const pizzaWithSize = {
+        if (selectedPizzaItem.sizes && selectedPizzaItem.sizes[size]) {
+            sizePrice = selectedPizzaItem.sizes[size].price;
+            sizeName = selectedPizzaItem.sizes[size].name || sizeName;
+        } else {
+            // Fallback to percentage-based pricing if sizes not configured
+            const sizePrices = {
+                'small': selectedPizzaItem.price * 0.8, // 80% of base price
+                'medium': selectedPizzaItem.price, // 100% of base price
+                'large': selectedPizzaItem.price * 1.2 // 120% of base price
+            };
+            sizePrice = sizePrices[size] || selectedPizzaItem.price;
+        }
+
+        const itemWithSize = {
             ...selectedPizzaItem,
             id: `${selectedPizzaItem.id}-${size}`,
-            name: `${selectedPizzaItem.name} (${size.charAt(0).toUpperCase() + size.slice(1)})`,
+            name: `${selectedPizzaItem.name} (${sizeName})`,
             size: size,
-            price: sizePrices[size] || selectedPizzaItem.price,
+            price: sizePrice,
             quantity: 1
         };
 
-        const existingItem = currentOrder.find(orderItem => orderItem.id === pizzaWithSize.id);
+        const existingItem = currentOrder.find(orderItem => orderItem.id === itemWithSize.id);
         if (existingItem) {
             setCurrentOrder(prev =>
                 prev.map(orderItem =>
-                    orderItem.id === pizzaWithSize.id
+                    orderItem.id === itemWithSize.id
                         ? { ...orderItem, quantity: orderItem.quantity + 1 }
                         : orderItem
                 )
             );
         } else {
-            setCurrentOrder(prev => [...prev, pizzaWithSize]);
+            setCurrentOrder(prev => [...prev, itemWithSize]);
         }
 
         setSelectedPizzaItem(null); // Clear selection after adding
@@ -478,6 +541,16 @@ const EnhancedPOSSystem = () => {
     // Remove item from order
     const removeFromOrder = (itemId) => {
         setCurrentOrder(prev => prev.filter(item => item.id !== itemId));
+    };
+
+    // Remove multiple items from order
+    const removeSelectedItems = () => {
+        if (selectedOrderItemIds.size === 0) {
+            alert('Please select items to remove');
+            return;
+        }
+        setCurrentOrder(prev => prev.filter(item => !selectedOrderItemIds.has(item.id)));
+        setSelectedOrderItemIds(new Set());
     };
 
     // Clear entire order
@@ -567,15 +640,21 @@ const EnhancedPOSSystem = () => {
         alert('You can modify items using the quantity controls in the cart');
     };
 
+    // Handle "Add to Order" button click
+    const handleAddToOrder = () => {
+        if (selectedCategory === 'modify') {
+            // In modify category - add selected modify items to cart
+            addSelectedModifyItemsToOrder();
+        } else {
+            // Normal flow - submit the order
+            submitOrder();
+        }
+    };
+
     // Submit order
     const submitOrder = async () => {
         if (currentOrder.length === 0) {
             alert('Please add items to the order');
-            return;
-        }
-
-        if (orderType === 'dine-in' && !tableNumber) {
-            alert('Please enter a table number');
             return;
         }
 
@@ -588,7 +667,7 @@ const EnhancedPOSSystem = () => {
             const orderData = {
                 items: currentOrder,
                 orderType,
-                tableNumber: orderType === 'dine-in' ? tableNumber : null,
+                tableNumber: null,
                 customerName: orderType === 'pickup' ? customerName : null,
                 customerPhone: customerPhone || null,
                 total: totals.subtotal,
@@ -826,80 +905,236 @@ const EnhancedPOSSystem = () => {
                         {/* Modify View or Menu Display */}
                         {selectedCategory === 'modify' ? (
                             <div className="flex-1 overflow-y-auto p-4">
-                                {/* Items Section */}
-                                <div className="mb-4">
-                                    <h3 className="text-lg font-bold text-gray-900 mb-2">Items</h3>
-                                    <div className="grid grid-cols-5 gap-2">
-                                        {[1, 2, 3, 4, 5].map((num) => (
-                                            <motion.button
-                                                key={`item-${num}`}
-                                                whileHover={{ scale: 1.02 }}
-                                                whileTap={{ scale: 0.98 }}
-                                                onClick={() => addToOrder({
-                                                    id: `modify-item-${num}`,
-                                                    name: `Item ${num}`,
-                                                    price: 0,
-                                                    isAvailable: true
-                                                })}
-                                                className="p-2 rounded-lg shadow-sm border border-gray-200 bg-white hover:shadow-md cursor-pointer transition-all"
-                                            >
-                                                <h3 className="font-semibold text-sm text-center text-gray-900">
-                                                    Item {num}
-                                                </h3>
-                                            </motion.button>
-                                        ))}
+                                {/* Top Section - 12 blocks in 2 rows */}
+                                {customBlocks && customBlocks.modifyTop && (
+                                    <div className="mb-8">
+                                        <div className="grid grid-cols-6 gap-2">
+                                            {customBlocks.modifyTop.map((block, index) => {
+                                                const itemKey = `modifyTop-${index}`;
+                                                const isSelected = selectedModifyItems.has(itemKey);
+                                                return (
+                                                    <motion.button
+                                                        key={`modify-top-${index}`}
+                                                        whileHover={{ scale: 1.02 }}
+                                                        whileTap={{ scale: 0.98 }}
+                                                        onClick={() => handleBlockClick('modifyTop', index)}
+                                                        className={`p-2 h-16 rounded-lg shadow-sm border-2 cursor-pointer transition-all relative ${
+                                                            isSelected 
+                                                                ? 'border-blue-500 bg-blue-50' 
+                                                                : 'border-gray-200 bg-white hover:shadow-md'
+                                                        }`}
+                                                    >
+                                                        {block ? (
+                                                            <>
+                                                                <h3 className={`font-semibold text-sm text-center pr-5 ${
+                                                                    isSelected ? 'text-blue-900' : 'text-gray-900'
+                                                                }`}>
+                                                                    {block.name}
+                                                                </h3>
+                                                                {currentUser?.userRole === 'owner' && (
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleClearBlock('modifyTop', index, e);
+                                                                        }}
+                                                                        className="absolute top-1 right-1 p-1 rounded hover:bg-gray-200 transition-colors"
+                                                                        title="Clear"
+                                                                    >
+                                                                        <X className="w-3 h-3 text-gray-500" />
+                                                                    </button>
+                                                                )}
+                                                            </>
+                                                        ) : (
+                                                            <Plus className="w-4 h-4 mx-auto text-gray-400" />
+                                                        )}
+                                                    </motion.button>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
-                                </div>
+                                )}
 
-                                {/* Sauces Section */}
-                                <div className="mb-4">
-                                    <h3 className="text-lg font-bold text-gray-900 mb-2">Sauces</h3>
-                                    <div className="grid grid-cols-5 gap-2">
-                                        {[1, 2, 3, 4, 5].map((num) => (
-                                            <motion.button
-                                                key={`sauce-${num}`}
-                                                whileHover={{ scale: 1.02 }}
-                                                whileTap={{ scale: 0.98 }}
-                                                onClick={() => addToOrder({
-                                                    id: `modify-sauce-${num}`,
-                                                    name: `Sauce ${num}`,
-                                                    price: 0,
-                                                    isAvailable: true
+                                {/* Size Section - 3 blocks (Small, Medium, Large) */}
+                                {customBlocks && customBlocks.modifySizes && (
+                                    <div className="mb-8">
+                                        <div className="flex justify-center">
+                                            <div className="grid grid-cols-3 gap-2 max-w-md">
+                                                {customBlocks.modifySizes.map((block, index) => {
+                                                    const itemKey = `modifySizes-${index}`;
+                                                    const isSelected = selectedModifyItems.has(itemKey);
+                                                    return (
+                                                        <motion.button
+                                                            key={`modify-size-${index}`}
+                                                            whileHover={{ scale: 1.02 }}
+                                                            whileTap={{ scale: 0.98 }}
+                                                            onClick={() => handleBlockClick('modifySizes', index)}
+                                                            className={`p-2 h-10 rounded-lg shadow-sm border-2 cursor-pointer transition-all relative ${
+                                                                isSelected 
+                                                                    ? 'border-blue-500 bg-blue-50' 
+                                                                    : 'border-gray-200 bg-white hover:shadow-md'
+                                                            }`}
+                                                        >
+                                                            {block ? (
+                                                                <>
+                                                                    <h3 className={`font-semibold text-sm text-center ${
+                                                                        isSelected ? 'text-blue-900' : 'text-gray-900'
+                                                                    }`}>
+                                                                        {block.name}
+                                                                    </h3>
+                                                                </>
+                                                            ) : (
+                                                                <Plus className="w-4 h-4 mx-auto text-gray-400" />
+                                                            )}
+                                                        </motion.button>
+                                                    );
                                                 })}
-                                                className="p-2 rounded-lg shadow-sm border border-gray-200 bg-white hover:shadow-md cursor-pointer transition-all"
-                                            >
-                                                <h3 className="font-semibold text-sm text-center text-gray-900">
-                                                    Sauce {num}
-                                                </h3>
-                                            </motion.button>
-                                        ))}
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
+                                )}
 
-                                {/* Toppings Section */}
-                                <div className="mb-4">
-                                    <h3 className="text-lg font-bold text-gray-900 mb-2">Toppings</h3>
-                                    <div className="grid grid-cols-7 gap-2">
-                                        {[1, 2, 3, 4, 5, 6, 7].map((num) => (
-                                            <motion.button
-                                                key={`topping-${num}`}
-                                                whileHover={{ scale: 1.02 }}
-                                                whileTap={{ scale: 0.98 }}
-                                                onClick={() => addToOrder({
-                                                    id: `modify-topping-${num}`,
-                                                    name: `Topping ${num}`,
-                                                    price: 0,
-                                                    isAvailable: true
-                                                })}
-                                                className="p-2 rounded-lg shadow-sm border border-gray-200 bg-white hover:shadow-md cursor-pointer transition-all"
-                                            >
-                                                <h3 className="font-semibold text-sm text-center text-gray-900">
-                                                    Topping {num}
-                                                </h3>
-                                            </motion.button>
-                                        ))}
+                                {/* Middle Section - 12 blocks in 2 rows */}
+                                {customBlocks && customBlocks.modifyMiddle && (
+                                    <div className="mb-8">
+                                        <div className="grid grid-cols-6 gap-2">
+                                            {customBlocks.modifyMiddle.map((block, index) => {
+                                                const itemKey = `modifyMiddle-${index}`;
+                                                const isSelected = selectedModifyItems.has(itemKey);
+                                                return (
+                                                    <motion.button
+                                                        key={`modify-middle-${index}`}
+                                                        whileHover={{ scale: 1.02 }}
+                                                        whileTap={{ scale: 0.98 }}
+                                                        onClick={() => handleBlockClick('modifyMiddle', index)}
+                                                        className={`p-2 h-12 rounded-lg shadow-sm border-2 cursor-pointer transition-all relative ${
+                                                            isSelected 
+                                                                ? 'border-blue-500 bg-blue-50' 
+                                                                : 'border-gray-200 bg-white hover:shadow-md'
+                                                        }`}
+                                                    >
+                                                        {block ? (
+                                                            <>
+                                                                <h3 className={`font-semibold text-sm text-center pr-5 ${
+                                                                    isSelected ? 'text-blue-900' : 'text-gray-900'
+                                                                }`}>
+                                                                    {block.name}
+                                                                </h3>
+                                                                {currentUser?.userRole === 'owner' && (
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleClearBlock('modifyMiddle', index, e);
+                                                                        }}
+                                                                        className="absolute top-1 right-1 p-1 rounded hover:bg-gray-200 transition-colors"
+                                                                        title="Clear"
+                                                                    >
+                                                                        <X className="w-3 h-3 text-gray-500" />
+                                                                    </button>
+                                                                )}
+                                                            </>
+                                                        ) : (
+                                                            <Plus className="w-4 h-4 mx-auto text-gray-400" />
+                                                        )}
+                                                    </motion.button>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
-                                </div>
+                                )}
+
+                                {/* Bottom Section - 18 blocks in 3 rows (12 + 6 with gap) */}
+                                {customBlocks && customBlocks.modifyBottom && (
+                                    <div>
+                                        {/* First 2 rows - 12 blocks */}
+                                        <div className="grid grid-cols-6 gap-2 mb-8">
+                                            {customBlocks.modifyBottom.slice(0, 12).map((block, index) => {
+                                                const itemKey = `modifyBottom-${index}`;
+                                                const isSelected = selectedModifyItems.has(itemKey);
+                                                return (
+                                                    <motion.button
+                                                        key={`modify-bottom-${index}`}
+                                                        whileHover={{ scale: 1.02 }}
+                                                        whileTap={{ scale: 0.98 }}
+                                                        onClick={() => handleBlockClick('modifyBottom', index)}
+                                                        className={`p-2 h-12 rounded-lg shadow-sm border-2 cursor-pointer transition-all relative ${
+                                                            isSelected 
+                                                                ? 'border-blue-500 bg-blue-50' 
+                                                                : 'border-gray-200 bg-white hover:shadow-md'
+                                                        }`}
+                                                    >
+                                                        {block ? (
+                                                            <>
+                                                                <h3 className={`font-semibold text-sm text-center pr-5 ${
+                                                                    isSelected ? 'text-blue-900' : 'text-gray-900'
+                                                                }`}>
+                                                                    {block.name}
+                                                                </h3>
+                                                                {currentUser?.userRole === 'owner' && (
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleClearBlock('modifyBottom', index, e);
+                                                                        }}
+                                                                        className="absolute top-1 right-1 p-1 rounded hover:bg-gray-200 transition-colors"
+                                                                        title="Clear"
+                                                                    >
+                                                                        <X className="w-3 h-3 text-gray-500" />
+                                                                    </button>
+                                                                )}
+                                                            </>
+                                                        ) : (
+                                                            <Plus className="w-4 h-4 mx-auto text-gray-400" />
+                                                        )}
+                                                    </motion.button>
+                                                );
+                                            })}
+                                        </div>
+                                        {/* Last row - 6 blocks */}
+                                        <div className="grid grid-cols-6 gap-2">
+                                            {customBlocks.modifyBottom.slice(12, 18).map((block, index) => {
+                                                const itemKey = `modifyBottom-${index + 12}`;
+                                                const isSelected = selectedModifyItems.has(itemKey);
+                                                return (
+                                                    <motion.button
+                                                        key={`modify-bottom-${index + 12}`}
+                                                        whileHover={{ scale: 1.02 }}
+                                                        whileTap={{ scale: 0.98 }}
+                                                        onClick={() => handleBlockClick('modifyBottom', index + 12)}
+                                                        className={`p-2 h-12 rounded-lg shadow-sm border-2 cursor-pointer transition-all relative ${
+                                                            isSelected 
+                                                                ? 'border-blue-500 bg-blue-50' 
+                                                                : 'border-gray-200 bg-white hover:shadow-md'
+                                                        }`}
+                                                    >
+                                                        {block ? (
+                                                            <>
+                                                                <h3 className={`font-semibold text-sm text-center pr-5 ${
+                                                                    isSelected ? 'text-blue-900' : 'text-gray-900'
+                                                                }`}>
+                                                                    {block.name}
+                                                                </h3>
+                                                                {currentUser?.userRole === 'owner' && (
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleClearBlock('modifyBottom', index + 12, e);
+                                                                        }}
+                                                                        className="absolute top-1 right-1 p-1 rounded hover:bg-gray-200 transition-colors"
+                                                                        title="Clear"
+                                                                    >
+                                                                        <X className="w-3 h-3 text-gray-500" />
+                                                                    </button>
+                                                                )}
+                                                            </>
+                                                        ) : (
+                                                            <Plus className="w-4 h-4 mx-auto text-gray-400" />
+                                                        )}
+                                                    </motion.button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         ) : (
                             <div className="flex-1 overflow-y-auto p-4">
@@ -911,34 +1146,45 @@ const EnhancedPOSSystem = () => {
                             </div>
                         )}
 
-                        {/* Pizza Size Selection - Show when pizza is selected */}
-                        {selectedPizzaItem && (
+                        {/* Size Selection - Show when item with sizes is selected */}
+                        {selectedPizzaItem && selectedPizzaItem.sizes && (
                             <div className="px-4 pb-2 border-t border-gray-200 bg-blue-50">
                                 <div className="pt-2">
-                                    {/* <h3 className="text-sm font-semibold text-gray-700 mb-2"> */}
-                                    {/* Select Size for: {selectedPizzaItem.name} */}
-                                    {/* </h3> */}
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {['small', 'medium', 'large'].map((size) => (
-                                            <motion.button
-                                                key={size}
-                                                whileHover={{ scale: 1.02 }}
-                                                whileTap={{ scale: 0.98 }}
-                                                onClick={() => addPizzaWithSize(size)}
-                                                className="p-3 rounded-lg shadow-sm border-2 border-blue-300 bg-white hover:bg-blue-100 hover:border-blue-500 cursor-pointer transition-all"
-                                            >
-                                                <h3 className="font-semibold text-sm text-center text-gray-900 capitalize">
-                                                    {size}
-                                                </h3>
-                                            </motion.button>
-                                        ))}
+                                    <div className={`grid gap-2 ${Object.keys(selectedPizzaItem.sizes).length === 1 ? 'grid-cols-2' : Object.keys(selectedPizzaItem.sizes).length === 2 ? 'grid-cols-3' : 'grid-cols-4'}`}>
+                                        {Object.keys(selectedPizzaItem.sizes).map((sizeKey) => {
+                                            const sizeConfig = selectedPizzaItem.sizes[sizeKey];
+                                            return (
+                                                <motion.button
+                                                    key={sizeKey}
+                                                    whileHover={{ scale: 1.02 }}
+                                                    whileTap={{ scale: 0.98 }}
+                                                    onClick={() => addPizzaWithSize(sizeKey)}
+                                                    className="p-3 rounded-lg shadow-sm border-2 border-blue-300 bg-white hover:bg-blue-100 hover:border-blue-500 cursor-pointer transition-all"
+                                                >
+                                                    <h3 className="font-semibold text-sm text-center text-gray-900">
+                                                        {sizeConfig.name || sizeKey.charAt(0).toUpperCase() + sizeKey.slice(1)}
+                                                    </h3>
+                                                </motion.button>
+                                            );
+                                        })}
+                                        {/* Cancel Button */}
+                                        <motion.button
+                                            whileHover={{ scale: 1.02 }}
+                                            whileTap={{ scale: 0.98 }}
+                                            onClick={() => setSelectedPizzaItem(null)}
+                                            className="p-3 rounded-lg shadow-sm border-2 border-red-300 bg-white hover:bg-red-100 hover:border-red-500 cursor-pointer transition-all"
+                                        >
+                                            <h3 className="font-semibold text-sm text-center text-red-600">
+                                                Cancel
+                                            </h3>
+                                        </motion.button>
                                     </div>
                                 </div>
                             </div>
                         )}
 
-                        {/* Constant Blocks - Hide when "all items" is selected */}
-                        {selectedCategory !== 'all' && customBlocks && (
+                        {/* Constant Blocks - Hide when "all items" or "modify" is selected */}
+                        {selectedCategory !== 'all' && selectedCategory !== 'modify' && customBlocks && (
                             <>
                                 {/* Protein Blocks - Top row (3 blocks) */}
                                 <div className="px-4 pb-1">
@@ -957,13 +1203,15 @@ const EnhancedPOSSystem = () => {
                                                         <h3 className="font-semibold text-sm text-center text-gray-900 pr-5">
                                                             {block.name}
                                                         </h3>
-                                                        <button
-                                                            onClick={(e) => handleBlockClick('proteinTop', index, true)}
-                                                            className="absolute top-1 right-1 p-1 rounded hover:bg-gray-200 transition-colors"
-                                                            title="Edit"
-                                                        >
-                                                            <Edit2 className="w-3 h-3 text-gray-600" />
-                                                        </button>
+                                                        {currentUser?.userRole === 'owner' && (
+                                                            <button
+                                                                onClick={(e) => handleBlockClick('proteinTop', index, true)}
+                                                                className="absolute top-1 right-1 p-1 rounded hover:bg-gray-200 transition-colors"
+                                                                title="Edit"
+                                                            >
+                                                                <Edit2 className="w-3 h-3 text-gray-600" />
+                                                            </button>
+                                                        )}
                                                     </>
                                                 ) : (
                                                     <Plus className="w-5 h-5 mx-auto text-gray-400" />
@@ -991,13 +1239,15 @@ const EnhancedPOSSystem = () => {
                                                         <h3 className="font-semibold text-sm text-center text-gray-900 pr-5">
                                                             {block.name}
                                                         </h3>
-                                                        <button
-                                                            onClick={(e) => handleBlockClick('protein', index, true)}
-                                                            className="absolute top-1 right-1 p-1 rounded hover:bg-gray-200 transition-colors"
-                                                            title="Edit"
-                                                        >
-                                                            <Edit2 className="w-3 h-3 text-gray-600" />
-                                                        </button>
+                                                        {currentUser?.userRole === 'owner' && (
+                                                            <button
+                                                                onClick={(e) => handleBlockClick('protein', index, true)}
+                                                                className="absolute top-1 right-1 p-1 rounded hover:bg-gray-200 transition-colors"
+                                                                title="Edit"
+                                                            >
+                                                                <Edit2 className="w-3 h-3 text-gray-600" />
+                                                            </button>
+                                                        )}
                                                     </>
                                                 ) : (
                                                     <Plus className="w-5 h-5 mx-auto text-gray-400" />
@@ -1024,13 +1274,15 @@ const EnhancedPOSSystem = () => {
                                                         <h3 className="font-semibold text-sm text-center text-gray-900 pr-5">
                                                             {block.name}
                                                         </h3>
-                                                        <button
-                                                            onClick={(e) => handleBlockClick('toppings', index, true)}
-                                                            className="absolute top-1 right-1 p-1 rounded hover:bg-gray-200 transition-colors"
-                                                            title="Edit"
-                                                        >
-                                                            <Edit2 className="w-3 h-3 text-gray-600" />
-                                                        </button>
+                                                        {currentUser?.userRole === 'owner' && (
+                                                            <button
+                                                                onClick={(e) => handleBlockClick('toppings', index, true)}
+                                                                className="absolute top-1 right-1 p-1 rounded hover:bg-gray-200 transition-colors"
+                                                                title="Edit"
+                                                            >
+                                                                <Edit2 className="w-3 h-3 text-gray-600" />
+                                                            </button>
+                                                        )}
                                                     </>
                                                 ) : (
                                                     <Plus className="w-5 h-5 mx-auto text-gray-400" />
@@ -1056,13 +1308,15 @@ const EnhancedPOSSystem = () => {
                                                         <h3 className="font-semibold text-sm text-center text-gray-900 pr-5">
                                                             {block.name}
                                                         </h3>
-                                                        <button
-                                                            onClick={(e) => handleBlockClick('extraProtein', index, true)}
-                                                            className="absolute top-1 right-1 p-1 rounded hover:bg-gray-200 transition-colors"
-                                                            title="Edit"
-                                                        >
-                                                            <Edit2 className="w-3 h-3 text-gray-600" />
-                                                        </button>
+                                                        {currentUser?.userRole === 'owner' && (
+                                                            <button
+                                                                onClick={(e) => handleBlockClick('extraProtein', index, true)}
+                                                                className="absolute top-1 right-1 p-1 rounded hover:bg-gray-200 transition-colors"
+                                                                title="Edit"
+                                                            >
+                                                                <Edit2 className="w-3 h-3 text-gray-600" />
+                                                            </button>
+                                                        )}
                                                     </>
                                                 ) : (
                                                     <Plus className="w-5 h-5 mx-auto text-gray-400" />
@@ -1088,13 +1342,15 @@ const EnhancedPOSSystem = () => {
                                                         <h3 className="font-semibold text-sm text-center text-gray-900 pr-5">
                                                             {block.name}
                                                         </h3>
-                                                        <button
-                                                            onClick={(e) => handleBlockClick('snacks', index, true)}
-                                                            className="absolute top-1 right-1 p-1 rounded hover:bg-gray-200 transition-colors"
-                                                            title="Edit"
-                                                        >
-                                                            <Edit2 className="w-3 h-3 text-gray-600" />
-                                                        </button>
+                                                        {currentUser?.userRole === 'owner' && (
+                                                            <button
+                                                                onClick={(e) => handleBlockClick('snacks', index, true)}
+                                                                className="absolute top-1 right-1 p-1 rounded hover:bg-gray-200 transition-colors"
+                                                                title="Edit"
+                                                            >
+                                                                <Edit2 className="w-3 h-3 text-gray-600" />
+                                                            </button>
+                                                        )}
                                                     </>
                                                 ) : (
                                                     <Plus className="w-5 h-5 mx-auto text-gray-400" />
@@ -1120,13 +1376,15 @@ const EnhancedPOSSystem = () => {
                                                         <h3 className="font-semibold text-sm text-center text-gray-900 pr-5">
                                                             {block.name}
                                                         </h3>
-                                                        <button
-                                                            onClick={(e) => handleBlockClick('drinks', index, true)}
-                                                            className="absolute top-1 right-1 p-1 rounded hover:bg-gray-200 transition-colors"
-                                                            title="Edit"
-                                                        >
-                                                            <Edit2 className="w-3 h-3 text-gray-600" />
-                                                        </button>
+                                                        {currentUser?.userRole === 'owner' && (
+                                                            <button
+                                                                onClick={(e) => handleBlockClick('drinks', index, true)}
+                                                                className="absolute top-1 right-1 p-1 rounded hover:bg-gray-200 transition-colors"
+                                                                title="Edit"
+                                                            >
+                                                                <Edit2 className="w-3 h-3 text-gray-600" />
+                                                            </button>
+                                                        )}
                                                     </>
                                                 ) : (
                                                     <Plus className="w-5 h-5 mx-auto text-gray-400" />
@@ -1148,6 +1406,8 @@ const EnhancedPOSSystem = () => {
                             setCustomerName={setCustomerName}
                             customerPhone={customerPhone}
                             setCustomerPhone={setCustomerPhone}
+                            onSubmitOrder={handleAddToOrder}
+                            selectedCategory={selectedCategory}
                         />
                     </div>
 
@@ -1173,16 +1433,18 @@ const EnhancedPOSSystem = () => {
                                     {block ? (
                                         <>
                                             <span className="relative z-10 pr-5">{block.name}</span>
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleBlockClick('categories', index, true);
-                                                }}
-                                                className="absolute top-1 right-1 p-1 rounded hover:bg-gray-200 transition-colors z-20"
-                                                title="Edit"
-                                            >
-                                                <Edit2 className="w-3 h-3 text-gray-600" />
-                                            </button>
+                                            {currentUser?.userRole === 'owner' && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleBlockClick('categories', index, true);
+                                                    }}
+                                                    className="absolute top-1 right-1 p-1 rounded hover:bg-gray-200 transition-colors z-20"
+                                                    title="Edit"
+                                                >
+                                                    <Edit2 className="w-3 h-3 text-gray-600" />
+                                                </button>
+                                            )}
                                         </>
                                     ) : (
                                         <Plus className="w-5 h-5 mx-auto text-gray-400" />
@@ -1216,8 +1478,11 @@ const EnhancedPOSSystem = () => {
                                 finalTotal={totals.finalTotal}
                                 onUpdateQuantity={updateQuantity}
                                 onRemoveItem={removeFromOrder}
+                                onRemoveSelectedItems={removeSelectedItems}
                                 onClearOrder={clearOrder}
                                 onSubmitOrder={submitOrder}
+                                selectedItemIds={selectedOrderItemIds}
+                                onSelectItem={setSelectedOrderItemIds}
                             />
                         </div>
 
@@ -1233,6 +1498,15 @@ const EnhancedPOSSystem = () => {
                                 onCancelOrder={handleCancelOrder}
                                 onRefreshOrder={loadMenuData}
                                 onNewOrder={clearOrder}
+                                selectedItemIds={selectedOrderItemIds}
+                                onRemoveItem={(itemId) => {
+                                    removeFromOrder(itemId);
+                                    setSelectedOrderItemIds(prev => {
+                                        const newSet = new Set(prev);
+                                        newSet.delete(itemId);
+                                        return newSet;
+                                    });
+                                }}
                             />
                         )}
                     </div>

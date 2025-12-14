@@ -18,7 +18,9 @@ const OrderManagementPanel = ({
     onApplyTax,
     onCancelOrder,
     onRefreshOrder,
-    onNewOrder
+    onNewOrder,
+    selectedItemIds = new Set(),
+    onRemoveItem
 }) => {
     const [showDiscount, setShowDiscount] = useState(false);
     const [showTip, setShowTip] = useState(false);
@@ -78,11 +80,16 @@ const OrderManagementPanel = ({
             color: 'bg-green-500 hover:bg-green-600'
         },
         {
-            label: 'Cancel Order',
+            label: 'Cancel',
             icon: Trash2,
             action: () => {
-                if (window.confirm('Are you sure you want to cancel this order?')) {
-                    onCancelOrder();
+                if (selectedItemIds.size > 0 && onRemoveItem) {
+                    // Remove all selected items
+                    selectedItemIds.forEach(itemId => {
+                        onRemoveItem(itemId);
+                    });
+                } else {
+                    alert('Please select item(s) to cancel');
                 }
             },
             color: 'bg-red-500 hover:bg-red-600'

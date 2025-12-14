@@ -28,7 +28,18 @@ const menuItemSchema = Joi.object({
     prepTime: Joi.string().max(20).optional(),
     tags: Joi.array().items(Joi.string().max(30)).optional(),
     availability: Joi.boolean().default(true),
-    image: Joi.string().uri().optional()
+    image: Joi.string().uri().optional(),
+    hasSizes: Joi.boolean().optional().default(false),
+    sizes: Joi.alternatives().try(
+        Joi.object().pattern(
+            Joi.string(),
+            Joi.object({
+                name: Joi.string().required(),
+                price: Joi.number().positive().precision(2).required()
+            })
+        ),
+        Joi.valid(null)
+    ).optional().allow(null)
 });
 
 const updateMenuItemSchema = Joi.object({
@@ -39,7 +50,18 @@ const updateMenuItemSchema = Joi.object({
     prepTime: Joi.string().max(20).optional(),
     tags: Joi.array().items(Joi.string().max(30)).optional(),
     availability: Joi.boolean().optional(),
-    image: Joi.string().uri().optional()
+    image: Joi.string().uri().optional(),
+    hasSizes: Joi.boolean().optional(),
+    sizes: Joi.alternatives().try(
+        Joi.object().pattern(
+            Joi.string(),
+            Joi.object({
+                name: Joi.string().required(),
+                price: Joi.number().positive().precision(2).required()
+            })
+        ),
+        Joi.valid(null)
+    ).optional().allow(null)
 });
 
 // Get all menu items for a business
@@ -104,20 +126,40 @@ router.get('/', async (req, res) => {
 
         const menuItems = await MenuItem.findAll({
             where,
-            order: [['createdAt', 'DESC']]
+            order: [['createdAt', 'DESC']],
+            // Use raw: false to get Sequelize instances (handles missing columns gracefully)
+            raw: false
+        });
+
+        // Convert to plain objects and ensure hasSizes and sizes are included
+        const itemsData = menuItems.map(item => {
+            const plainItem = item.toJSON ? item.toJSON() : item;
+            // Ensure hasSizes and sizes have default values if not present
+            if (plainItem.hasSizes === undefined) {
+                plainItem.hasSizes = false;
+            }
+            if (plainItem.sizes === undefined) {
+                plainItem.sizes = null;
+            }
+            return plainItem;
         });
 
         res.json({
             success: true,
-            data: menuItems,
-            count: menuItems.length
+            data: itemsData,
+            count: itemsData.length
         });
     } catch (error) {
         console.error('Error fetching menu items:', error);
+        console.error('Error details:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name
+        });
         res.status(500).json({
             success: false,
             error: 'Failed to fetch menu items',
-            message: error.message
+            message: error.message || 'An unexpected error occurred while fetching menu items'
         });
     }
 });
@@ -168,14 +210,35 @@ router.post('/', async (req, res) => {
             });
         }
 
+        // Log the incoming request for debugging
+        console.log('📝 Create menu item request body:', JSON.stringify(req.body, null, 2));
+
         // Validate input
-        const { error, value } = menuItemSchema.validate(req.body);
+        const { error, value } = menuItemSchema.validate(req.body, { abortEarly: false });
         if (error) {
+            console.error('❌ Validation error details:', JSON.stringify(error.details, null, 2));
             return res.status(400).json({
                 success: false,
                 error: 'Validation error',
+                message: error.details.map(d => d.message).join(', '),
                 details: error.details
             });
+        }
+
+        // Ensure hasSizes is always a boolean (default to false if not provided)
+        if (value.hasSizes === undefined || value.hasSizes === null) {
+            value.hasSizes = false;
+        }
+        value.hasSizes = Boolean(value.hasSizes);
+
+        // If hasSizes is false, ensure sizes is null
+        if (!value.hasSizes) {
+            value.sizes = null;
+        }
+        // If hasSizes is true but sizes is empty/null, set hasSizes to false
+        if (value.hasSizes && (!value.sizes || Object.keys(value.sizes).length === 0)) {
+            value.hasSizes = false;
+            value.sizes = null;
         }
 
         const menuItem = await MenuItem.create({
@@ -215,6 +278,7 @@ router.put('/:itemId', async (req, res) => {
 
         const { itemId } = req.params;
         console.log('📝 Update request - itemId:', itemId, 'ownerId:', ownerId);
+        console.log('📝 Update data received:', JSON.stringify(req.body, null, 2));
 
         // Validate input
         const { error, value } = updateMenuItemSchema.validate(req.body);
@@ -226,6 +290,26 @@ router.put('/:itemId', async (req, res) => {
                 details: error.details
             });
         }
+
+        // Ensure hasSizes is always a boolean if provided
+        if (value.hasSizes !== undefined && value.hasSizes !== null) {
+            value.hasSizes = Boolean(value.hasSizes);
+        }
+
+        // Ensure hasSizes is set correctly based on sizes
+        if (value.sizes === null || (typeof value.sizes === 'object' && Object.keys(value.sizes || {}).length === 0)) {
+            value.hasSizes = false;
+            value.sizes = null;
+        } else if (value.sizes && typeof value.sizes === 'object' && Object.keys(value.sizes).length > 0) {
+            value.hasSizes = true;
+        }
+
+        // If hasSizes is explicitly set to false, ensure sizes is null
+        if (value.hasSizes === false) {
+            value.sizes = null;
+        }
+
+        console.log('📝 Processed update data:', JSON.stringify(value, null, 2));
 
         const menuItem = await MenuItem.findOne({
             where: {
@@ -247,6 +331,12 @@ router.put('/:itemId', async (req, res) => {
         await menuItem.reload(); // Reload to get updated values
 
         console.log('✅ Menu item updated successfully:', menuItem.id);
+        console.log('✅ Updated item data:', JSON.stringify({
+            id: menuItem.id,
+            name: menuItem.name,
+            hasSizes: menuItem.hasSizes,
+            sizes: menuItem.sizes
+        }, null, 2));
         res.json({
             success: true,
             data: menuItem,

@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { motion } from 'framer-motion';
 import {
     ShoppingCart,
     CheckCircle,
-    //X,
     User
 } from 'lucide-react';
 
@@ -20,10 +19,14 @@ const OrderCart = ({
     finalTotal,
     onUpdateQuantity,
     onRemoveItem,
+    onRemoveSelectedItems,
     onClearOrder,
-    onSubmitOrder
+    onSubmitOrder,
+    selectedItemIds = new Set(),
+    onSelectItem
 }) => {
-    const [selectedItemId, setSelectedItemId] = useState(null);
+    // Ensure selectedItemIds is always a Set
+    const selectedIds = selectedItemIds instanceof Set ? selectedItemIds : new Set();
 
     // Use provided values or calculate defaults
     const displayTotal = total || 0;
@@ -33,17 +36,22 @@ const OrderCart = ({
     const displayTip = tip || 0;
     const displayFinalTotal = finalTotal || (displayTotal + displayTax);
 
-    const handleItemClick = (itemId) => {
-        setSelectedItemId(selectedItemId === itemId ? null : itemId);
-    };
-
-    const handleCancelItem = () => {
-        if (selectedItemId) {
-            onRemoveItem(selectedItemId);
-            setSelectedItemId(null);
+    const handleItemClick = (itemId, e) => {
+        e.stopPropagation();
+        if (onSelectItem) {
+            const newSet = new Set(selectedIds);
+            if (newSet.has(itemId)) {
+                newSet.delete(itemId);
+            } else {
+                newSet.add(itemId);
+            }
+            onSelectItem(newSet);
         }
     };
-    console.log('handleCancelItem', handleCancelItem);
+
+    const isSelected = (itemId) => {
+        return selectedIds.has(itemId);
+    };
 
     return (
         <div className="h-full flex flex-col bg-white">
@@ -92,28 +100,36 @@ const OrderCart = ({
                     </div>
                 ) : (
                     <div className="space-y-3">
-                        {order.map((item) => (
+                        {order.map((item, index) => {
+                            const itemSelected = isSelected(item.id);
+                            return (
                             <motion.div
                                 key={item.id}
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -20 }}
-                                onClick={() => handleItemClick(item.id)}
-                                className={`bg-gray-50 rounded-lg p-3 cursor-pointer transition-colors ${selectedItemId === item.id ? 'bg-blue-100 border-2 border-blue-500' : 'hover:bg-gray-100'
+                                    onClick={(e) => handleItemClick(item.id, e)}
+                                    className={`bg-gray-50 rounded-lg p-3 cursor-pointer transition-colors ${
+                                        itemSelected 
+                                            ? 'bg-blue-100 border-2 border-blue-500' 
+                                            : 'hover:bg-gray-100'
                                     }`}
                             >
                                 <div className="flex items-center justify-between">
-                                    <h4 className={`font-medium text-sm flex-1 ${selectedItemId === item.id ? 'text-blue-900' : 'text-gray-900'
+                                        <h4 className={`font-medium text-sm flex-1 ${
+                                            itemSelected ? 'text-blue-900' : 'text-gray-900'
                                         }`}>
                                         {item.name}
                                     </h4>
-                                    <span className={`font-semibold text-sm ${selectedItemId === item.id ? 'text-blue-900' : 'text-gray-900'
+                                        <span className={`font-semibold text-sm ${
+                                            itemSelected ? 'text-blue-900' : 'text-gray-900'
                                         }`}>
                                         ${(parseFloat(item.price || 0) * item.quantity).toFixed(2)}
                                     </span>
                                 </div>
                             </motion.div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>

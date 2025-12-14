@@ -132,6 +132,20 @@ const startServer = async () => {
         // Connect to PostgreSQL
         await connectDB();
 
+        // Run migration for menu item sizes FIRST (ensures hasSizes and sizes columns exist)
+        // This must run before Sequelize sync to avoid query errors
+        try {
+            const { migrateMenuItemSizes } = require('./scripts/migrate-menu-item-sizes');
+            await migrateMenuItemSizes();
+        } catch (migrationError) {
+            // Migration might fail if columns already exist, which is fine
+            if (!migrationError.message.includes('already exists') &&
+                !migrationError.message.includes('duplicate') &&
+                !migrationError.message.includes('does not exist')) {
+                console.warn('⚠️ Could not run menu item sizes migration:', migrationError.message);
+            }
+        }
+
         // Sync models (creates tables if they don't exist, alters if they do)
         await sequelize.sync({ alter: true });
         console.log('✅ Database models synchronized');

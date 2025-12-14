@@ -1,18 +1,20 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import {
-    Utensils,
     ShoppingBag,
     Home,
     Truck,
-    Send
+    Send,
+    Plus
 } from 'lucide-react';
 
 const OrderTypes = ({
     orderType,
     setOrderType,
     tableNumber,
-    setTableNumber
+    setTableNumber,
+    onSubmitOrder,
+    selectedCategory
 }) => {
     const orderTypes = [
         {
@@ -21,14 +23,6 @@ const OrderTypes = ({
             icon: ShoppingBag,
             color: 'bg-green-500',
         },
-        {
-            id: 'dine-in',
-            name: 'Dine In',
-            icon: Utensils,
-            color: 'bg-blue-500',
-
-        },
-
         {
             id: 'pickup',
             name: 'Pickup',
@@ -56,8 +50,10 @@ const OrderTypes = ({
         <div className="px-4 pt-1 pb-2 bg-white shadow-lg">
             {/* <h3 className="text-lg font-semibold text-gray-900 mb-4">Order Type</h3> */}
 
+            {/* Order Type Buttons with Add to Order button on the right */}
+            <div className="flex items-center gap-2">
             {/* Order Type Buttons */}
-            <div className="grid grid-cols-5 gap-2">
+                <div className="grid grid-cols-4 gap-2 flex-1">
                 {orderTypes.map((type) => {
                     const Icon = type.icon;
                     return (
@@ -78,21 +74,19 @@ const OrderTypes = ({
                 })}
             </div>
 
-            {/* Additional Inputs based on Order Type */}
-            {orderType === 'dine-in' && (
-                <div className="mt-3 mb-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Table Number
-                    </label>
-                    <input
-                        type="text"
-                        value={tableNumber}
-                        onChange={(e) => setTableNumber(e.target.value)}
-                        placeholder="Enter table number"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
+                {/* Add to Order Button - Positioned on the right */}
+                <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={onSubmitOrder}
+                    className="p-3 rounded-lg border-2 bg-blue-600 text-white border-transparent hover:bg-blue-700 transition-all flex items-center gap-2 whitespace-nowrap"
+                >
+                    <Plus className="w-6 h-6" />
+                    <p className="text-xs font-medium">
+                        {selectedCategory === 'modify' ? 'Add to Order' : 'Submit Order'}
+                    </p>
+                </motion.button>
                 </div>
-            )}
         </div>
     );
 };

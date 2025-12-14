@@ -8,7 +8,8 @@
         "dev": "nodemon server.js",
         "test": "jest --passWithNoTests",
         "lint": "eslint .",
-        "lint:fix": "eslint . --fix"
+        "lint:fix": "eslint . --fix",
+        "migrate:sizes": "node scripts/migrate-menu-item-sizes.js"
     },
     "keywords": [
         "pos",
