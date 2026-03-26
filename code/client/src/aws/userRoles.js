@@ -1,6 +1,7 @@
 // User Roles and Permissions Configuration
 export const USER_ROLES = {
     OWNER: 'owner',        // Business Owner - Full control over POS system
+    MANAGER: 'manager',    // Manager - Extended permissions for staff management
     EMPLOYEE: 'employee'   // Employee - Limited operational tasks
 };
 
@@ -42,6 +43,9 @@ export const PERMISSIONS = {
     CAN_MANAGE_RESTAURANT_DETAILS: 'canManageRestaurantDetails',
     CAN_MANAGE_PAYMENT_GATEWAY: 'canManagePaymentGateway',
     CAN_MANAGE_NOTIFICATION_SETTINGS: 'canManageNotificationSettings',
+
+    // Schedule Management
+    CAN_MANAGE_SCHEDULES: 'canManageSchedules',
 
     // Menu Interaction (Employee)
     CAN_VIEW_MENU_ITEMS: 'canViewMenuItems',
@@ -99,7 +103,61 @@ export const ROLE_PERMISSIONS = {
         [PERMISSIONS.CAN_NOTIFY_ITEM_UNAVAILABLE]: true,
 
         // Account Management
-        [PERMISSIONS.CAN_UPDATE_PERSONAL_DETAILS]: true
+        [PERMISSIONS.CAN_UPDATE_PERSONAL_DETAILS]: true,
+
+        // Schedule Management
+        [PERMISSIONS.CAN_MANAGE_SCHEDULES]: true
+    },
+    [USER_ROLES.MANAGER]: {
+        // Manager - Extended permissions for managing staff and operations
+
+        // User Management
+        [PERMISSIONS.CAN_CREATE_EMPLOYEE]: true,        // Add staff
+        [PERMISSIONS.CAN_EDIT_EMPLOYEE]: true,
+        [PERMISSIONS.CAN_DEACTIVATE_EMPLOYEE]: true,
+        [PERMISSIONS.CAN_VIEW_EMPLOYEE_ACTIVITY]: true,
+
+        // Menu Management
+        [PERMISSIONS.CAN_MANAGE_MENU_ITEMS]: true,       // Manage menu
+        [PERMISSIONS.CAN_MANAGE_MENU_CATEGORIES]: true,
+        [PERMISSIONS.CAN_TOGGLE_ITEM_AVAILABILITY]: true,
+
+        // Order Management
+        [PERMISSIONS.CAN_VIEW_ALL_ORDERS]: true,
+        [PERMISSIONS.CAN_UPDATE_ORDERS]: true,
+        [PERMISSIONS.CAN_CANCEL_ORDERS]: true,
+        [PERMISSIONS.CAN_TAKE_DINE_IN_ORDERS]: true,
+        [PERMISSIONS.CAN_HANDLE_ONLINE_ORDERS]: true,
+        [PERMISSIONS.CAN_UPDATE_ORDER_STATUS]: true,
+        [PERMISSIONS.CAN_GENERATE_BILLS]: true,
+
+        // Payment Management
+        [PERMISSIONS.CAN_VIEW_ALL_TRANSACTIONS]: true,
+        [PERMISSIONS.CAN_PROCESS_PAYMENTS]: true,
+        [PERMISSIONS.CAN_HANDLE_REFUNDS]: true,
+        [PERMISSIONS.CAN_MANAGE_TAX_RATES]: false,
+        [PERMISSIONS.CAN_MANAGE_DISCOUNTS]: false,
+        [PERMISSIONS.CAN_APPLY_DISCOUNTS]: true,
+
+        // Analytics & Reports
+        [PERMISSIONS.CAN_VIEW_SALES_ANALYTICS]: true,    // View analytics
+        [PERMISSIONS.CAN_VIEW_EMPLOYEE_PERFORMANCE]: true,
+        [PERMISSIONS.CAN_VIEW_REVENUE_BREAKDOWN]: true,
+
+        // System Configuration (Restricted - Owner only)
+        [PERMISSIONS.CAN_MANAGE_RESTAURANT_DETAILS]: false,  // Restricted
+        [PERMISSIONS.CAN_MANAGE_PAYMENT_GATEWAY]: false,
+        [PERMISSIONS.CAN_MANAGE_NOTIFICATION_SETTINGS]: false,
+
+        // Menu Interaction
+        [PERMISSIONS.CAN_VIEW_MENU_ITEMS]: true,
+        [PERMISSIONS.CAN_NOTIFY_ITEM_UNAVAILABLE]: true,
+
+        // Account Management
+        [PERMISSIONS.CAN_UPDATE_PERSONAL_DETAILS]: true,
+
+        // Schedule Management
+        [PERMISSIONS.CAN_MANAGE_SCHEDULES]: true         // Schedule management
     },
     [USER_ROLES.EMPLOYEE]: {
         // Employee - Limited operational tasks within the POS
@@ -147,7 +205,10 @@ export const ROLE_PERMISSIONS = {
         [PERMISSIONS.CAN_NOTIFY_ITEM_UNAVAILABLE]: true,
 
         // Account Management
-        [PERMISSIONS.CAN_UPDATE_PERSONAL_DETAILS]: true
+        [PERMISSIONS.CAN_UPDATE_PERSONAL_DETAILS]: true,
+
+        // Schedule Management
+        [PERMISSIONS.CAN_MANAGE_SCHEDULES]: false
     }
 };
 

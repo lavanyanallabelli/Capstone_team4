@@ -1,20 +1,89 @@
 const express = require('express');
 const Joi = require('joi');
-const { docClient } = require('../config/dynamodb');
+const { Setting, Owner, BusinessType } = require('../models');
 const { authorizePermission } = require('../middleware/auth');
+
+// Helper to get ownerId from request
+const getOwnerId = (req) => {
+    // ONLY use ownerId from cognitoSync middleware - it's the PostgreSQL UUID
+    if (req.user?.ownerId) {
+        return req.user.ownerId;
+    }
+    console.warn('⚠️ ownerId not set - cognitoSync middleware may have failed');
+    return null;
+};
+
+// SECURITY: Verify that ownerId belongs to the authenticated user's email
+const verifyOwnerEmail = async (req, ownerId) => {
+    if (!req.user?.email) {
+        console.error('🚨 SECURITY: No email in request user');
+        return { valid: false, error: 'Email not found in authentication token' };
+    }
+
+    if (!ownerId) {
+        console.error('🚨 SECURITY: No ownerId provided');
+        return { valid: false, error: 'Owner ID is required' };
+    }
+
+    const owner = await Owner.findByPk(ownerId);
+    if (!owner) {
+        console.error('🚨 SECURITY: Owner not found:', ownerId);
+        return { valid: false, error: 'Owner not found' };
+    }
+
+    // CRITICAL: Verify email matches
+    if (owner.email !== req.user.email) {
+        console.error('🚨 SECURITY ALERT: Email mismatch in settings access!', {
+            authenticatedEmail: req.user.email,
+            ownerEmail: owner.email,
+            ownerId: owner.id
+        });
+        return { valid: false, error: 'Access denied: Email mismatch' };
+    }
+
+    console.log('✅ Email verification passed:', {
+        authenticatedEmail: req.user.email,
+        ownerEmail: owner.email,
+        ownerId: owner.id
+    });
+
+    return { valid: true, owner };
+};
 
 const router = express.Router();
 
 // Validation schemas
 const generalSettingsSchema = Joi.object({
     restaurantName: Joi.string().min(1).max(100).required(),
-    businessType: Joi.string().valid('Restaurant', 'Cafe', 'Fast Food', 'Fine Dining', 'Bar').required(),
+    businessType: Joi.string().valid('Italian Restaurant', 'Chinese Restaurant', 'Indian Restaurant', 'Mexican Restaurant', 'Cafe').required(),
     address: Joi.string().max(200).required(),
     phone: Joi.string().pattern(/^\+?[\d\s\-\(\)]+$/).required(),
     email: Joi.string().email().required(),
-    website: Joi.string().uri().optional(),
-    description: Joi.string().max(500).optional(),
-    logo: Joi.string().uri().optional()
+    website: Joi.string().allow('', null).custom((value, helpers) => {
+        // If empty or null, allow it
+        if (!value || value.trim() === '') {
+            return value;
+        }
+        // If not empty, validate as URI
+        const uriPattern = /^https?:\/\/.+/;
+        if (!uriPattern.test(value)) {
+            return helpers.error('string.uri');
+        }
+        return value;
+    }).optional(),
+    description: Joi.string().max(500).allow('', null).optional(),
+    logo: Joi.string().allow('', null).custom((value, helpers) => {
+        // If empty or null, allow it
+        if (!value || value.trim() === '') {
+            return value;
+        }
+        // If not empty, validate as URI
+        const uriPattern = /^https?:\/\/.+/;
+        if (!uriPattern.test(value)) {
+            return helpers.error('string.uri');
+        }
+        return value;
+    }).optional()
 });
 
 const hoursSettingsSchema = Joi.object({
@@ -77,17 +146,37 @@ const notificationSettingsSchema = Joi.object({
 // Get all settings
 router.get('/', authorizePermission('canManageRestaurantDetails'), async (req, res) => {
     try {
-        const { businessId } = req.user;
+        console.log('⚙️ GET /api/settings - Fetching settings');
+        console.log('🔍 Request user info:', {
+            email: req.user?.email,
+            ownerId: req.user?.ownerId
+        });
 
-        const params = {
-            TableName: 'pos-settings',
-            KeyConditionExpression: 'businessId = :businessId',
-            ExpressionAttributeValues: {
-                ':businessId': businessId
-            }
-        };
+        const ownerId = getOwnerId(req);
 
-        const result = await docClient.query(params).promise();
+        if (!ownerId) {
+            console.error('❌ No ownerId in request');
+            return res.status(401).json({
+                success: false,
+                error: 'Unauthorized',
+                message: 'Owner ID is required'
+            });
+        }
+
+        // SECURITY: Verify ownerId belongs to authenticated email
+        const verification = await verifyOwnerEmail(req, ownerId);
+        if (!verification.valid) {
+            console.error('🚨 SECURITY: Email verification failed:', verification.error);
+            return res.status(403).json({
+                success: false,
+                error: 'Access denied',
+                message: verification.error || 'You do not have permission to access these settings'
+            });
+        }
+
+        const settingsData = await Setting.findAll({
+            where: { ownerId }
+        });
 
         // Organize settings by type
         const settings = {
@@ -97,8 +186,14 @@ router.get('/', authorizePermission('canManageRestaurantDetails'), async (req, r
             notifications: null
         };
 
-        result.Items.forEach(item => {
+        settingsData.forEach(item => {
             settings[item.settingType] = item.data;
+        });
+
+        console.log('✅ Settings fetched successfully for owner:', {
+            ownerId,
+            email: req.user.email,
+            settingsCount: settingsData.length
         });
 
         res.json({
@@ -106,7 +201,7 @@ router.get('/', authorizePermission('canManageRestaurantDetails'), async (req, r
             data: settings
         });
     } catch (error) {
-        console.error('Error fetching settings:', error);
+        console.error('❌ Error fetching settings:', error);
         res.status(500).json({
             success: false,
             error: 'Failed to fetch settings',
@@ -118,8 +213,34 @@ router.get('/', authorizePermission('canManageRestaurantDetails'), async (req, r
 // Get specific setting type
 router.get('/:settingType', authorizePermission('canManageRestaurantDetails'), async (req, res) => {
     try {
-        const { businessId } = req.user;
+        console.log('⚙️ GET /api/settings/:settingType - Fetching setting:', req.params.settingType);
+        console.log('🔍 Request user info:', {
+            email: req.user?.email,
+            ownerId: req.user?.ownerId
+        });
+
+        const ownerId = getOwnerId(req);
         const { settingType } = req.params;
+
+        if (!ownerId) {
+            console.error('❌ No ownerId in request');
+            return res.status(401).json({
+                success: false,
+                error: 'Unauthorized',
+                message: 'Owner ID is required'
+            });
+        }
+
+        // SECURITY: Verify ownerId belongs to authenticated email
+        const verification = await verifyOwnerEmail(req, ownerId);
+        if (!verification.valid) {
+            console.error('🚨 SECURITY: Email verification failed:', verification.error);
+            return res.status(403).json({
+                success: false,
+                error: 'Access denied',
+                message: verification.error || 'You do not have permission to access these settings'
+            });
+        }
 
         const validTypes = ['general', 'hours', 'payment', 'notifications'];
         if (!validTypes.includes(settingType)) {
@@ -130,17 +251,14 @@ router.get('/:settingType', authorizePermission('canManageRestaurantDetails'), a
             });
         }
 
-        const params = {
-            TableName: 'pos-settings',
-            Key: {
-                businessId,
+        const setting = await Setting.findOne({
+            where: {
+                ownerId,
                 settingType
             }
-        };
+        });
 
-        const result = await docClient.get(params).promise();
-
-        if (!result.Item) {
+        if (!setting) {
             return res.status(404).json({
                 success: false,
                 error: 'Settings not found',
@@ -148,12 +266,18 @@ router.get('/:settingType', authorizePermission('canManageRestaurantDetails'), a
             });
         }
 
+        console.log('✅ Setting fetched successfully:', {
+            settingType,
+            ownerId,
+            email: req.user.email
+        });
+
         res.json({
             success: true,
-            data: result.Item.data
+            data: setting.data
         });
     } catch (error) {
-        console.error('Error fetching setting:', error);
+        console.error('❌ Error fetching setting:', error);
         res.status(500).json({
             success: false,
             error: 'Failed to fetch setting',
@@ -165,7 +289,33 @@ router.get('/:settingType', authorizePermission('canManageRestaurantDetails'), a
 // Update general settings
 router.put('/general', authorizePermission('canManageRestaurantDetails'), async (req, res) => {
     try {
-        const { businessId } = req.user;
+        console.log('⚙️ PUT /api/settings/general - Updating general settings');
+        console.log('🔍 Request user info:', {
+            email: req.user?.email,
+            ownerId: req.user?.ownerId
+        });
+
+        const ownerId = getOwnerId(req);
+
+        if (!ownerId) {
+            console.error('❌ No ownerId in request');
+            return res.status(401).json({
+                success: false,
+                error: 'Unauthorized',
+                message: 'Owner ID is required'
+            });
+        }
+
+        // SECURITY: Verify ownerId belongs to authenticated email
+        const verification = await verifyOwnerEmail(req, ownerId);
+        if (!verification.valid) {
+            console.error('🚨 SECURITY: Email verification failed:', verification.error);
+            return res.status(403).json({
+                success: false,
+                error: 'Access denied',
+                message: verification.error || 'You do not have permission to update these settings'
+            });
+        }
 
         // Validate input
         const { error, value } = generalSettingsSchema.validate(req.body);
@@ -177,32 +327,35 @@ router.put('/general', authorizePermission('canManageRestaurantDetails'), async 
             });
         }
 
-        const params = {
-            TableName: 'pos-settings',
-            Key: {
-                businessId,
+        const [setting] = await Setting.findOrCreate({
+            where: {
+                ownerId,
                 settingType: 'general'
             },
-            UpdateExpression: 'SET #data = :data, updatedAt = :updatedAt',
-            ExpressionAttributeNames: {
-                '#data': 'data'
-            },
-            ExpressionAttributeValues: {
-                ':data': value,
-                ':updatedAt': new Date().toISOString()
-            },
-            ReturnValues: 'ALL_NEW'
-        };
+            defaults: {
+                ownerId,
+                settingType: 'general',
+                data: value
+            }
+        });
 
-        const result = await docClient.update(params).promise();
+        if (!setting.isNewRecord) {
+            setting.data = value;
+            await setting.save();
+        }
+
+        console.log('✅ General settings updated successfully for owner:', {
+            ownerId,
+            email: req.user.email
+        });
 
         res.json({
             success: true,
-            data: result.Attributes.data,
+            data: setting.data,
             message: 'General settings updated successfully'
         });
     } catch (error) {
-        console.error('Error updating general settings:', error);
+        console.error('❌ Error updating general settings:', error);
         res.status(500).json({
             success: false,
             error: 'Failed to update general settings',
@@ -214,7 +367,33 @@ router.put('/general', authorizePermission('canManageRestaurantDetails'), async 
 // Update hours settings
 router.put('/hours', authorizePermission('canManageRestaurantDetails'), async (req, res) => {
     try {
-        const { businessId } = req.user;
+        console.log('⚙️ PUT /api/settings/hours - Updating hours settings');
+        console.log('🔍 Request user info:', {
+            email: req.user?.email,
+            ownerId: req.user?.ownerId
+        });
+
+        const ownerId = getOwnerId(req);
+
+        if (!ownerId) {
+            console.error('❌ No ownerId in request');
+            return res.status(401).json({
+                success: false,
+                error: 'Unauthorized',
+                message: 'Owner ID is required'
+            });
+        }
+
+        // SECURITY: Verify ownerId belongs to authenticated email
+        const verification = await verifyOwnerEmail(req, ownerId);
+        if (!verification.valid) {
+            console.error('🚨 SECURITY: Email verification failed:', verification.error);
+            return res.status(403).json({
+                success: false,
+                error: 'Access denied',
+                message: verification.error || 'You do not have permission to update these settings'
+            });
+        }
 
         // Validate input
         const { error, value } = hoursSettingsSchema.validate(req.body);
@@ -226,32 +405,35 @@ router.put('/hours', authorizePermission('canManageRestaurantDetails'), async (r
             });
         }
 
-        const params = {
-            TableName: 'pos-settings',
-            Key: {
-                businessId,
+        const [setting] = await Setting.findOrCreate({
+            where: {
+                ownerId,
                 settingType: 'hours'
             },
-            UpdateExpression: 'SET #data = :data, updatedAt = :updatedAt',
-            ExpressionAttributeNames: {
-                '#data': 'data'
-            },
-            ExpressionAttributeValues: {
-                ':data': value,
-                ':updatedAt': new Date().toISOString()
-            },
-            ReturnValues: 'ALL_NEW'
-        };
+            defaults: {
+                ownerId,
+                settingType: 'hours',
+                data: value
+            }
+        });
 
-        const result = await docClient.update(params).promise();
+        if (!setting.isNewRecord) {
+            setting.data = value;
+            await setting.save();
+        }
+
+        console.log('✅ Hours settings updated successfully for owner:', {
+            ownerId,
+            email: req.user.email
+        });
 
         res.json({
             success: true,
-            data: result.Attributes.data,
+            data: setting.data,
             message: 'Hours settings updated successfully'
         });
     } catch (error) {
-        console.error('Error updating hours settings:', error);
+        console.error('❌ Error updating hours settings:', error);
         res.status(500).json({
             success: false,
             error: 'Failed to update hours settings',
@@ -263,7 +445,33 @@ router.put('/hours', authorizePermission('canManageRestaurantDetails'), async (r
 // Update payment settings
 router.put('/payment', authorizePermission('canManagePaymentGateway'), async (req, res) => {
     try {
-        const { businessId } = req.user;
+        console.log('⚙️ PUT /api/settings/payment - Updating payment settings');
+        console.log('🔍 Request user info:', {
+            email: req.user?.email,
+            ownerId: req.user?.ownerId
+        });
+
+        const ownerId = getOwnerId(req);
+
+        if (!ownerId) {
+            console.error('❌ No ownerId in request');
+            return res.status(401).json({
+                success: false,
+                error: 'Unauthorized',
+                message: 'Owner ID is required'
+            });
+        }
+
+        // SECURITY: Verify ownerId belongs to authenticated email
+        const verification = await verifyOwnerEmail(req, ownerId);
+        if (!verification.valid) {
+            console.error('🚨 SECURITY: Email verification failed:', verification.error);
+            return res.status(403).json({
+                success: false,
+                error: 'Access denied',
+                message: verification.error || 'You do not have permission to update these settings'
+            });
+        }
 
         // Validate input
         const { error, value } = paymentSettingsSchema.validate(req.body);
@@ -275,32 +483,35 @@ router.put('/payment', authorizePermission('canManagePaymentGateway'), async (re
             });
         }
 
-        const params = {
-            TableName: 'pos-settings',
-            Key: {
-                businessId,
+        const [setting] = await Setting.findOrCreate({
+            where: {
+                ownerId,
                 settingType: 'payment'
             },
-            UpdateExpression: 'SET #data = :data, updatedAt = :updatedAt',
-            ExpressionAttributeNames: {
-                '#data': 'data'
-            },
-            ExpressionAttributeValues: {
-                ':data': value,
-                ':updatedAt': new Date().toISOString()
-            },
-            ReturnValues: 'ALL_NEW'
-        };
+            defaults: {
+                ownerId,
+                settingType: 'payment',
+                data: value
+            }
+        });
 
-        const result = await docClient.update(params).promise();
+        if (!setting.isNewRecord) {
+            setting.data = value;
+            await setting.save();
+        }
+
+        console.log('✅ Payment settings updated successfully for owner:', {
+            ownerId,
+            email: req.user.email
+        });
 
         res.json({
             success: true,
-            data: result.Attributes.data,
+            data: setting.data,
             message: 'Payment settings updated successfully'
         });
     } catch (error) {
-        console.error('Error updating payment settings:', error);
+        console.error('❌ Error updating payment settings:', error);
         res.status(500).json({
             success: false,
             error: 'Failed to update payment settings',
@@ -312,7 +523,33 @@ router.put('/payment', authorizePermission('canManagePaymentGateway'), async (re
 // Update notification settings
 router.put('/notifications', authorizePermission('canManageNotificationSettings'), async (req, res) => {
     try {
-        const { businessId } = req.user;
+        console.log('⚙️ PUT /api/settings/notifications - Updating notification settings');
+        console.log('🔍 Request user info:', {
+            email: req.user?.email,
+            ownerId: req.user?.ownerId
+        });
+
+        const ownerId = getOwnerId(req);
+
+        if (!ownerId) {
+            console.error('❌ No ownerId in request');
+            return res.status(401).json({
+                success: false,
+                error: 'Unauthorized',
+                message: 'Owner ID is required'
+            });
+        }
+
+        // SECURITY: Verify ownerId belongs to authenticated email
+        const verification = await verifyOwnerEmail(req, ownerId);
+        if (!verification.valid) {
+            console.error('🚨 SECURITY: Email verification failed:', verification.error);
+            return res.status(403).json({
+                success: false,
+                error: 'Access denied',
+                message: verification.error || 'You do not have permission to update these settings'
+            });
+        }
 
         // Validate input
         const { error, value } = notificationSettingsSchema.validate(req.body);
@@ -324,32 +561,35 @@ router.put('/notifications', authorizePermission('canManageNotificationSettings'
             });
         }
 
-        const params = {
-            TableName: 'pos-settings',
-            Key: {
-                businessId,
+        const [setting] = await Setting.findOrCreate({
+            where: {
+                ownerId,
                 settingType: 'notifications'
             },
-            UpdateExpression: 'SET #data = :data, updatedAt = :updatedAt',
-            ExpressionAttributeNames: {
-                '#data': 'data'
-            },
-            ExpressionAttributeValues: {
-                ':data': value,
-                ':updatedAt': new Date().toISOString()
-            },
-            ReturnValues: 'ALL_NEW'
-        };
+            defaults: {
+                ownerId,
+                settingType: 'notifications',
+                data: value
+            }
+        });
 
-        const result = await docClient.update(params).promise();
+        if (!setting.isNewRecord) {
+            setting.data = value;
+            await setting.save();
+        }
+
+        console.log('✅ Notification settings updated successfully for owner:', {
+            ownerId,
+            email: req.user.email
+        });
 
         res.json({
             success: true,
-            data: result.Attributes.data,
+            data: setting.data,
             message: 'Notification settings updated successfully'
         });
     } catch (error) {
-        console.error('Error updating notification settings:', error);
+        console.error('❌ Error updating notification settings:', error);
         res.status(500).json({
             success: false,
             error: 'Failed to update notification settings',
@@ -361,13 +601,13 @@ router.put('/notifications', authorizePermission('canManageNotificationSettings'
 // Initialize default settings for a business
 router.post('/initialize', authorizePermission('canManageRestaurantDetails'), async (req, res) => {
     try {
-        const { businessId } = req.user;
+        const ownerId = getOwnerId(req);
 
         // Default settings
         const defaultSettings = {
             general: {
                 restaurantName: 'My Restaurant',
-                businessType: 'Restaurant',
+                businessType: 'Italian Restaurant',
                 address: '',
                 phone: '',
                 email: '',
@@ -405,22 +645,14 @@ router.post('/initialize', authorizePermission('canManageRestaurantDetails'), as
 
         // Create settings items
         const settingsItems = Object.entries(defaultSettings).map(([settingType, data]) => ({
-            TableName: 'pos-settings',
-            Item: {
-                businessId,
-                settingType,
-                data,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-            }
+            ownerId,
+            settingType,
+            data
         }));
 
-        // Batch write settings
-        const batchWritePromises = settingsItems.map(item =>
-            docClient.put(item).promise()
-        );
-
-        await Promise.all(batchWritePromises);
+        await Setting.bulkCreate(settingsItems, {
+            updateOnDuplicate: ['data', 'updatedAt']
+        });
 
         res.status(201).json({
             success: true,
@@ -503,6 +735,28 @@ router.post('/notifications/test', authorizePermission('canManageNotificationSet
         res.status(500).json({
             success: false,
             error: 'Failed to send test notification',
+            message: error.message
+        });
+    }
+});
+
+// Get all business types
+router.get('/business-types', async (req, res) => {
+    try {
+        const businessTypes = await BusinessType.findAll({
+            order: [['typename', 'ASC']],
+            attributes: ['businesstypeid', 'typename']
+        });
+
+        res.json({
+            success: true,
+            data: businessTypes
+        });
+    } catch (error) {
+        console.error('❌ Error fetching business types:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch business types',
             message: error.message
         });
     }

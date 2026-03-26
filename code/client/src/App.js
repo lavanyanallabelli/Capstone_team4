@@ -5,8 +5,10 @@ import Homepage from './components/Homepage';
 import Dashboard from './components/Dashboard';
 import EmployeeManagement from './components/EmployeeManagement';
 import MenuManagement from './components/MenuManagement';
+import MenuItemAvailabilitySchedule from './components/MenuItemAvailabilitySchedule';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import RestaurantSettings from './components/RestaurantSettings';
+import ScheduleManagement from './components/ScheduleManagement';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import PricingPage from './pages/PricingPage';
@@ -14,9 +16,11 @@ import AboutPage from './pages/AboutPage';
 import ContactPage from './pages/ContactPage';
 import POSPage from './pages/POSPage';
 import EmployeeLoginPage from './pages/EmployeeLoginPage';
+import TrialExpiredPage from './pages/TrialExpiredPage';
 import EmailVerification from './components/auth/EmailVerification';
 import ResetPasswordConfirm from './components/auth/ResetPasswordConfirm';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import ReactivateAccount from './components/auth/ReactivateAccount';
 import ProtectedRoute from './components/ProtectedRoute';
 import './App.css';
 
@@ -28,6 +32,7 @@ function App() {
                     <Routes>
                         <Route path="/" element={<Homepage />} />
                         <Route path="/pricing" element={<PricingPage />} />
+                        <Route path="/trial-expired" element={<TrialExpiredPage />} />
                         <Route path="/about" element={<AboutPage />} />
                         <Route path="/contact" element={<ContactPage />} />
                         <Route path="/login" element={<LoginPage />} />
@@ -36,6 +41,7 @@ function App() {
                         <Route path="/verify-email" element={<EmailVerification />} />
                         <Route path="/reset-password" element={<ResetPasswordPage />} />
                         <Route path="/reset-password-confirm" element={<ResetPasswordConfirm />} />
+                        <Route path="/reactivate-account" element={<ReactivateAccount />} />
                         <Route
                             path="/dashboard"
                             element={
@@ -49,6 +55,14 @@ function App() {
                             element={
                                 <ProtectedRoute>
                                     <EmployeeManagement />
+                                </ProtectedRoute>
+                            }
+                        />
+                        <Route
+                            path="/schedules"
+                            element={
+                                <ProtectedRoute>
+                                    <ScheduleManagement />
                                 </ProtectedRoute>
                             }
                         />
@@ -78,6 +92,14 @@ function App() {
                             element={
                                 <ProtectedRoute>
                                     <MenuManagement />
+                                </ProtectedRoute>
+                            }
+                        />
+                        <Route
+                            path="/menu/availability"
+                            element={
+                                <ProtectedRoute>
+                                    <MenuItemAvailabilitySchedule />
                                 </ProtectedRoute>
                             }
                         />

@@ -3,7 +3,10 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const dotenv = require('dotenv');
-const AWS = require('aws-sdk');
+
+// Import database
+const { connectDB, sequelize } = require('./config/database');
+const models = require('./models');
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -12,9 +15,15 @@ const employeeRoutes = require('./routes/employees');
 const analyticsRoutes = require('./routes/analytics-simple');
 const settingsRoutes = require('./routes/settings');
 const orderRoutes = require('./routes/orders');
+const ownerRoutes = require('./routes/owner');
+const scheduleRoutes = require('./routes/schedules');
+const subscriptionRoutes = require('./routes/subscription');
+const doordashRoutes = require('./routes/doordash');
+const posBlocksRoutes = require('./routes/posBlocks');
 
 // Import middleware
 const { authenticateToken } = require('./middleware/auth');
+const { syncCognitoUserToOwner } = require('./middleware/cognitoSync');
 
 // Load environment variables
 dotenv.config();
@@ -23,25 +32,38 @@ const app = express();
 const PORT = process.env.PORT || 8000;
 const HOST = '0.0.0.0'; // allow external traffic
 
-// Configure AWS
-console.log('🔧 AWS Configuration:');
-console.log('   Region:', process.env.AWS_REGION || 'us-east-1');
-console.log('   Access Key ID:', process.env.AWS_ACCESS_KEY_ID ? 'Set' : 'Not set');
-console.log('   Secret Access Key:', process.env.AWS_SECRET_ACCESS_KEY ? 'Set' : 'Not set');
-
-AWS.config.update({
-    region: process.env.AWS_REGION || 'us-east-1',
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-});
-
-// Initialize DynamoDB
-const dynamodb = new AWS.DynamoDB.DocumentClient();
-
+// Startup debug logs (non-sensitive)
+// console.log('=== Startup Configuration ===');
+// console.log('NODE_ENV:', process.env.NODE_ENV);
+// console.log('PORT:', PORT);
+// console.log('FRONTEND_URL:', process.env.FRONTEND_URL);
+// console.log('DB_HOST:', (process.env.DB_HOST || '').replace(/^(..).*(..$)/, '$1***$2')); // mask
+// console.log('DB_NAME:', process.env.DB_NAME);
+// console.log('AWS_REGION:', process.env.AWS_REGION);
+// console.log('JWKS_URI set:', Boolean(process.env.JWKS_URI));
+// console.log('============================');
+// 
 // Middleware
 app.use(helmet());
+
+// CORS Configuration - Read from environment variables
+// CORS_ORIGINS can be a comma-separated string or JSON array string
+// Example: "http://localhost:3000,http://3.87.100.22:3000,http://54.196.161.29:3001"
+// Or: '["http://localhost:3000","http://3.87.100.22:3000","http://54.196.161.29:3001"]'
+let corsOrigins = ['http://localhost:3000']; // Default fallback
+if (process.env.CORS_ORIGINS) {
+    try {
+        // Try parsing as JSON array first
+        corsOrigins = JSON.parse(process.env.CORS_ORIGINS);
+    } catch (e) {
+        // If not JSON, treat as comma-separated string
+        corsOrigins = process.env.CORS_ORIGINS.split(',').map(origin => origin.trim());
+    }
+}
+console.log('🌐 CORS Origins configured:', corsOrigins);
+
 app.use(cors({
-    origin: ['http://localhost:3000', 'http://3.85.243.29:3000'],
+    origin: corsOrigins,
     credentials: true
 }));
 app.use(morgan('combined'));
@@ -59,11 +81,17 @@ app.get('/health', (req, res) => {
 
 // API Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/menu', menuRoutes); // Temporarily disabled auth for testing
-app.use('/api/employees', employeeRoutes); // Temporarily disabled auth for testing
-app.use('/api/analytics', analyticsRoutes); // Temporarily disabled auth for testing
-app.use('/api/settings', settingsRoutes); // Temporarily disabled auth for testing
-app.use('/api/orders', orderRoutes); // POS orders
+// Apply authentication and Cognito sync middleware to protected routes
+app.use('/api/menu', authenticateToken, syncCognitoUserToOwner, menuRoutes);
+app.use('/api/employees', authenticateToken, syncCognitoUserToOwner, employeeRoutes);
+app.use('/api/analytics', authenticateToken, syncCognitoUserToOwner, analyticsRoutes);
+app.use('/api/settings', authenticateToken, syncCognitoUserToOwner, settingsRoutes);
+app.use('/api/orders', authenticateToken, syncCognitoUserToOwner, orderRoutes);
+app.use('/api/owner', authenticateToken, syncCognitoUserToOwner, ownerRoutes);
+app.use('/api/schedules', authenticateToken, syncCognitoUserToOwner, scheduleRoutes);
+app.use('/api/pos-blocks', authenticateToken, syncCognitoUserToOwner, posBlocksRoutes);
+app.use('/api/subscription', subscriptionRoutes);
+app.use('/api/doordash', doordashRoutes); // No auth required - webhook endpoint
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -98,11 +126,65 @@ app.use('*', (req, res) => {
     });
 });
 
-// Start server
-app.listen(PORT, HOST, () => {
-    console.log(`🚀 Server running on http://${HOST}:${PORT}`);
-    console.log(`📊 Health check: http://${HOST}:${PORT}/health`);
-    console.log(`🔗 API Base URL: http://${HOST}:${PORT}/api`);
+// Initialize database and start server
+const startServer = async () => {
+    try {
+        // Connect to PostgreSQL
+        await connectDB();
+
+        // Run migration for menu item sizes FIRST (ensures hasSizes and sizes columns exist)
+        // This must run before Sequelize sync to avoid query errors
+        try {
+            const { migrateMenuItemSizes } = require('./scripts/migrate-menu-item-sizes');
+            await migrateMenuItemSizes();
+        } catch (migrationError) {
+            // Migration might fail if columns already exist, which is fine
+            if (!migrationError.message.includes('already exists') &&
+                !migrationError.message.includes('duplicate') &&
+                !migrationError.message.includes('does not exist')) {
+                console.warn('⚠️ Could not run menu item sizes migration:', migrationError.message);
+            }
+        }
+
+        // Sync models (creates tables if they don't exist, alters if they do)
+        await sequelize.sync({ alter: true });
+        console.log('✅ Database models synchronized');
+
+        // Add unique index for employeeId after column is created
+        try {
+            await sequelize.query(`
+                CREATE UNIQUE INDEX IF NOT EXISTS "employees_employee_id_unique" 
+                ON "employees" ("employeeId") 
+                WHERE "employeeId" IS NOT NULL;
+            `);
+            console.log('✅ Employee ID unique index created');
+        } catch (indexError) {
+            // Index might already exist, which is fine
+            if (!indexError.message.includes('already exists')) {
+                console.warn('⚠️ Could not create employeeId index:', indexError.message);
+            }
+        }
+
+        // Start server
+        app.listen(PORT, HOST, () => {
+            console.log(`🚀 Server running on http://${HOST}:${PORT}`);
+            console.log(`📊 Health check: http://${HOST}:${PORT}/health`);
+            console.log(`🔗 API Base URL: http://${HOST}:${PORT}/api`);
+        });
+    } catch (error) {
+        console.error('❌ Failed to start server:', error);
+        process.exit(1);
+    }
+};
+
+// Global error handlers for more debug info
+process.on('unhandledRejection', (reason) => {
+    console.error('UNHANDLED_REJECTION:', reason);
+});
+process.on('uncaughtException', (err) => {
+    console.error('UNCAUGHT_EXCEPTION:', err);
 });
 
-module.exports = { app, dynamodb };
+startServer();
+
+module.exports = { app, sequelize };

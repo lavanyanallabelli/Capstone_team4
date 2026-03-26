@@ -1,11 +1,11 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import {
-    Utensils,
     ShoppingBag,
+    Home,
     Truck,
-    Coffee,
-    Home
+    Send,
+    Plus
 } from 'lucide-react';
 
 const OrderTypes = ({
@@ -13,53 +13,47 @@ const OrderTypes = ({
     setOrderType,
     tableNumber,
     setTableNumber,
-    customerName,
-    setCustomerName
+    onSubmitOrder,
+    selectedCategory
 }) => {
     const orderTypes = [
-        {
-            id: 'dine-in',
-            name: 'Dine In',
-            icon: Utensils,
-            color: 'bg-blue-500',
-            description: 'Customer dining in restaurant'
-        },
         {
             id: 'to-go',
             name: 'To Go',
             icon: ShoppingBag,
             color: 'bg-green-500',
-            description: 'Takeout order'
-        },
-        {
-            id: 'delivery',
-            name: 'Delivery',
-            icon: Truck,
-            color: 'bg-purple-500',
-            description: 'Home delivery'
-        },
-        {
-            id: 'drive-thru',
-            name: 'Drive Thru',
-            icon: Coffee,
-            color: 'bg-orange-500',
-            description: 'Drive through service'
         },
         {
             id: 'pickup',
             name: 'Pickup',
             icon: Home,
             color: 'bg-pink-500',
-            description: 'Customer pickup'
+
+        },
+        {
+            id: 'delivery',
+            name: 'Delivery',
+            icon: Truck,
+            color: 'bg-purple-500',
+
+        },
+        {
+            id: 'send-order',
+            name: 'Send Order',
+            icon: Send,
+            color: 'bg-orange-500',
+
         }
     ];
 
     return (
-        <div className="p-4 bg-white border-b">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Order Type</h3>
+        <div className="px-4 pt-1 pb-2 bg-white shadow-lg">
+            {/* <h3 className="text-lg font-semibold text-gray-900 mb-4">Order Type</h3> */}
 
+            {/* Order Type Buttons with Add to Order button on the right */}
+            <div className="flex items-center gap-2">
             {/* Order Type Buttons */}
-            <div className="grid grid-cols-5 gap-2 mb-4">
+                <div className="grid grid-cols-4 gap-2 flex-1">
                 {orderTypes.map((type) => {
                     const Icon = type.icon;
                     return (
@@ -69,8 +63,8 @@ const OrderTypes = ({
                             whileTap={{ scale: 0.98 }}
                             onClick={() => setOrderType(type.id)}
                             className={`p-3 rounded-lg border-2 transition-all ${orderType === type.id
-                                    ? `${type.color} text-white border-transparent`
-                                    : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
+                                ? `${type.color} text-white border-transparent`
+                                : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
                                 }`}
                         >
                             <Icon className="w-6 h-6 mx-auto mb-1" />
@@ -80,58 +74,19 @@ const OrderTypes = ({
                 })}
             </div>
 
-            {/* Additional Inputs based on Order Type */}
-            <div className="space-y-3">
-                {orderType === 'dine-in' && (
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Table Number
-                        </label>
-                        <input
-                            type="text"
-                            value={tableNumber}
-                            onChange={(e) => setTableNumber(e.target.value)}
-                            placeholder="Enter table number"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                    </div>
-                )}
-
-                {orderType === 'delivery' && (
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Customer Name
-                        </label>
-                        <input
-                            type="text"
-                            value={customerName}
-                            onChange={(e) => setCustomerName(e.target.value)}
-                            placeholder="Enter customer name"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                    </div>
-                )}
-
-                {orderType === 'pickup' && (
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Customer Name
-                        </label>
-                        <input
-                            type="text"
-                            value={customerName}
-                            onChange={(e) => setCustomerName(e.target.value)}
-                            placeholder="Enter customer name"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                    </div>
-                )}
-
-                {/* Order Type Description */}
-                <div className="text-sm text-gray-600 bg-gray-50 p-2 rounded-lg">
-                    {orderTypes.find(type => type.id === orderType)?.description}
+                {/* Add to Order Button - Positioned on the right */}
+                <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={onSubmitOrder}
+                    className="p-3 rounded-lg border-2 bg-blue-600 text-white border-transparent hover:bg-blue-700 transition-all flex items-center gap-2 whitespace-nowrap"
+                >
+                    <Plus className="w-6 h-6" />
+                    <p className="text-xs font-medium">
+                        {selectedCategory === 'modify' ? 'Add to Order' : 'Submit Order'}
+                    </p>
+                </motion.button>
                 </div>
-            </div>
         </div>
     );
 };

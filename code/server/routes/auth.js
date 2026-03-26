@@ -1,9 +1,11 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const Joi = require('joi');
-const { docClient } = require('../config/dynamodb');
+const { Owner, Employee } = require('../models');
+const { sendReactivationEmail } = require('../services/emailService');
 
 const router = express.Router();
 
@@ -19,7 +21,13 @@ const registerSchema = Joi.object({
     email: Joi.string().email().required(),
     password: Joi.string().min(6).required(),
     businessName: Joi.string().min(1).max(100).required(),
-    businessType: Joi.string().valid('Restaurant', 'Cafe', 'Fast Food', 'Fine Dining', 'Bar').required(),
+    businessType: Joi.string().valid(
+        // Frontend form values (lowercase with spaces or short forms)
+        'italian restaurant', 'chinese restaurant', 'indian restaurant', 'mexican restaurant', 'cafe',
+        'italian', 'chinese', 'indian', 'mexican',
+        // Backend enum values
+        'Italian Restaurant', 'Chinese Restaurant', 'Indian Restaurant', 'Mexican Restaurant', 'Cafe'
+    ).required(),
     phone: Joi.string().pattern(/^\+?[\d\s\-\(\)]+$/).required()
 });
 
@@ -41,20 +49,33 @@ router.post('/register', async (req, res) => {
             });
         }
 
-        const { firstName, lastName, email, password, businessName, businessType, phone } = value;
+        const { firstName, lastName, email, password, businessName, businessType: rawBusinessType, phone } = value;
 
-        // Check if user already exists
-        const existingUserParams = {
-            TableName: 'pos-users',
-            IndexName: 'email-index',
-            KeyConditionExpression: 'email = :email',
-            ExpressionAttributeValues: {
-                ':email': email
-            }
+        // Map frontend business type values to backend enum values
+        // Both CTA and SignupForm send: "italian restaurant", "chinese restaurant", "indian restaurant", "mexican restaurant", "cafe"
+        const businessTypeMap = {
+            // Full form values (lowercase with spaces)
+            'italian restaurant': 'Italian Restaurant',
+            'chinese restaurant': 'Chinese Restaurant',
+            'indian restaurant': 'Indian Restaurant',
+            'mexican restaurant': 'Mexican Restaurant',
+            'cafe': 'Cafe',
+            // Short forms (for flexibility)
+            'italian': 'Italian Restaurant',
+            'chinese': 'Chinese Restaurant',
+            'indian': 'Indian Restaurant',
+            'mexican': 'Mexican Restaurant'
         };
 
-        const existingUser = await docClient.query(existingUserParams).promise();
-        if (existingUser.Items.length > 0) {
+        // Normalize business type - only allow the 5 valid enum values
+        const normalizedType = businessTypeMap[rawBusinessType?.toLowerCase()];
+        const validTypes = ['Italian Restaurant', 'Chinese Restaurant', 'Indian Restaurant', 'Mexican Restaurant', 'Cafe'];
+        const businessType = normalizedType ||
+            (validTypes.includes(rawBusinessType) ? rawBusinessType : 'Italian Restaurant');
+
+        // Check if user already exists
+        const existingUser = await Owner.findOne({ where: { email } });
+        if (existingUser) {
             return res.status(409).json({
                 success: false,
                 error: 'User already exists',
@@ -64,42 +85,33 @@ router.post('/register', async (req, res) => {
 
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
-        const userId = uuidv4();
-        const businessId = uuidv4();
 
-        // Create user
-        const user = {
-            userId,
-            businessId,
+        // Calculate trial end date (30 days from now)
+        const trialEndDate = new Date();
+        trialEndDate.setDate(trialEndDate.getDate() + 30);
+
+        // Create user with 30-day free trial
+        const user = await Owner.create({
+            name: `${firstName} ${lastName}`,
             email,
             password: hashedPassword,
-            firstName,
-            lastName,
+            phone,
             businessName,
             businessType,
-            phone,
-            userRole: 'owner',
             isActive: true,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            lastLogin: null,
-            loginCount: 0
-        };
-
-        const userParams = {
-            TableName: 'pos-users',
-            Item: user
-        };
-
-        await docClient.put(userParams).promise();
+            loginCount: 0,
+            subscriptionPlan: 'Free Trial',
+            subscriptionStatus: 'trial',
+            trialEndDate: trialEndDate
+        });
 
         // Generate JWT token
         const token = jwt.sign(
             {
-                sub: userId,
+                sub: user.id,
                 email: user.email,
-                'custom:userRole': user.userRole,
-                'custom:businessId': businessId,
+                'custom:userRole': 'owner',
+                'custom:businessId': user.id,
                 'custom:businessName': businessName,
                 'custom:businessType': businessType,
                 'custom:phone': phone
@@ -109,7 +121,8 @@ router.post('/register', async (req, res) => {
         );
 
         // Remove sensitive data from response
-        const { password: _, ...safeUser } = user;
+        const safeUser = user.toJSON();
+        delete safeUser.password;
 
         res.status(201).json({
             success: true,
@@ -145,17 +158,8 @@ router.post('/login', async (req, res) => {
         const { email, password } = value;
 
         // Find user by email
-        const userParams = {
-            TableName: 'pos-users',
-            IndexName: 'email-index',
-            KeyConditionExpression: 'email = :email',
-            ExpressionAttributeValues: {
-                ':email': email
-            }
-        };
-
-        const userResult = await docClient.query(userParams).promise();
-        if (userResult.Items.length === 0) {
+        const user = await Owner.findOne({ where: { email } });
+        if (!user) {
             return res.status(401).json({
                 success: false,
                 error: 'Invalid credentials',
@@ -163,18 +167,7 @@ router.post('/login', async (req, res) => {
             });
         }
 
-        const user = userResult.Items[0];
-
-        // Check if user is active
-        if (!user.isActive) {
-            return res.status(401).json({
-                success: false,
-                error: 'Account deactivated',
-                message: 'Your account has been deactivated. Please contact support.'
-            });
-        }
-
-        // Verify password
+        // Verify password first (security: don't reveal account status with wrong password)
         const isValidPassword = await bcrypt.compare(password, user.password);
         if (!isValidPassword) {
             return res.status(401).json({
@@ -184,27 +177,29 @@ router.post('/login', async (req, res) => {
             });
         }
 
-        // Update last login and login count
-        const updateParams = {
-            TableName: 'pos-users',
-            Key: { userId: user.userId },
-            UpdateExpression: 'SET lastLogin = :lastLogin, loginCount = :loginCount, updatedAt = :updatedAt',
-            ExpressionAttributeValues: {
-                ':lastLogin': new Date().toISOString(),
-                ':loginCount': (user.loginCount || 0) + 1,
-                ':updatedAt': new Date().toISOString()
-            }
-        };
+        // Check if user is active (only after password is verified)
+        if (!user.isActive) {
+            return res.status(401).json({
+                success: false,
+                error: 'Account deactivated',
+                message: 'Your account has been deactivated. Please contact support.',
+                accountInactive: true,
+                email: user.email
+            });
+        }
 
-        await docClient.update(updateParams).promise();
+        // Update last login and login count
+        user.lastLogin = new Date();
+        user.loginCount = (user.loginCount || 0) + 1;
+        await user.save();
 
         // Generate JWT token
         const token = jwt.sign(
             {
-                sub: user.userId,
+                sub: user.id,
                 email: user.email,
-                'custom:userRole': user.userRole,
-                'custom:businessId': user.businessId,
+                'custom:userRole': 'owner',
+                'custom:businessId': user.id,
                 'custom:businessName': user.businessName,
                 'custom:businessType': user.businessType,
                 'custom:phone': user.phone
@@ -214,7 +209,8 @@ router.post('/login', async (req, res) => {
         );
 
         // Remove sensitive data from response
-        const { password: _, ...safeUser } = user;
+        const safeUser = user.toJSON();
+        delete safeUser.password;
 
         res.json({
             success: true,
@@ -234,38 +230,64 @@ router.post('/login', async (req, res) => {
     }
 });
 
-// Employee login (using employee ID and temporary password)
+// Employee login (using employee ID only - no password required)
 router.post('/employee-login', async (req, res) => {
     try {
-        const { employeeId, password } = req.body;
+        const { employeeId } = req.body;
 
-        if (!employeeId || !password) {
+        console.log('🔐 Employee login attempt:', {
+            employeeId: employeeId,
+            employeeIdType: typeof employeeId
+        });
+
+        if (!employeeId) {
+            console.error('❌ No Employee ID provided');
             return res.status(400).json({
                 success: false,
                 error: 'Missing credentials',
-                message: 'Employee ID and password are required'
+                message: 'Employee ID is required'
             });
         }
 
-        // Find employee by employeeId
-        const employeeParams = {
-            TableName: 'pos-employees',
-            FilterExpression: 'employeeId = :employeeId',
-            ExpressionAttributeValues: {
-                ':employeeId': employeeId
-            }
-        };
+        // Trim and sanitize employee ID
+        const cleanEmployeeId = String(employeeId).trim();
 
-        const employeeResult = await docClient.scan(employeeParams).promise();
-        if (employeeResult.Items.length === 0) {
+        // Find employee by employeeId (string like "1002001") not UUID
+        const employee = await Employee.findOne({
+            where: { employeeId: cleanEmployeeId }
+        });
+
+        console.log('🔍 Employee lookup result:', {
+            searchedId: cleanEmployeeId,
+            found: !!employee,
+            employeeData: employee ? {
+                id: employee.id,
+                employeeId: employee.employeeId,
+                firstName: employee.firstName,
+                lastName: employee.lastName,
+                isActive: employee.isActive
+            } : null
+        });
+
+        if (!employee) {
+            console.error('❌ Employee not found with ID:', cleanEmployeeId);
+            // Also check if any employees exist to help debug
+            const allEmployees = await Employee.findAll({
+                attributes: ['id', 'employeeId', 'firstName', 'lastName'],
+                limit: 5
+            });
+            console.log('📋 Sample employees in database:', allEmployees.map(emp => ({
+                id: emp.id,
+                employeeId: emp.employeeId,
+                name: `${emp.firstName} ${emp.lastName}`
+            })));
+
             return res.status(401).json({
                 success: false,
                 error: 'Invalid credentials',
-                message: 'Employee ID or password is incorrect'
+                message: 'Employee ID is incorrect'
             });
         }
-
-        const employee = employeeResult.Items[0];
 
         // Check if employee is active
         if (!employee.isActive) {
@@ -276,44 +298,66 @@ router.post('/employee-login', async (req, res) => {
             });
         }
 
-        // Verify password (check both hashed password and temporary password)
-        const isValidPassword = await bcrypt.compare(password, employee.password) ||
-            password === employee.tempPassword;
+        // Update last login
+        employee.lastLogin = new Date();
+        employee.loginCount = (employee.loginCount || 0) + 1;
+        await employee.save();
 
-        if (!isValidPassword) {
-            return res.status(401).json({
-                success: false,
-                error: 'Invalid credentials',
-                message: 'Employee ID or password is incorrect'
-            });
+        // Get owner/business info
+        const owner = await Owner.findByPk(employee.ownerId);
+
+        // Include permissions in response
+        const permissions = employee.permissions || [];
+
+        // Determine user role: check database first, then permissions
+        let userRole = employee.role || 'employee';
+
+        // If role is not set in database, determine from permissions
+        if (!employee.role) {
+            const hasManagerPermissions = permissions.includes('canCreateEmployee') &&
+                permissions.includes('canManageSchedules') &&
+                permissions.includes('canManageMenuItems') &&
+                permissions.includes('canViewSalesAnalytics');
+
+            if (hasManagerPermissions) {
+                userRole = 'manager';
+                console.log('👔 Manager role detected based on permissions');
+            }
+
+            // Save role to database
+            employee.role = userRole;
+            await employee.save();
+            console.log('💾 Saved employee role to database:', userRole);
+        } else {
+            // Role exists in database, but verify it matches permissions
+            const hasManagerPermissions = permissions.includes('canCreateEmployee') &&
+                permissions.includes('canManageSchedules') &&
+                permissions.includes('canManageMenuItems') &&
+                permissions.includes('canViewSalesAnalytics');
+
+            // If database says manager but permissions don't match, update it
+            if (employee.role === 'manager' && !hasManagerPermissions) {
+                userRole = 'employee';
+                employee.role = 'employee';
+                await employee.save();
+                console.log('⚠️ Updated employee role from manager to employee (permissions mismatch)');
+            } else if (employee.role === 'employee' && hasManagerPermissions) {
+                userRole = 'manager';
+                employee.role = 'manager';
+                await employee.save();
+                console.log('👔 Updated employee role from employee to manager (permissions match)');
+            }
         }
 
-        // Update last login
-        const updateParams = {
-            TableName: 'pos-employees',
-            Key: {
-                businessId: employee.businessId,
-                employeeId: employee.employeeId
-            },
-            UpdateExpression: 'SET lastLogin = :lastLogin, loginCount = :loginCount, updatedAt = :updatedAt',
-            ExpressionAttributeValues: {
-                ':lastLogin': new Date().toISOString(),
-                ':loginCount': (employee.loginCount || 0) + 1,
-                ':updatedAt': new Date().toISOString()
-            }
-        };
-
-        await docClient.update(updateParams).promise();
-
-        // Generate JWT token
+        // Generate JWT token with correct role
         const token = jwt.sign(
             {
-                sub: employee.employeeId,
+                sub: employee.id,
                 email: employee.email,
-                'custom:userRole': 'employee',
-                'custom:businessId': employee.businessId,
-                'custom:businessName': employee.businessName || 'Restaurant',
-                'custom:businessType': 'Restaurant',
+                'custom:userRole': userRole, // Use determined role, not hardcoded 'employee'
+                'custom:businessId': employee.ownerId,
+                'custom:businessName': owner?.businessName || 'Restaurant',
+                'custom:businessType': owner?.businessType || 'Italian Restaurant',
                 'custom:phone': employee.phone
             },
             process.env.JWT_SECRET || 'fallback-secret',
@@ -321,7 +365,26 @@ router.post('/employee-login', async (req, res) => {
         );
 
         // Remove sensitive data from response
-        const { password: _, tempPassword: __, ...safeEmployee } = employee;
+        const safeEmployee = employee.toJSON();
+        delete safeEmployee.password;
+        delete safeEmployee.tempPassword;
+
+        // Add owner info to employee data for frontend
+        safeEmployee.businessName = owner?.businessName || 'Restaurant';
+        safeEmployee.businessType = owner?.businessType || 'Italian Restaurant';
+        safeEmployee.ownerId = employee.ownerId;
+
+        // Set user role in response
+        safeEmployee.userRole = userRole;
+        safeEmployee.permissions = permissions;
+
+        console.log('✅ Employee login successful:', {
+            employeeId: employee.employeeId,
+            email: employee.email,
+            businessName: owner?.businessName,
+            userRole: userRole,
+            permissions: permissions.length
+        });
 
         res.json({
             success: true,
@@ -371,20 +434,13 @@ router.post('/change-password', async (req, res) => {
         const { currentPassword, newPassword } = value;
 
         // Get user
-        const userParams = {
-            TableName: 'pos-users',
-            Key: { userId }
-        };
-
-        const userResult = await docClient.get(userParams).promise();
-        if (!userResult.Item) {
+        const user = await Owner.findByPk(userId);
+        if (!user) {
             return res.status(404).json({
                 success: false,
                 error: 'User not found'
             });
         }
-
-        const user = userResult.Item;
 
         // Verify current password
         const isValidPassword = await bcrypt.compare(currentPassword, user.password);
@@ -395,21 +451,9 @@ router.post('/change-password', async (req, res) => {
             });
         }
 
-        // Hash new password
-        const hashedNewPassword = await bcrypt.hash(newPassword, 10);
-
-        // Update password
-        const updateParams = {
-            TableName: 'pos-users',
-            Key: { userId },
-            UpdateExpression: 'SET password = :password, updatedAt = :updatedAt',
-            ExpressionAttributeValues: {
-                ':password': hashedNewPassword,
-                ':updatedAt': new Date().toISOString()
-            }
-        };
-
-        await docClient.update(updateParams).promise();
+        // Hash new password and update
+        user.password = await bcrypt.hash(newPassword, 10);
+        await user.save();
 
         res.json({
             success: true,
@@ -448,7 +492,7 @@ router.get('/verify', async (req, res) => {
                 user: {
                     sub: decoded.sub,
                     email: decoded.email,
-                    userRole: decoded['custom:userRole'],
+                    userRole: decoded['custom:userRole'] || 'owner',
                     businessId: decoded['custom:businessId'],
                     businessName: decoded['custom:businessName'],
                     businessType: decoded['custom:businessType'],
@@ -461,6 +505,151 @@ router.get('/verify', async (req, res) => {
             success: false,
             error: 'Invalid token',
             data: { valid: false }
+        });
+    }
+});
+
+// Request account reactivation
+router.post('/request-reactivation', async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        if (!email) {
+            return res.status(400).json({
+                success: false,
+                error: 'Email is required'
+            });
+        }
+
+        // Find user by email
+        const user = await Owner.findOne({ where: { email } });
+        if (!user) {
+            // Don't reveal if user exists or not for security
+            return res.json({
+                success: true,
+                message: 'If an account with this email exists and is inactive, a reactivation email has been sent.'
+            });
+        }
+
+        // Only send email if account is inactive
+        if (user.isActive) {
+            return res.json({
+                success: true,
+                message: 'If an account with this email exists and is inactive, a reactivation email has been sent.'
+            });
+        }
+
+        // Generate reactivation token
+        const reactivationToken = crypto.randomBytes(32).toString('hex');
+        const reactivationTokenExpiry = new Date();
+        reactivationTokenExpiry.setHours(reactivationTokenExpiry.getHours() + 24); // 24 hours expiry
+
+        // Save token to user
+        await user.update({
+            reactivationToken,
+            reactivationTokenExpiry
+        });
+
+        // Send reactivation email
+        try {
+            await sendReactivationEmail(user.email, user.name, reactivationToken);
+            console.log('✅ Reactivation email sent to:', user.email);
+        } catch (emailError) {
+            console.error('❌ Error sending reactivation email:', emailError);
+            // Still return success to not reveal if account exists
+        }
+
+        res.json({
+            success: true,
+            message: 'If an account with this email exists and is inactive, a reactivation email has been sent.'
+        });
+    } catch (error) {
+        console.error('Error requesting reactivation:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to process reactivation request',
+            message: error.message
+        });
+    }
+});
+
+// Verify and reactivate account
+router.post('/reactivate-account', async (req, res) => {
+    try {
+        const { token } = req.body;
+
+        if (!token) {
+            return res.status(400).json({
+                success: false,
+                error: 'Reactivation token is required'
+            });
+        }
+
+        // Find user by reactivation token
+        const user = await Owner.findOne({
+            where: {
+                reactivationToken: token
+            }
+        });
+
+        if (!user) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid or expired reactivation token'
+            });
+        }
+
+        // Check if token is expired
+        if (user.reactivationTokenExpiry && new Date() > new Date(user.reactivationTokenExpiry)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Reactivation token has expired. Please request a new one.'
+            });
+        }
+
+        // Reactivate account
+        await user.update({
+            isActive: true,
+            reactivationToken: null,
+            reactivationTokenExpiry: null
+        });
+
+        console.log('✅ Account reactivated:', user.email);
+
+        // Generate JWT token and log user in
+        const jwtToken = jwt.sign(
+            {
+                sub: user.id,
+                email: user.email,
+                'custom:userRole': 'owner',
+                'custom:businessId': user.id,
+                'custom:businessName': user.businessName,
+                'custom:businessType': user.businessType,
+                'custom:phone': user.phone
+            },
+            process.env.JWT_SECRET || 'fallback-secret',
+            { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
+        );
+
+        // Remove sensitive data from response
+        const safeUser = user.toJSON();
+        delete safeUser.password;
+        delete safeUser.reactivationToken;
+
+        res.json({
+            success: true,
+            data: {
+                user: safeUser,
+                token: jwtToken
+            },
+            message: 'Account reactivated successfully. You are now logged in.'
+        });
+    } catch (error) {
+        console.error('Error reactivating account:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to reactivate account',
+            message: error.message
         });
     }
 });

@@ -273,7 +273,7 @@ const OrderHistory = () => {
                                     {selectedOrder.items?.map((item, index) => (
                                         <div key={index} className="flex justify-between text-sm">
                                             <span>{item.quantity}x {item.name}</span>
-                                            <span>${(item.price * item.quantity).toFixed(2)}</span>
+                                            <span>${(parseFloat(item.price || 0) * item.quantity).toFixed(2)}</span>
                                         </div>
                                     ))}
                                 </div>

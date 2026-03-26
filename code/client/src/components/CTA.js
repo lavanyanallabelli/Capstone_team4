@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowRight, Shield, CreditCard, Cloud, Headphones, Lock } from 'lucide-react';
 import { useInView } from 'react-intersection-observer';
+import apiService from '../services/api';
 
 const CTA = () => {
     const [ref, inView] = useInView({
@@ -16,6 +17,31 @@ const CTA = () => {
         businessType: ''
     });
     const [errors, setErrors] = useState({});
+    const [businessTypes, setBusinessTypes] = useState([]);
+
+    // Load business types from API
+    useEffect(() => {
+        loadBusinessTypes();
+    }, []);
+
+    const loadBusinessTypes = async () => {
+        try {
+            const response = await apiService.get('/settings/business-types');
+            if (response && response.success && response.data) {
+                setBusinessTypes(response.data);
+            }
+        } catch (error) {
+            console.error('Error loading business types:', error);
+            // Set default business types if API fails
+            setBusinessTypes([
+                { typename: 'Italian' },
+                { typename: 'Chinese' },
+                { typename: 'Indian' },
+                { typename: 'Mexican' },
+                { typename: 'Cafe' }
+            ]);
+        }
+    };
 
     const handleInputChange = (e) => {
         setFormData({
@@ -235,12 +261,25 @@ const CTA = () => {
                                         required
                                     >
                                         <option value="">Select Business Type</option>
-                                        <option value="retail">Retail Store</option>
-                                        <option value="restaurant">Restaurant</option>
-                                        <option value="cafe">Café/Coffee Shop</option>
-                                        <option value="salon">Salon/Spa</option>
-                                        <option value="pharmacy">Pharmacy</option>
-                                        <option value="other">Other</option>
+                                        {businessTypes.length > 0 ? (
+                                            businessTypes.map((type) => {
+                                                const value = type.typename === 'Cafe' ? 'cafe' : `${type.typename.toLowerCase()} restaurant`;
+                                                const label = type.typename === 'Cafe' ? 'Cafe' : `${type.typename} Restaurant`;
+                                                return (
+                                                    <option key={type.businesstypeid || type.typename} value={value}>
+                                                        {label}
+                                                    </option>
+                                                );
+                                            })
+                                        ) : (
+                                            <>
+                                                <option value="italian restaurant">Italian Restaurant</option>
+                                                <option value="chinese restaurant">Chinese Restaurant</option>
+                                                <option value="indian restaurant">Indian Restaurant</option>
+                                                <option value="mexican restaurant">Mexican Restaurant</option>
+                                                <option value="cafe">Cafe</option>
+                                            </>
+                                        )}
                                     </select>
                                 </motion.div>
 

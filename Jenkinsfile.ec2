@@ -1,0 +1,346 @@
+pipeline {
+    agent { label 'docker-slave' }
+
+    environment {
+        // Frontend (React) environment variables — public only
+        REACT_APP_AWS_REGION = 'us-east-1'
+        REACT_APP_USER_POOL_ID = 'us-east-1_i2eRulYnD'
+        REACT_APP_USER_POOL_WEB_CLIENT_ID = '3q99asqjvgb0eakf80eorms0ho'
+        REACT_APP_OAUTH_DOMAIN = 'https://us-east-1i2erulynd.auth.us-east-1.amazoncognito'
+        REACT_APP_API_URL = 'http://54.242.45.110:5000/api'
+        REACT_APP_REDIRECT_SIGN_IN = 'http://54.242.45.110.112/'
+        REACT_APP_REDIRECT_SIGN_OUT = 'http://54.242.45.110.112/'
+        
+        // Docker Hub configuration
+        DOCKER_HUB_REPO = 'lavanyanallabelli/pos-system'
+    }
+
+    parameters {
+        choice(
+            name: 'BRANCH',
+            choices: ['prod', 'QA', 'main'],
+            description: 'Select the branch to build'
+        )
+    }
+
+    stages {
+
+        stage('Checkout from GitHub') {
+            steps {
+                git branch: "${params.BRANCH}", url: 'https://github.com/lavanyanallabelli/Capstone_team4.git'
+                script {
+                    env.LAST_COMMIT_MESSAGE = sh(script: "git log -1 --pretty=%B | tr -d '\\n'", returnStdout: true).trim()
+                    env.LAST_COMMIT_AUTHOR  = sh(script: "git log -1 --pretty=%an", returnStdout: true).trim()
+                    env.LAST_COMMIT_HASH    = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+                    env.DOCKER_IMAGE_TAG = "${env.BUILD_NUMBER}-${env.LAST_COMMIT_HASH}"
+                }
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                dir('code') {
+                    sh '''
+                    echo "Installing dependencies (using cache if available)..."
+                    npm run install:all
+                    cd client && npm install path-exists --save
+                    cd ../server && npm install path-exists --save
+                    cd ..
+                    '''
+                }
+            }
+        }
+
+        stage('Set Frontend Environment') {
+            steps {
+                dir('code/client') {
+                    writeFile file: '.env', text: """
+REACT_APP_AWS_REGION=${env.REACT_APP_AWS_REGION}
+REACT_APP_USER_POOL_ID=${env.REACT_APP_USER_POOL_ID}
+REACT_APP_USER_POOL_WEB_CLIENT_ID=${env.REACT_APP_USER_POOL_WEB_CLIENT_ID}
+REACT_APP_OAUTH_DOMAIN=${env.REACT_APP_OAUTH_DOMAIN}
+REACT_APP_API_URL=${env.REACT_APP_API_URL}
+REACT_APP_REDIRECT_SIGN_IN=${env.REACT_APP_REDIRECT_SIGN_IN}
+REACT_APP_REDIRECT_SIGN_OUT=${env.REACT_APP_REDIRECT_SIGN_OUT}
+"""
+                }
+            }
+        }
+
+        stage('Build React Application') {
+            steps {
+                dir('code') {
+                    sh 'npm run build:client'
+                }
+            }
+        }
+
+        stage('Build Docker Images') {
+            steps {
+                script {
+                    // Build Frontend Docker Image
+                    sh """
+                        echo "Building Frontend Docker image..."
+                        docker build -t ${env.DOCKER_HUB_REPO}-frontend:${env.DOCKER_IMAGE_TAG} \\
+                                     -t ${env.DOCKER_HUB_REPO}-frontend:latest \\
+                                     -f code/client/Dockerfile code/client/ || \\
+                        docker build -t ${env.DOCKER_HUB_REPO}-frontend:${env.DOCKER_IMAGE_TAG} \\
+                                     -t ${env.DOCKER_HUB_REPO}-frontend:latest \\
+                                     code/client/
+                    """
+                    
+                    // Build Backend Docker Image
+                    sh """
+                        echo "Building Backend Docker image..."
+                        docker build -t ${env.DOCKER_HUB_REPO}-backend:${env.DOCKER_IMAGE_TAG} \\
+                                     -t ${env.DOCKER_HUB_REPO}-backend:latest \\
+                                     -f code/server/Dockerfile code/server/ || \\
+                        docker build -t ${env.DOCKER_HUB_REPO}-backend:${env.DOCKER_IMAGE_TAG} \\
+                                     -t ${env.DOCKER_HUB_REPO}-backend:latest \\
+                                     code/server/
+                    """
+                }
+            }
+        }
+
+        stage('Push Docker Images to Docker Hub') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    script {
+                        sh """
+                            echo "Logging in to Docker Hub..."
+                            echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
+                            
+                            echo "Pushing Frontend image..."
+                            docker push ${env.DOCKER_HUB_REPO}-frontend:${env.DOCKER_IMAGE_TAG}
+                            docker push ${env.DOCKER_HUB_REPO}-frontend:latest
+                            
+                            echo "Pushing Backend image..."
+                            docker push ${env.DOCKER_HUB_REPO}-backend:${env.DOCKER_IMAGE_TAG}
+                            docker push ${env.DOCKER_HUB_REPO}-backend:latest
+                            
+                            echo "✅ Docker images pushed successfully!"
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Deploy Frontend to DEV EC2') {
+            steps {
+                withCredentials([sshUserPrivateKey(credentialsId: 'AWS_DEV_SSH_KEY', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
+                    sh '''
+                    echo "Deploying frontend build..."
+                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@54.242.45.110 "mkdir -p /home/ec2-user/pos_system/build"
+                    scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/client/build/* $SSH_USER@54.242.45.110:/home/ec2-user/pos_system/build/
+                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@54.242.45.110 "
+                        pm2 stop pos-system || true
+                        pm2 serve /home/ec2-user/pos_system/build 3000 --name pos-system --spa
+                        pm2 save
+                        pm2 startup -u ec2-user --hp /home/ec2-user || echo 'PM2 startup may require manual setup'
+                    "
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy Backend to DEV EC2') {
+            steps {
+                withCredentials([
+                    sshUserPrivateKey(credentialsId: 'AWS_DEV_SSH_KEY', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')
+                ]) {
+                    sh """
+                    echo "Deploying backend..."
+                    echo "Verifying SSH connection..."
+                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@54.242.45.110 "echo 'SSH connection successful'" || { echo "SSH connection failed!"; exit 1; }
+
+                    echo "Creating server directory..."
+                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@54.242.45.110 "mkdir -p /home/ec2-user/pos_system/server" || { echo "Failed to create directory!"; exit 1; }
+
+                    echo "Copying server files..."
+                    scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r code/server/* $SSH_USER@54.242.45.110:/home/ec2-user/pos_system/server/ || { echo "Failed to copy files!"; exit 1; }
+
+                    echo "Using existing .env on EC2 (no .env creation from Jenkins)"
+
+                    echo "Installing dependencies and starting backend..."
+                    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -T $SSH_USER@54.242.45.110 "
+                        cd /home/ec2-user/pos_system/server || { echo 'Failed to cd to server directory'; exit 1; }
+                        npm install || { echo 'npm install failed'; exit 1; }
+                        pm2 delete pos-backend || true
+                        pm2 start server.js --name pos-backend || { echo 'pm2 start failed'; exit 1; }
+                        pm2 save || { echo 'pm2 save failed'; exit 1; }
+                        echo 'Backend deployed and restarted using existing .env'
+                    " || { echo "Backend deployment failed!"; exit 1; }
+
+                    echo "✅ Backend deployment completed successfully!"
+                    """
+                }
+            }
+        }
+
+    }
+    post {
+        success {
+            echo "✅ Build succeeded: ${env.BUILD_NUMBER} (${params.BRANCH})"
+            withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_URL')]) {
+                script {
+                    def slackMessage = """
+{
+  "attachments": [
+    {
+      "color": "good",
+      "blocks": [
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": ":white_check_mark: *Jenkins Dev Build Succeeded!*"
+          }
+        },
+        {
+          "type": "section",
+          "fields": [
+            {
+              "type": "mrkdwn",
+              "text": "*Branch:* ${params.BRANCH}"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*Build #:* ${env.BUILD_NUMBER}"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*Project:* POS System"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*Commit:* ${env.LAST_COMMIT_HASH}"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*Author:* ${env.LAST_COMMIT_AUTHOR}"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*Message:* ${env.LAST_COMMIT_MESSAGE}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+"""
+                    writeFile file: 'slack_payload.json', text: slackMessage
+                    sh '''
+HTTP_CODE=$(curl -sS -o /tmp/slack_resp.txt -w "%{http_code}" -X POST -H 'Content-type: application/json' --data @slack_payload.json "$SLACK_URL" || true)
+echo "Slack HTTP: $HTTP_CODE"
+echo "Slack resp:" && cat /tmp/slack_resp.txt || true
+                    '''
+                }
+            }
+            mail (
+                to: 'chetanjogi042@gmail.com',
+                subject: "✅ Jenkins Dev Build Successful - Branch: ${params.BRANCH}",
+                body: """
+Build Successful!
+
+Project: POS System
+Branch: ${params.BRANCH}
+Build: ${env.BUILD_NUMBER}
+Commit: ${env.LAST_COMMIT_HASH}
+Author: ${env.LAST_COMMIT_AUTHOR}
+Message: ${env.LAST_COMMIT_MESSAGE}
+
+Status: SUCCESS
+Deployment: Dev EC2 Instance
+Build URL: ${env.BUILD_URL}
+                """
+            )
+        }
+
+        failure {
+            echo "❌ Build failed!"
+            withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_URL')]) {
+                script {
+                    def slackMessage = """
+{
+  "attachments": [
+    {
+      "color": "danger",
+      "blocks": [
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": ":x: *Jenkins Dev Build Failed!*"
+          }
+        },
+        {
+          "type": "section",
+          "fields": [
+            {
+              "type": "mrkdwn",
+              "text": "*Branch:* ${params.BRANCH}"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*Build #:* ${env.BUILD_NUMBER}"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*Project:* POS System"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*Commit:* ${env.LAST_COMMIT_HASH}"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*Author:* ${env.LAST_COMMIT_AUTHOR}"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*Message:* ${env.LAST_COMMIT_MESSAGE}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+"""
+                    writeFile file: 'slack_payload.json', text: slackMessage
+                    sh '''
+HTTP_CODE=$(curl -sS -o /tmp/slack_resp.txt -w "%{http_code}" -X POST -H 'Content-type: application/json' --data @slack_payload.json "$SLACK_URL" || true)
+echo "Slack HTTP: $HTTP_CODE"
+echo "Slack resp:" && cat /tmp/slack_resp.txt || true
+                    '''
+                }
+            }
+            
+            // ✅ Email notification retained
+            mail (
+                to: 'cuteamy104@gmail.com, chetanjogi042@gmail.com',
+                subject: "❌ Jenkins Dev Build Failed - Branch: ${params.BRANCH}",
+                body: """
+Build Failed!
+
+Project: POS System
+Branch: ${params.BRANCH}
+Build: ${env.BUILD_NUMBER}
+Commit: ${env.LAST_COMMIT_HASH}
+Author: ${env.LAST_COMMIT_AUTHOR}
+Message: ${env.LAST_COMMIT_MESSAGE}
+
+Status: FAILED
+Environment: Dev EC2 Instance
+Build URL: ${env.BUILD_URL}
+Console Output: ${env.BUILD_URL}console
+
+Please check the build logs for more details about the failure.
+                """
+            )
+        }
+    }
+}

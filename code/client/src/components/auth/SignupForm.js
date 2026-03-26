@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Mail, Lock, Phone, Building, Eye, EyeOff, AlertCircle, Loader2, CheckCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import apiService from '../../services/api';
 // import { Link } from 'react-router-dom'; // Unused import - keeping for future use
 
 const SignupForm = ({ onClose, onSwitchToLogin, isPage = false }) => {
@@ -18,22 +19,45 @@ const SignupForm = ({ onClose, onSwitchToLogin, isPage = false }) => {
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [errors, setErrors] = useState({});
+    const [businessTypes, setBusinessTypes] = useState([
+        { value: '', label: 'Select Business Type' }
+    ]);
 
     const { signup, error, clearError } = useAuth();
     const navigate = useNavigate();
 
-    const businessTypes = [
-        { value: '', label: 'Select Business Type' },
-        { value: 'retail', label: 'Retail Store' },
-        { value: 'restaurant', label: 'Restaurant' },
-        { value: 'cafe', label: 'Café/Coffee Shop' },
-        { value: 'salon', label: 'Salon/Spa' },
-        { value: 'pharmacy', label: 'Pharmacy' },
-        { value: 'grocery', label: 'Grocery Store' },
-        { value: 'clothing', label: 'Clothing Store' },
-        { value: 'electronics', label: 'Electronics' },
-        { value: 'other', label: 'Other' }
-    ];
+    // Load business types from API
+    useEffect(() => {
+        loadBusinessTypes();
+    }, []);
+
+    const loadBusinessTypes = async () => {
+        try {
+            const response = await apiService.get('/settings/business-types');
+            if (response && response.success && response.data) {
+                const types = [
+                    { value: '', label: 'Select Business Type' },
+                    ...response.data.map((type) => {
+                        const value = type.typename === 'Cafe' ? 'cafe' : `${type.typename.toLowerCase()} restaurant`;
+                        const label = type.typename === 'Cafe' ? 'Cafe' : `${type.typename} Restaurant`;
+                        return { value, label };
+                    })
+                ];
+                setBusinessTypes(types);
+            }
+        } catch (error) {
+            console.error('Error loading business types:', error);
+            // Set default business types if API fails
+            setBusinessTypes([
+                { value: '', label: 'Select Business Type' },
+                { value: 'italian restaurant', label: 'Italian Restaurant' },
+                { value: 'chinese restaurant', label: 'Chinese Restaurant' },
+                { value: 'indian restaurant', label: 'Indian Restaurant' },
+                { value: 'mexican restaurant', label: 'Mexican Restaurant' },
+                { value: 'cafe', label: 'Cafe' }
+            ]);
+        }
+    };
 
     const handleChange = (e) => {
         const { name, value } = e.target;
